@@ -1,0 +1,9 @@
+layer_id	celltype	gene	evidence_source	tissue	panel_name	evidence_note	confidence_ceiling
+panorama	Type_A	GENE_A1	literature	*	neutral_panorama	fictional example only	确定
+panorama	Type_A	GENE_A2	literature	*	neutral_panorama	fictional example only	确定
+panorama	Type_B	GENE_B1	literature	*	neutral_panorama	fictional example only	确定
+panorama	Type_B	GENE_B2	literature	*	neutral_panorama	fictional example only	确定
+subcluster_1	Subtype_A1	GENE_A_SUB1	curated	*	neutral_subcluster_1	fictional example only	确定
+subcluster_1	Subtype_A1	GENE_A_SUB1B	curated	*	neutral_subcluster_1	fictional example only	确定
+subcluster_1	Subtype_A2	GENE_A_SUB2	curated	*	neutral_subcluster_1	fictional example only	确定
+subcluster_2	State_B_candidate	GENE_B_STATE1	ortholog	*	neutral_subcluster_2	fictional example only	暂定

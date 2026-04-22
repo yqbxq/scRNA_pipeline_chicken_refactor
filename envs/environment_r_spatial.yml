@@ -1,0 +1,45 @@
+name: r_spatial
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - r-base=4.4.3
+  - r-remotes
+  - r-biocmanager
+  - r-seurat=5.4.0
+  - r-seuratobject=5.3.0
+  - r-hdf5r
+  - r-reticulate
+  - r-yaml
+  - r-dplyr
+  - r-tibble
+  - r-tidyr
+  - r-readr
+  - r-ggplot2
+  - r-patchwork
+  - r-cowplot
+  - r-ggrepel
+  - r-data.table
+  - r-broom
+  - bioconductor-singlecellexperiment=1.28.0
+  - bioconductor-biocneighbors
+  - bioconductor-spatialexperiment
+  - bioconductor-summarizedexperiment
+  - bioconductor-biocparallel
+  - compilers
+  - make
+  - cmake
+  - pkg-config
+  - git
+  - curl
+  - libcurl
+  - openssl
+  # Keep libxml2 on the 2.13 series. Newer 2.15 builds on the current server
+  # dropped the unversioned libxml2.so link and break RCurl/gprofiler2 builds.
+  - libxml2<2.14
+  - zlib
+  - bzip2
+  - xz
+  - pcre2
+  - cairo
+  - pandoc

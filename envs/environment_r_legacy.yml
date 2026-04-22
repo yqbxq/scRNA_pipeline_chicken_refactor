@@ -1,0 +1,43 @@
+name: r_legacy
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - r-base=4.3.3
+  - r-remotes
+  - r-biocmanager
+  - r-seurat=5.0.1
+  - r-seuratobject
+  - r-hdf5r
+  - r-dplyr
+  - r-tibble
+  - r-tidyr
+  - r-readr
+  - r-ggplot2
+  - r-patchwork
+  - r-pheatmap
+  - r-yaml
+  - r-igraph
+  - r-vgam
+  - r-matrix
+  - r-data.table
+  - bioconductor-monocle=2.30.0
+  - bioconductor-topgo=2.54.0
+  - bioconductor-biobase
+  - r-phater=1.0.7
+  - compilers
+  - make
+  - cmake
+  - pkg-config
+  - git
+  - curl
+  - libcurl
+  - openssl
+  # Keep libxml2 on the 2.13 series. Newer 2.15 builds on the current server
+  # dropped the unversioned libxml2.so link and break RCurl/gprofiler2 builds.
+  - libxml2<2.14
+  - zlib
+  - bzip2
+  - xz
+  - pcre2
+  - cairo

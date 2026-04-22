@@ -1,0 +1,53 @@
+name: r_scenic
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - r-base=4.4.3
+  - r-remotes
+  - r-biocmanager
+  - r-seurat=5.4.0
+  - r-seuratobject=5.3.0
+  - r-dplyr
+  - r-tibble
+  - r-tidyr
+  - r-tidyverse
+  - r-pheatmap
+  - r-circlize
+  - r-viridis
+  - r-ggrepel
+  - r-data.table
+  - r-dt
+  - r-feather=0.4.0
+  - r-getopt
+  - r-philentropy
+  - r-rmagic=2.0.3
+  - r-nmf
+  - r-dynamictreecut
+  - r-mixtools
+  - r-rtsne
+  - r-svmisc
+  - r-upsetr
+  - bioconductor-aucell=1.28.0
+  - bioconductor-rcistarget=1.26.0
+  - bioconductor-genie3=1.28.0
+  - bioconductor-complexheatmap=2.22.0
+  - bioconductor-fgsea=1.32.2
+  - bioconductor-biobase
+  - compilers
+  - make
+  - cmake
+  - pkg-config
+  - git
+  - curl
+  - libcurl
+  - openssl
+  # Keep libxml2 on the 2.13 series. Newer 2.15 builds on the current server
+  # dropped the unversioned libxml2.so link and break RCurl/gprofiler2 builds.
+  - libxml2<2.14
+  - zlib
+  - bzip2
+  - xz
+  - pcre2
+  - cairo
+  - pandoc

@@ -1,0 +1,62 @@
+name: r_main
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - r-base=4.4.3
+  - r-remotes
+  - r-biocmanager
+  - r-seurat=5.4.0
+  - r-seuratobject=5.3.0
+  - r-harmony=1.2.4
+  - r-hdf5r
+  - r-reticulate
+  - r-yaml
+  - r-dplyr
+  - r-tibble
+  - r-tidyr
+  - r-readr
+  - r-patchwork
+  - r-cowplot
+  - r-ggrepel
+  - r-pheatmap
+  - r-rcolorbrewer
+  - r-circlize
+  - r-readxl
+  - r-data.table
+  - r-future
+  - r-future.apply
+  - r-fields
+  - r-rocr
+  - bioconductor-biocparallel
+  - bioconductor-singlecellexperiment=1.28.0
+  - bioconductor-scater
+  - bioconductor-scdblfinder
+  - bioconductor-celda
+  - bioconductor-edger
+  - bioconductor-limma
+  - bioconductor-muscat
+  - bioconductor-speckle
+  - bioconductor-slingshot=2.14.0
+  - bioconductor-tradeseq=1.20.0
+  - bioconductor-clusterprofiler=4.14.0
+  - bioconductor-org.gg.eg.db
+  - bioconductor-biomart=2.62.0
+  - r-monocle3
+  - compilers
+  - make
+  - cmake
+  - pkg-config
+  - git
+  - curl
+  - libcurl
+  - openssl
+  # Keep libxml2 on the 2.13 series. Newer 2.15 builds on the current server
+  # dropped the unversioned libxml2.so link and break RCurl/gprofiler2 builds.
+  - libxml2<2.14
+  - zlib
+  - bzip2
+  - xz
+  - pcre2
+  - cairo
+  - pandoc

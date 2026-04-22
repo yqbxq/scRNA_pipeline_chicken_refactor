@@ -1,0 +1,8 @@
+# Optional override for mitochondrial gene detection.
+# One gene symbol or feature ID per line.
+# Leave this file unchanged when GTF-based mito detection is sufficient.
+#
+# Example:
+# MT-CO1
+# MT-CO2
+# ENSGALG00000000001

@@ -1,0 +1,19 @@
+name: py_spatial
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.11
+  - scanpy=1.11
+  - squidpy
+  - anndata
+  - spatialdata
+  - numpy
+  - scipy
+  - pandas
+  - matplotlib
+  - seaborn
+  - scikit-learn
+  - scikit-image
+  - h5py
+  - pip

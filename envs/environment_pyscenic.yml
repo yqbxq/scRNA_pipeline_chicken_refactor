@@ -1,0 +1,11 @@
+name: pyscenic
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.10
+  - pyscenic=0.12.1
+  - ctxcore=0.2.0
+  - arboreto=0.1.6
+  - pyarrow
+  - setuptools<81
