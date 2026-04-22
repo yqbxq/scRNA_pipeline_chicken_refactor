@@ -27,7 +27,7 @@ input_obj <- maybe_join_layers(input_obj)
 threshold_overrides <- read_qc_threshold_overrides(cfg)
 inventory_df <- read_input_inventory(cfg)
 
-run_secondary_doubletfinder <- function(model_obj, usable_dims, expected_doublets) {
+run_secondary_doubletfinder <- function(sample_id, model_obj, usable_dims, expected_doublets) {
   if (!secondary_pkg_available || !cfg$doublet_secondary_enabled) {
     return(list(
       status = if (!cfg$doublet_secondary_enabled) "disabled" else "package_missing",
@@ -38,28 +38,26 @@ run_secondary_doubletfinder <- function(model_obj, usable_dims, expected_doublet
   }
 
   doublet_pkg <- asNamespace("DoubletFinder")
-  sweep_fun <- if (exists("paramSweep_v3", envir = doublet_pkg, mode = "function")) {
-    get("paramSweep_v3", envir = doublet_pkg)
-  } else {
-    get("paramSweep", envir = doublet_pkg)
-  }
-  summarize_fun <- get("summarizeSweep", envir = doublet_pkg)
-  find_pk_fun <- get("find.pK", envir = doublet_pkg)
-  df_fun <- if (exists("doubletFinder_v3", envir = doublet_pkg, mode = "function")) {
-    get("doubletFinder_v3", envir = doublet_pkg)
-  } else {
-    get("doubletFinder", envir = doublet_pkg)
-  }
+  doublet_fns <- resolve_doubletfinder_fns(doublet_pkg)
 
   best_pk <- NA_real_
   status <- "completed"
-  sweep_res <- tryCatch(
-    sweep_fun(model_obj, PCs = usable_dims, sct = FALSE),
-    error = function(e) NULL
+  sweep_res <- safe_process_sample(
+    sample_id,
+    function() doublet_fns$paramSweep(model_obj, PCs = usable_dims, sct = FALSE),
+    on_error = function(e) NULL
   )
   if (!is.null(sweep_res)) {
-    sweep_stats <- tryCatch(summarize_fun(sweep_res, GT = FALSE), error = function(e) NULL)
-    bcmvn <- tryCatch(find_pk_fun(sweep_stats), error = function(e) NULL)
+    sweep_stats <- safe_process_sample(
+      sample_id,
+      function() doublet_fns$summarizeSweep(sweep_res, GT = FALSE),
+      on_error = function(e) NULL
+    )
+    bcmvn <- safe_process_sample(
+      sample_id,
+      function() doublet_fns$find.pK(sweep_stats),
+      on_error = function(e) NULL
+    )
     if (!is.null(bcmvn) && nrow(bcmvn) > 0) {
       best_pk <- suppressWarnings(as.numeric(as.character(bcmvn$pK[which.max(bcmvn$BCmetric)])))
     }
@@ -69,8 +67,9 @@ run_secondary_doubletfinder <- function(model_obj, usable_dims, expected_doublet
     status <- "completed_fallback_pk"
   }
 
-  df_obj <- tryCatch(
-    df_fun(
+  df_obj <- safe_process_sample(
+    sample_id,
+    function() doublet_fns$doubletFinder(
       model_obj,
       PCs = usable_dims,
       pN = 0.25,
@@ -78,7 +77,7 @@ run_secondary_doubletfinder <- function(model_obj, usable_dims, expected_doublet
       nExp = expected_doublets,
       sct = FALSE
     ),
-    error = function(e) NULL
+    on_error = function(e) NULL
   )
   if (is.null(df_obj)) {
     return(list(
@@ -175,14 +174,12 @@ for (sample_id in names(split_objs)) {
           provisional_umap_1 = provisional_umap_1,
           provisional_umap_2 = provisional_umap_2
         )
-      meta_df <- meta_df %>%
-        left_join(qc_model_meta, by = "cell_id", suffix = c("", ".new")) %>%
-        mutate(
-          provisional_cluster = ifelse(!is.na(provisional_cluster.new), provisional_cluster.new, provisional_cluster),
-          provisional_umap_1 = ifelse(!is.na(provisional_umap_1.new), provisional_umap_1.new, provisional_umap_1),
-          provisional_umap_2 = ifelse(!is.na(provisional_umap_2.new), provisional_umap_2.new, provisional_umap_2)
-        ) %>%
-        select(-ends_with(".new"))
+      meta_df <- safe_merge_meta(
+        meta_df,
+        qc_model_meta,
+        by = "cell_id",
+        cols = c("provisional_cluster", "provisional_umap_1", "provisional_umap_2")
+      )
 
       counts_mat <- get_assay_matrix(model_obj, assay = "RNA", type = "counts")
       sce <- SingleCellExperiment::SingleCellExperiment(assays = list(counts = counts_mat))
@@ -193,9 +190,10 @@ for (sample_id in names(split_objs)) {
         primary_args$dbr <- expected_rate
       }
 
-      sce <- tryCatch(
-        do.call(scDblFinder::scDblFinder, primary_args),
-        error = function(e) {
+      sce <- safe_process_sample(
+        sample_id,
+        function() do.call(scDblFinder::scDblFinder, primary_args),
+        on_error = function(e) {
           message(sprintf("scDblFinder failed for %s: %s", sample_id, conditionMessage(e)))
           NULL
         }
@@ -208,13 +206,12 @@ for (sample_id in names(split_objs)) {
           scDblFinder.class = as.character(SummarizedExperiment::colData(sce)$scDblFinder.class),
           stringsAsFactors = FALSE
         )
-        meta_df <- meta_df %>%
-          left_join(primary_df, by = "cell_id", suffix = c("", ".new")) %>%
-          mutate(
-            scDblFinder.score = ifelse(!is.na(scDblFinder.score.new), scDblFinder.score.new, scDblFinder.score),
-            scDblFinder.class = ifelse(!is.na(scDblFinder.class.new), scDblFinder.class.new, scDblFinder.class)
-          ) %>%
-          select(-ends_with(".new"))
+        meta_df <- safe_merge_meta(
+          meta_df,
+          primary_df,
+          by = "cell_id",
+          cols = c("scDblFinder.score", "scDblFinder.class")
+        )
         primary_detected_doublets <- sum(tolower(meta_df$scDblFinder.class) == "doublet", na.rm = TRUE)
       } else {
         primary_status <- "failed"
@@ -222,6 +219,7 @@ for (sample_id in names(split_objs)) {
 
       if (length(branch_model$usable_dims) >= 5) {
         secondary_result <- run_secondary_doubletfinder(
+          sample_id = sample_id,
           model_obj = model_obj,
           usable_dims = branch_model$usable_dims,
           expected_doublets = expected_doublets
@@ -234,13 +232,12 @@ for (sample_id in names(split_objs)) {
           DoubletFinder.pANN = unname(secondary_result$pANN),
           stringsAsFactors = FALSE
         )
-        meta_df <- meta_df %>%
-          left_join(secondary_df, by = "cell_id", suffix = c("", ".new")) %>%
-          mutate(
-            DoubletFinder.class = ifelse(!is.na(DoubletFinder.class.new), DoubletFinder.class.new, DoubletFinder.class),
-            DoubletFinder.pANN = ifelse(!is.na(DoubletFinder.pANN.new), DoubletFinder.pANN.new, DoubletFinder.pANN)
-          ) %>%
-          select(-ends_with(".new"))
+        meta_df <- safe_merge_meta(
+          meta_df,
+          secondary_df,
+          by = "cell_id",
+          cols = c("DoubletFinder.class", "DoubletFinder.pANN")
+        )
         secondary_detected_doublets <- sum(meta_df$DoubletFinder.class == "Doublet", na.rm = TRUE)
       } else {
         secondary_status <- if (cfg$doublet_secondary_enabled) "skipped_low_dims" else "disabled"

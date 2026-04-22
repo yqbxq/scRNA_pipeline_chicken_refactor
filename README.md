@@ -230,7 +230,9 @@
     - `02b_finalize_clustering.R`
     - `03_annotation.R`
     - `03a_annotation_eda.R`
-    - `04_deg_enrichment.R`
+    - `04_marker_discovery.R`
+    - `04a_pseudobulk_ds.R`
+    - `04b_composition.R`
     - `05_trajectory.R`
   - 会在 `pre_qc / post_qc / integration / annotation` 四个 gate 自动停住
   - 审阅对应 `reports/eda/<stage>/report.md` 后，在 `config/eda_gates.tsv` 中把该 gate 设为 `approved`，再重跑同一个 `20_run_main_pipeline.sh`

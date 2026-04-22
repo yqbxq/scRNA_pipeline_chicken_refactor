@@ -132,13 +132,11 @@ resolution_rows <- bind_rows(lapply(panorama_spec$res_range, function(res) {
 
 triage_rows <- list()
 append_triage <- function(severity, signal_id, evidence, recommended_action) {
-  triage_rows[[length(triage_rows) + 1]] <<- data.frame(
+  triage_rows[[length(triage_rows) + 1]] <<- make_triage_row(
     severity = severity,
     signal_id = signal_id,
     evidence = evidence,
-    recommended_action = recommended_action,
-    manual_review_required = "yes",
-    stringsAsFactors = FALSE
+    recommended_action = recommended_action
   )
 }
 
@@ -191,14 +189,7 @@ if (has_harmony) {
   }
 }
 
-triage_df <- if (length(triage_rows) > 0) bind_rows(triage_rows) else data.frame(
-  severity = character(0),
-  signal_id = character(0),
-  evidence = character(0),
-  recommended_action = character(0),
-  manual_review_required = character(0),
-  stringsAsFactors = FALSE
-)
+triage_df <- if (length(triage_rows) > 0) bind_rows(triage_rows) else empty_triage_df(include_sample = FALSE)
 
 if ("umap_rna" %in% Reductions(obj)) {
   umap_rna <- as.data.frame(Embeddings(obj, reduction = "umap_rna"))
@@ -267,13 +258,7 @@ report_lines <- c(
   "- resolution 候选曲线只提供证据，不自动改写其它 layer 的 target_clusters。"
 )
 
-if (nrow(triage_df) > 0) {
-  report_lines <- c(report_lines, "", "## Triage Summary")
-  for (i in seq_len(nrow(triage_df))) {
-    row <- triage_df[i, , drop = FALSE]
-    report_lines <- c(report_lines, sprintf("- [%s] `%s`: %s", row$severity, row$signal_id, row$recommended_action))
-  }
-}
+report_lines <- c(report_lines, "", "## Triage Summary", render_triage_markdown(triage_df, include_sample = FALSE))
 
 write_markdown(report_lines, panorama_paths$report_md)
 write_markdown(report_lines, file.path(compat_stage_dir, "report.md"))

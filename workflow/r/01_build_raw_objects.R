@@ -42,26 +42,10 @@ sample_builds <- lapply(sample_ids, function(sample_id) {
     project = sample_id,
     min.features = 0
   )
-  platform_resolved <- if (!is.null(inventory_row) && "platform_resolved" %in% colnames(inventory_row)) {
-    normalize_scalar_value(inventory_row$platform_resolved[1], "generic_mex")
-  } else {
-    normalize_scalar_value(sample_row$platform[1], "generic_mex")
-  }
-  gene_id_type_resolved <- if (!is.null(inventory_row) && "gene_id_type_resolved" %in% colnames(inventory_row)) {
-    normalize_scalar_value(inventory_row$gene_id_type_resolved[1], "unknown")
-  } else {
-    normalize_scalar_value(sample_row$gene_id_type[1], "unknown")
-  }
-  feature_name_profile <- if (!is.null(inventory_row) && "feature_name_profile" %in% colnames(inventory_row)) {
-    normalize_scalar_value(inventory_row$feature_name_profile[1], "unknown")
-  } else {
-    "unknown"
-  }
-  reference_version <- if (!is.null(inventory_row) && "reference_version" %in% colnames(inventory_row)) {
-    normalize_scalar_value(inventory_row$reference_version[1])
-  } else {
-    normalize_scalar_value(sample_row$reference_version[1])
-  }
+  platform_resolved <- safe_get_field(inventory_row, sample_row, "platform_resolved", "platform", "generic_mex")
+  gene_id_type_resolved <- safe_get_field(inventory_row, sample_row, "gene_id_type_resolved", "gene_id_type", "unknown")
+  feature_name_profile <- safe_get_field(inventory_row, NULL, "feature_name_profile", default = "unknown")
+  reference_version <- safe_get_field(inventory_row, sample_row, "reference_version")
   obj$sample_id <- sample_id
   obj$barcode_raw <- colnames(obj)
   resolved_group <- normalize_scalar_value(sample_row$group_id[1])

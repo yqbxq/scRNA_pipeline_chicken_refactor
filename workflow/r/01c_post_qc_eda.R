@@ -63,14 +63,12 @@ if (nrow(ambient_summary_df) > 0 && "sample_id" %in% colnames(ambient_summary_df
 
 triage_rows <- list()
 append_triage <- function(sample_id, severity, signal_id, evidence, recommended_action) {
-  triage_rows[[length(triage_rows) + 1]] <<- data.frame(
+  triage_rows[[length(triage_rows) + 1]] <<- make_triage_row(
     sample_id = sample_id,
     severity = severity,
     signal_id = signal_id,
     evidence = evidence,
-    recommended_action = recommended_action,
-    manual_review_required = "yes",
-    stringsAsFactors = FALSE
+    recommended_action = recommended_action
   )
 }
 
@@ -150,15 +148,7 @@ if (nrow(cluster_risk_df) > 0) {
   }
 }
 
-triage_df <- if (length(triage_rows) > 0) bind_rows(triage_rows) else data.frame(
-  sample_id = character(0),
-  severity = character(0),
-  signal_id = character(0),
-  evidence = character(0),
-  recommended_action = character(0),
-  manual_review_required = character(0),
-  stringsAsFactors = FALSE
-)
+triage_df <- if (length(triage_rows) > 0) bind_rows(triage_rows) else empty_triage_df()
 
 retention_long <- retention_df %>%
   select(sample, qc_retention, singlet_retention, final_retention) %>%
@@ -255,16 +245,7 @@ report_lines <- c(
   "- 若 ambient 报告建议替换 counts 但当前仍未应用，应在进入后续整合和注释前显式记录。"
 )
 
-if (nrow(triage_df) > 0) {
-  report_lines <- c(report_lines, "", "## Triage Summary")
-  for (i in seq_len(nrow(triage_df))) {
-    row <- triage_df[i, , drop = FALSE]
-    report_lines <- c(
-      report_lines,
-      sprintf("- `%s` [%s] `%s`: %s", row$sample_id, row$severity, row$signal_id, row$recommended_action)
-    )
-  }
-}
+report_lines <- c(report_lines, "", "## Triage Summary", render_triage_markdown(triage_df))
 
 write_markdown(report_lines, file.path(stage_dir, "report.md"))
 message("post-QC EDA 已输出到: ", stage_dir)

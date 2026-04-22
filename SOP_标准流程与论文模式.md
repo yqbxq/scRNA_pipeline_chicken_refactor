@@ -211,8 +211,10 @@
 7. `02b_finalize_clustering.R`
 8. `03_annotation.R`
 9. `03a_annotation_eda.R`
-10. `04_deg_enrichment.R`
-11. `05_trajectory.R`
+10. `04_marker_discovery.R`
+11. `04a_pseudobulk_ds.R`
+12. `04b_composition.R`
+13. `05_trajectory.R`
 
 门控规则：
 

@@ -107,6 +107,9 @@ read_cfg <- function() {
     target_clusters = as.integer(Sys.getenv("TARGET_CLUSTERS", "15")),
     res_range = as.numeric(split_csv(Sys.getenv("RES_RANGE", "0.20,0.25,0.30,0.35,0.40,0.45,0.50,0.55,0.60"))),
     res_fine_step = as.numeric(Sys.getenv("RES_FINE_STEP", "0.005")),
+    triage_frac_below_cutoff = as.numeric(Sys.getenv("TRIAGE_FRAC_BELOW_CUTOFF", "0.35")),
+    triage_frac_above_mito = as.numeric(Sys.getenv("TRIAGE_FRAC_ABOVE_MITO", "0.25")),
+    triage_density_peaks = as.integer(Sys.getenv("TRIAGE_DENSITY_PEAKS", "2")),
     integration_mode = tolower(Sys.getenv("INTEGRATION_MODE", "harmony")),
     trajectory_start = Sys.getenv("TRAJECTORY_START", ""),
     trajectory_coarse_label = Sys.getenv("TRAJECTORY_COARSE_LABEL", "cell_type"),
@@ -347,6 +350,363 @@ normalize_scalar_value <- function(x, default = "") {
     return(default)
   }
   trimws(as.character(x))
+}
+
+display_scalar_value <- function(x, default = "NA") {
+  value <- normalize_scalar_value(x)
+  if (nzchar(value)) {
+    return(value)
+  }
+  default
+}
+
+safe_get_field <- function(inventory_row, sample_row, inv_field, sample_field = inv_field, default = "") {
+  if (!is.null(inventory_row) && inv_field %in% colnames(inventory_row)) {
+    return(normalize_scalar_value(inventory_row[[inv_field]][1], default))
+  }
+  if (!is.null(sample_row) && sample_field %in% colnames(sample_row)) {
+    return(normalize_scalar_value(sample_row[[sample_field]][1], default))
+  }
+  default
+}
+
+resolve_doubletfinder_fns <- function(pkg_env = NULL) {
+  if (is.null(pkg_env)) {
+    pkg_env <- asNamespace("DoubletFinder")
+  }
+
+  sweep_name <- if (exists("paramSweep_v3", envir = pkg_env, mode = "function")) {
+    "paramSweep_v3"
+  } else {
+    "paramSweep"
+  }
+  doublet_name <- if (exists("doubletFinder_v3", envir = pkg_env, mode = "function")) {
+    "doubletFinder_v3"
+  } else {
+    "doubletFinder"
+  }
+
+  list(
+    paramSweep = get(sweep_name, envir = pkg_env),
+    summarizeSweep = get("summarizeSweep", envir = pkg_env),
+    find.pK = get("find.pK", envir = pkg_env),
+    doubletFinder = get(doublet_name, envir = pkg_env)
+  )
+}
+
+safe_merge_meta <- function(meta_df, new_df, by = "cell_id", cols = NULL) {
+  if (is.null(new_df) || nrow(new_df) == 0) {
+    return(meta_df)
+  }
+  if (!is.null(cols)) {
+    keep_cols <- unique(c(by, cols))
+    keep_cols <- keep_cols[keep_cols %in% colnames(new_df)]
+    new_df <- new_df[, keep_cols, drop = FALSE]
+  }
+
+  result <- dplyr::left_join(meta_df, new_df, by = by, suffix = c("", ".new"))
+  new_cols <- grep("\\.new$", colnames(result), value = TRUE)
+  for (new_col in new_cols) {
+    base_col <- sub("\\.new$", "", new_col)
+    if (base_col %in% colnames(meta_df)) {
+      use_new <- !is.na(result[[new_col]])
+      result[[base_col]][use_new] <- result[[new_col]][use_new]
+    } else {
+      result[[base_col]] <- result[[new_col]]
+    }
+  }
+
+  result[, !grepl("\\.new$", colnames(result)), drop = FALSE]
+}
+
+safe_process_sample <- function(sample_id, fn, on_error = NULL) {
+  tryCatch(
+    fn(),
+    error = function(e) {
+      warning(
+        sprintf("样本 %s 处理失败: %s", sample_id, conditionMessage(e)),
+        call. = FALSE
+      )
+      if (is.function(on_error)) {
+        return(on_error(e))
+      }
+      NULL
+    }
+  )
+}
+
+TRIAGE_SIGNAL_REGISTRY <- list(
+  low_complexity_burden = list(
+    display_name = "大量细胞未达标",
+    suspected_issue = "超过当前 QC 最低阈值的细胞比例偏高，说明样本整体质量可能较差，或当前阈值对这个样本来说过严。",
+    recommended_action = "先打开 violin 图和 cutoff burden 图查看分布。如果低质量细胞形成独立峰，沿用当前阈值；如果分布连续，考虑为该样本单独调整阈值。"
+  ),
+  mito_detection_failed = list(
+    display_name = "线粒体基因识别失败",
+    suspected_issue = "未能稳定识别线粒体基因，当前 percent.mito 不可信。",
+    recommended_action = "优先使用 reference GTF 染色体位点或 config/mito_gene_list.txt 明确线粒体基因列表，再继续解释或依赖 percent.mito。"
+  ),
+  mito_prefix_fallback = list(
+    display_name = "线粒体识别仅依赖前缀匹配",
+    suspected_issue = "当前样本没有直接使用 reference/GTF 命中线粒体基因，而是退回到前缀匹配。",
+    recommended_action = "结果可用于初步 QC，但进入正式解释前应尽快用 reference GTF 或用户显式列表复核。"
+  ),
+  mito_feature_count_low = list(
+    display_name = "线粒体基因命中数偏少",
+    suspected_issue = "虽然识别到了线粒体基因，但命中数偏少，percent.mito 的稳定性仍然可疑。",
+    recommended_action = "先检查 GTF 染色体命名、features 列选择和 mito_gene_list.txt 是否需要显式补充。"
+  ),
+  high_mito_burden = list(
+    display_name = "高线粒体负担",
+    suspected_issue = "高 mt 细胞比例偏高，样本可能存在明显的低质量负担，也可能混入特定高 mt 群体。",
+    recommended_action = "先判断这是全样本质量问题还是特定细胞群体的生物信号，再决定是否收紧 mt cutoff。"
+  ),
+  possible_multimodal_qc = list(
+    display_name = "QC 分布疑似多峰",
+    suspected_issue = "QC 指标分布不太像单一总体，说明同一样本里可能混有不同质量层或不同输入状态。",
+    recommended_action = "先标记为人工复核，避免直接套单一固定 cutoff 清洗。"
+  ),
+  low_genes_low_saturation = list(
+    display_name = "低基因数且饱和度仍偏低",
+    suspected_issue = "每细胞基因数偏低，同时测序饱和度也偏低，说明追加测序可能仍有收益。",
+    recommended_action = "继续核查文库复杂度，同时评估是否值得追加测序。"
+  ),
+  low_genes_high_saturation = list(
+    display_name = "低基因数但饱和度已高",
+    suspected_issue = "每细胞基因数偏低，但测序饱和度已接近平稳，问题更像是样本或文库复杂度本身受限。",
+    recommended_action = "优先回头检查样本与文库复杂度，不要默认把问题归因于测序深度不足。"
+  ),
+  ambient_soupx_ready = list(
+    display_name = "具备 SoupX 主路径条件",
+    suspected_issue = "该样本已经具备 raw droplets 等前提，ambient 分支可以按主路径执行。",
+    recommended_action = "进入 ambient branch 时优先走 SoupX，并输出 contamination summary 与前后 marker leakage 对比。"
+  ),
+  ambient_decontx_fallback = list(
+    display_name = "仅具备 DecontX fallback 条件",
+    suspected_issue = "该样本不满足 SoupX 主路径要求，但仍可走对象级的 DecontX fallback。",
+    recommended_action = "在 ambient 报告中明确标记为 DecontX fallback，不要与 SoupX 等价解释。"
+  ),
+  gene_id_type_unrecognized = list(
+    display_name = "gene_id_type 未识别",
+    suspected_issue = "feature naming profile 无法稳定识别 gene_id_type，后续 percent.mito、marker 命中和同源映射解释都存在风险。",
+    recommended_action = "先确认 features.tsv 的命名列和 reference GTF 是否匹配，再继续解释 percent.mito 或 marker 命中。"
+  ),
+  raw_matrix_missing_for_soupx = list(
+    display_name = "缺少 SoupX 所需原始矩阵",
+    suspected_issue = "该样本没有可用于 SoupX 的 raw droplets 输入，ambient 主路径不可用。",
+    recommended_action = "在 ambient 报告里确认是否降级到 DecontX fallback，并把“可做 ambient”与“已完成 correction”明确区分。"
+  ),
+  input_contract_limits = list(
+    display_name = "输入契约存在限制",
+    suspected_issue = "当前样本的输入契约仍有边界条件，后续解释可能受到约束。",
+    recommended_action = "结合 sample_qc_summary.tsv 一起确认这些限制是否影响继续推进。"
+  ),
+  project_readiness_limits = list(
+    display_name = "项目级 readiness 仍有限制",
+    suspected_issue = "项目级 intake/readiness 还没有完全放行，继续推进前需要确认这些限制是否可接受。",
+    recommended_action = "在进入后续整合和分支模块前，先显式记录这些限制及接受理由。"
+  ),
+  heavy_qc_loss = list(
+    display_name = "QC 保留率过低",
+    suspected_issue = "该样本在 QC 后保留率偏低，说明阈值或样本质量都需要重新审视。",
+    recommended_action = "优先回看 pre-QC 报告中的 cutoff burden 和样本级质量分布。"
+  ),
+  high_primary_doublet_rate = list(
+    display_name = "primary doublet rate 偏高",
+    suspected_issue = "默认主调用器识别出的 doublet 比例偏高，后续聚类和整合容易受到影响。",
+    recommended_action = "重点审阅 doublet UMAP、score 分布与高风险 cluster。"
+  ),
+  primary_secondary_discordance = list(
+    display_name = "主次 doublet 调用器不一致",
+    suspected_issue = "primary 与 secondary 调用器对同一批细胞给出了冲突结论。",
+    recommended_action = "在保留 primary 为默认主调用器的前提下，重点复核冲突区域。"
+  ),
+  sample_collapse = list(
+    display_name = "样本在 QC/doublet 后接近塌缩",
+    suspected_issue = "经过 QC 和 doublet 过滤后，该样本剩余细胞过少，后续结构解释会明显变得不稳定。",
+    recommended_action = "在继续整合和注释前先评估这个样本是否仍适合保留。"
+  ),
+  ambient_recommended_not_applied = list(
+    display_name = "ambient 建议替换但未应用",
+    suspected_issue = "ambient 分支认为应替换 counts，但主对象当前仍保留原始 counts。",
+    recommended_action = "进入后续整合和注释前，应把这个差异显式记录在报告中。"
+  ),
+  doublet_high_risk_cluster = list(
+    display_name = "存在 doublet 高风险 cluster",
+    suspected_issue = "某些 provisional cluster 中的 doublet 富集明显高于样本背景。",
+    recommended_action = "结合 UMAP 空间和 marker 混合模式复核这些 cluster。"
+  ),
+  batch_dominant_pca_axes = list(
+    display_name = "PCA 主轴被样本来源主导",
+    suspected_issue = "未整合空间中的主导变异更像 sample/batch，而不是目标生物学结构。",
+    recommended_action = "优先检查是否需要 batch correction 或 integration，再决定是否沿用未整合空间。"
+  ),
+  possible_overcorrection = list(
+    display_name = "可能发生过度校正",
+    suspected_issue = "整合后条件结构被明显抹平，可能已经开始损失你真正关心的生物学差异。",
+    recommended_action = "如果整合后条件结构被明显抹平，优先改用更保守策略或退回未整合分析。"
+  ),
+  annotation_conflict = list(
+    display_name = "注释证据存在冲突",
+    suspected_issue = "同一层中存在 marker 证据与最终命名不一致的 cluster，需要单独审阅。",
+    recommended_action = "回看 annotation evidence 表，检查 marker panel 是否重叠或 cluster 是否需要进一步拆分。"
+  ),
+  high_undetermined_ratio = list(
+    display_name = "未定注释比例偏高",
+    suspected_issue = "该层里未定 cluster 占比偏高，说明当前 panel 或证据还不足以稳定命名。",
+    recommended_action = "优先补充 marker panel，或把这一层保留为待定结果而不是强行命名。"
+  ),
+  no_marker_panel = list(
+    display_name = "缺少 marker panel",
+    suspected_issue = "该层当前没有 marker panel，注释主要依赖数据驱动证据。",
+    recommended_action = "在 config/marker_panels/ 中补充组织特异性 marker panel，再复核该层注释。"
+  )
+)
+
+TRIAGE_SIGNAL_PREFIX_REGISTRY <- list(
+  cell_cycle_axis_ = list(
+    display_name = "细胞周期主导轴",
+    suspected_issue = "当前主导降维轴中包含较多细胞周期高载荷基因，cell cycle 可能正在主导结构变化。",
+    recommended_action = "只有在 cell cycle 明显遮蔽了你的核心科学问题时，再考虑回归，而不是默认直接回归。"
+  ),
+  stress_axis_ = list(
+    display_name = "应激/即时早期基因主导轴",
+    suspected_issue = "当前主导降维轴中富集 stress/IEG 高载荷基因，更像 dissociation stress 或技术扰动。",
+    recommended_action = "优先怀疑应激来源，不要立刻把它解释成新的稳定细胞状态。"
+  )
+)
+
+resolve_triage_signal_spec <- function(signal_id) {
+  signal_id <- normalize_scalar_value(signal_id)
+  if (!nzchar(signal_id)) {
+    return(list(
+      display_name = "未命名信号",
+      suspected_issue = "",
+      recommended_action = ""
+    ))
+  }
+
+  if (signal_id %in% names(TRIAGE_SIGNAL_REGISTRY)) {
+    return(TRIAGE_SIGNAL_REGISTRY[[signal_id]])
+  }
+
+  matched_prefixes <- names(TRIAGE_SIGNAL_PREFIX_REGISTRY)[
+    startsWith(signal_id, names(TRIAGE_SIGNAL_PREFIX_REGISTRY))
+  ]
+  if (length(matched_prefixes) > 0) {
+    prefix <- matched_prefixes[[which.max(nchar(matched_prefixes))]]
+    return(TRIAGE_SIGNAL_PREFIX_REGISTRY[[prefix]])
+  }
+
+  list(
+    display_name = signal_id,
+    suspected_issue = "",
+    recommended_action = ""
+  )
+}
+
+empty_triage_df <- function(include_sample = TRUE) {
+  cols <- list(
+    severity = character(0),
+    signal_id = character(0),
+    display_name = character(0),
+    suspected_issue = character(0),
+    evidence = character(0),
+    recommended_action = character(0),
+    manual_review_required = character(0)
+  )
+  if (isTRUE(include_sample)) {
+    cols <- c(list(sample_id = character(0)), cols)
+  }
+  do.call(
+    data.frame,
+    c(cols, list(stringsAsFactors = FALSE, check.names = FALSE))
+  )
+}
+
+make_triage_row <- function(sample_id = NULL, severity, signal_id, evidence = "", suspected_issue = "", recommended_action = "", manual_review_required = "yes") {
+  spec <- resolve_triage_signal_spec(signal_id)
+  row <- data.frame(
+    severity = severity,
+    signal_id = signal_id,
+    display_name = display_scalar_value(spec$display_name, signal_id),
+    suspected_issue = display_scalar_value(suspected_issue, display_scalar_value(spec$suspected_issue, "待补充")),
+    evidence = display_scalar_value(evidence, "待补充"),
+    recommended_action = display_scalar_value(recommended_action, display_scalar_value(spec$recommended_action, "待补充")),
+    manual_review_required = display_scalar_value(manual_review_required, "yes"),
+    stringsAsFactors = FALSE
+  )
+  if (!is.null(sample_id)) {
+    row <- cbind(data.frame(sample_id = display_scalar_value(sample_id, "NA"), stringsAsFactors = FALSE), row)
+  }
+  row
+}
+
+triage_subject_label <- function(sample_id) {
+  sample_id <- normalize_scalar_value(sample_id)
+  if (!nzchar(sample_id)) {
+    return("")
+  }
+  if (identical(sample_id, "__PROJECT__")) {
+    return("项目级")
+  }
+  sprintf("`%s`", sample_id)
+}
+
+render_triage_markdown <- function(triage_df, include_sample = TRUE) {
+  if (is.null(triage_df) || nrow(triage_df) == 0) {
+    return("- 当前没有 triage 信号。")
+  }
+
+  lines <- character(0)
+  for (i in seq_len(nrow(triage_df))) {
+    row <- triage_df[i, , drop = FALSE]
+    header_parts <- c()
+    if (isTRUE(include_sample) && "sample_id" %in% colnames(row)) {
+      subject_label <- triage_subject_label(row$sample_id[[1]])
+      if (nzchar(subject_label)) {
+        header_parts <- c(header_parts, subject_label)
+      }
+    }
+    header_parts <- c(
+      header_parts,
+      sprintf("[%s]", display_scalar_value(row$severity[[1]], "info")),
+      display_scalar_value(row$display_name[[1]], display_scalar_value(row$signal_id[[1]], "未命名信号"))
+    )
+    lines <- c(
+      lines,
+      sprintf("- %s", paste(header_parts, collapse = " ")),
+      sprintf("  问题：%s", display_scalar_value(row$suspected_issue[[1]], "待补充")),
+      sprintf("  证据：%s", display_scalar_value(row$evidence[[1]], "待补充")),
+      sprintf("  建议：%s", display_scalar_value(row$recommended_action[[1]], "待补充"))
+    )
+  }
+  lines
+}
+
+escape_markdown_cell <- function(x) {
+  value <- display_scalar_value(x, "NA")
+  value <- gsub("\\|", "\\\\|", value)
+  value <- gsub("\n", "<br>", value, fixed = TRUE)
+  value
+}
+
+render_markdown_table <- function(df) {
+  if (is.null(df) || nrow(df) == 0 || ncol(df) == 0) {
+    return("- 无")
+  }
+
+  header <- paste(sprintf(" %s ", colnames(df)), collapse = "|")
+  separator <- paste(rep(" --- ", ncol(df)), collapse = "|")
+  body <- apply(df, 1, function(row) {
+    paste(sprintf(" %s ", vapply(row, escape_markdown_cell, character(1))), collapse = "|")
+  })
+
+  c(
+    paste0("|", header, "|"),
+    paste0("|", separator, "|"),
+    paste0("|", body, "|")
+  )
 }
 
 strip_ensembl_version <- function(x) {

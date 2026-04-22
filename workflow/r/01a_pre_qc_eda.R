@@ -117,15 +117,13 @@ sample_summary <- bind_rows(lapply(unique(meta_df$sample_id), function(sample_id
 
 triage_rows <- list()
 append_triage <- function(sample_id, severity, signal_id, suspected_issue, evidence, recommended_action) {
-  triage_rows[[length(triage_rows) + 1]] <<- data.frame(
+  triage_rows[[length(triage_rows) + 1]] <<- make_triage_row(
     sample_id = sample_id,
     severity = severity,
     signal_id = signal_id,
     suspected_issue = suspected_issue,
     evidence = evidence,
-    recommended_action = recommended_action,
-    manual_review_required = "yes",
-    stringsAsFactors = FALSE
+    recommended_action = recommended_action
   )
 }
 
@@ -133,7 +131,7 @@ for (i in seq_len(nrow(sample_summary))) {
   row <- sample_summary[i, , drop = FALSE]
   sample_id <- row$sample_id
 
-  if (row$frac_below_nfeature_cutoff > 0.35 || row$frac_below_ncount_cutoff > 0.35) {
+  if (row$frac_below_nfeature_cutoff > cfg$triage_frac_below_cutoff || row$frac_below_ncount_cutoff > cfg$triage_frac_below_cutoff) {
     append_triage(
       sample_id,
       "high",
@@ -182,7 +180,7 @@ for (i in seq_len(nrow(sample_summary))) {
     }
   }
 
-  if (row$frac_above_mito_cutoff > 0.25) {
+  if (row$frac_above_mito_cutoff > cfg$triage_frac_above_mito) {
     append_triage(
       sample_id,
       "high",
@@ -193,7 +191,7 @@ for (i in seq_len(nrow(sample_summary))) {
     )
   }
 
-  if (row$nfeature_density_peaks > 2 || row$mito_density_peaks > 2) {
+  if (row$nfeature_density_peaks > cfg$triage_density_peaks || row$mito_density_peaks > cfg$triage_density_peaks) {
     append_triage(
       sample_id,
       "medium",
@@ -304,16 +302,7 @@ if (length(project_notes) > 0) {
 triage_df <- if (length(triage_rows) > 0) {
   bind_rows(triage_rows)
 } else {
-  data.frame(
-    sample_id = character(0),
-    severity = character(0),
-    signal_id = character(0),
-    suspected_issue = character(0),
-    evidence = character(0),
-    recommended_action = character(0),
-    manual_review_required = character(0),
-    stringsAsFactors = FALSE
-  )
+  empty_triage_df()
 }
 
 qc_long <- meta_df %>%
@@ -364,6 +353,52 @@ save_plot_dual(cutoff_plot, file.path(stage_dir, "pre_qc_cutoff_burden.png"), wi
 write_tsv(sample_summary, file.path(stage_dir, "sample_qc_summary.tsv"))
 write_tsv(triage_df, file.path(stage_dir, "triage.tsv"))
 
+sample_contract_rows <- function(row) {
+  data.frame(
+    主题 = c(
+      "输入契约", "输入契约", "输入契约", "输入契约",
+      "标准路径", "标准路径", "标准路径", "标准路径",
+      "Ambient", "Ambient", "Ambient", "Ambient", "Ambient", "Ambient",
+      "Feature/QC", "Feature/QC", "Feature/QC", "Feature/QC", "Feature/QC",
+      "Feature/QC", "Feature/QC", "Feature/QC", "Feature/QC", "Feature/QC"
+    ),
+    字段 = c(
+      "platform", "feature_name_profile", "gene_id_type", "reference_version",
+      "filtered_matrix_dir", "raw_matrix_dir", "metrics_path", "bam_path",
+      "preferred_method", "fallback_method", "soupx_ready", "decontx_ready", "cellbender_ready", "ambient_notes",
+      "mito_detection_method", "mito_detection_detail", "species_guess", "mito_reference_seqnames", "mito_feature_count",
+      "ribo_feature_count", "cell_cycle_s_features", "cell_cycle_g2m_features", "mito_gene_list", "mito_warnings"
+    ),
+    值 = c(
+      display_scalar_value(row$platform),
+      display_scalar_value(row$feature_name_profile),
+      display_scalar_value(row$gene_id_type_resolved),
+      display_scalar_value(row$reference_version),
+      display_scalar_value(row$filtered_matrix_dir),
+      display_scalar_value(row$raw_matrix_dir),
+      display_scalar_value(row$metrics_summary_path),
+      display_scalar_value(row$bam_path),
+      display_scalar_value(row$ambient_preferred_method),
+      display_scalar_value(row$ambient_fallback_method),
+      display_scalar_value(row$ambient_soupx_ready),
+      display_scalar_value(row$ambient_decontx_ready),
+      display_scalar_value(row$ambient_cellbender_ready),
+      display_scalar_value(row$ambient_notes),
+      display_scalar_value(row$mito_detection_method, "failed"),
+      display_scalar_value(row$mito_detection_detail),
+      display_scalar_value(row$species_guess, "unknown"),
+      display_scalar_value(row$mito_reference_seqnames),
+      display_scalar_value(row$mito_feature_count),
+      display_scalar_value(row$ribo_feature_count),
+      display_scalar_value(row$cell_cycle_s_feature_count),
+      display_scalar_value(row$cell_cycle_g2m_feature_count),
+      display_scalar_value(row$mito_detected_gene_names),
+      display_scalar_value(row$mito_warning_messages)
+    ),
+    stringsAsFactors = FALSE
+  )
+}
+
 report_lines <- c(
   "# Pre-QC EDA Report",
   "",
@@ -380,7 +415,8 @@ report_lines <- c(
   "",
   "## Review Focus",
   "- 先确认是否存在样本级整体质量问题，再决定是否调整 sample-wise QC 阈值。",
-  "- 如果 `triage.tsv` 出现 `possible_multimodal_qc`，优先人工审阅，不要直接套全局固定 cutoff。",
+  sprintf("- 当前 triage 阈值：frac_below_cutoff=`%.2f`，frac_above_mito=`%.2f`，density_peaks=`%s`。", cfg$triage_frac_below_cutoff, cfg$triage_frac_above_mito, cfg$triage_density_peaks),
+  "- 如果 triage 摘要里出现“QC 分布疑似多峰”，优先人工审阅，不要直接套全局固定 cutoff。",
   sprintf("- ambient branch 报告位置: `%s`", file.path(cfg$eda_report_dir, "ambient", "report.md")),
   "- 如果 `mito_detection_method` 不是 `gtf` 或 `user_list`，先确认 mito 基因识别是否可信，再解释 `percent.mito`。"
 )
@@ -397,31 +433,12 @@ for (i in seq_len(nrow(sample_summary))) {
   row <- sample_summary[i, , drop = FALSE]
   report_lines <- c(
     report_lines,
-    sprintf("- `%s`: platform=`%s`; profile=`%s`; gene_id_type=`%s`; reference_version=`%s`", row$sample_id, row$platform, row$feature_name_profile, row$gene_id_type_resolved, ifelse(nzchar(row$reference_version), row$reference_version, "NA")),
-    sprintf("  filtered_matrix_dir=`%s`", ifelse(nzchar(row$filtered_matrix_dir), row$filtered_matrix_dir, "NA")),
-    sprintf("  raw_matrix_dir=`%s`", ifelse(nzchar(row$raw_matrix_dir), row$raw_matrix_dir, "NA")),
-    sprintf("  ambient_preferred_method=`%s`; ambient_fallback_method=`%s`; soupx_ready=`%s`; decontx_ready=`%s`; cellbender_ready=`%s`", row$ambient_preferred_method, row$ambient_fallback_method, row$ambient_soupx_ready, row$ambient_decontx_ready, row$ambient_cellbender_ready),
-    sprintf("  metrics_path=`%s`", ifelse(nzchar(row$metrics_summary_path), row$metrics_summary_path, "NA")),
-    sprintf("  bam_path=`%s`", ifelse(nzchar(row$bam_path), row$bam_path, "NA")),
-    sprintf("  mito_detection_method=`%s`; detail=`%s`; species_guess=`%s`", normalize_scalar_value(row$mito_detection_method, "failed"), ifelse(nzchar(normalize_scalar_value(row$mito_detection_detail)), row$mito_detection_detail, "NA"), normalize_scalar_value(row$species_guess, "unknown")),
-    sprintf("  mito_reference_seqnames=`%s`", ifelse(nzchar(normalize_scalar_value(row$mito_reference_seqnames)), row$mito_reference_seqnames, "NA")),
-    sprintf("  mito_feature_count=`%s`; ribo_feature_count=`%s`; cell_cycle_s_features=`%s`; cell_cycle_g2m_features=`%s`", row$mito_feature_count, row$ribo_feature_count, row$cell_cycle_s_feature_count, row$cell_cycle_g2m_feature_count),
-    sprintf("  mito_gene_list=`%s`", ifelse(nzchar(normalize_scalar_value(row$mito_detected_gene_names)), row$mito_detected_gene_names, "NA")),
-    sprintf("  mito_warnings=`%s`", ifelse(nzchar(normalize_scalar_value(row$mito_warning_messages)), row$mito_warning_messages, "NA")),
-    sprintf("  ambient_notes=`%s`", ifelse(nzchar(normalize_scalar_value(row$ambient_notes)), row$ambient_notes, "NA"))
+    sprintf("### `%s`", row$sample_id),
+    render_markdown_table(sample_contract_rows(row))
   )
 }
 
-if (nrow(triage_df) > 0) {
-  report_lines <- c(report_lines, "", "## Triage Summary")
-  for (i in seq_len(nrow(triage_df))) {
-    row <- triage_df[i, , drop = FALSE]
-    report_lines <- c(
-      report_lines,
-      sprintf("- `%s` [%s] `%s`: %s", row$sample_id, row$severity, row$signal_id, row$recommended_action)
-    )
-  }
-}
+report_lines <- c(report_lines, "", "## Triage Summary", render_triage_markdown(triage_df))
 
 write_markdown(report_lines, file.path(stage_dir, "report.md"))
 message("pre-QC EDA 已输出到: ", stage_dir)
