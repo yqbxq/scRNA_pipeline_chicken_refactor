@@ -1,229 +1,29 @@
 #!/usr/bin/env Rscript
 
-load_required_packages <- function(pkgs) {
-  missing <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)]
-  if (length(missing) > 0) {
-    stop(
-      sprintf("缺少 R 包: %s", paste(missing, collapse = ", ")),
-      call. = FALSE
-    )
+.script_dir <- tryCatch(
+  dirname(normalizePath(sys.frame(1)$ofile)),
+  error = function(e) {
+    args <- commandArgs(trailingOnly = FALSE)
+    file_arg <- grep("^--file=", args, value = TRUE)
+    if (length(file_arg) > 0) {
+      dirname(normalizePath(sub("^--file=", "", file_arg[1])))
+    } else {
+      getwd()
+    }
   }
-  invisible(lapply(pkgs, function(pkg) {
-    suppressPackageStartupMessages(library(pkg, character.only = TRUE))
-  }))
-}
+)
+
+source(file.path(.script_dir, "helpers", "runtime_utils.R"))
+source(file.path(.script_dir, "helpers", "config.R"))
+source(file.path(.script_dir, "helpers", "gtf_utils.R"))
+source(file.path(.script_dir, "helpers", "ortholog_utils.R"))
+source(file.path(.script_dir, "helpers", "manifest_utils.R"))
+source(file.path(.script_dir, "helpers", "report_utils.R"))
 
 load_required_packages(c("dplyr", "ggplot2", "jsonlite"))
 
-reference_dir <- "/home/user_test/syf_f5/01shared_resources/reference/chicken"
-clean_gtf <- file.path(reference_dir, "GRCg7b_genomic_clean.gtf")
-reference_gtf <- file.path(reference_dir, "GRCg7b_genomic.gtf")
-output_dir <- "/home/user_test/syf_f5/05projects/scrna_improve/ortholog_cache"
-figure_dir <- file.path(output_dir, "figures")
-manifest_path <- file.path(output_dir, "_manifest.json")
-target_species <- c("human", "mouse")
+cfg <- get_single_script_config()
 module_name <- "00b_ortholog_report"
-module_contract <- "00_ortholog_module"
-module_version <- "1.0"
-key_genes <- c("DRGX", "CREB3L2", "EMX2", "CEBPB", "FOSL2", "JUN", "PBX3", "HMGA1", "SREBF2")
-
-`%||%` <- function(x, y) {
-  if (is.null(x)) y else x
-}
-
-timestamp_now <- function() {
-  format(Sys.time(), "%Y-%m-%dT%H:%M:%S")
-}
-
-ensure_dir <- function(path) {
-  dir.create(path, recursive = TRUE, showWarnings = FALSE)
-}
-
-strip_ensembl_version <- function(x) {
-  sub("\\.[0-9]+$", "", as.character(x))
-}
-
-extract_gtf_attr <- function(attr_vec, key) {
-  pattern <- paste0(key, ' "([^"]+)"')
-  matches <- regexec(pattern, attr_vec, perl = TRUE)
-  values <- regmatches(attr_vec, matches)
-  vapply(values, function(hit) {
-    if (length(hit) >= 2) {
-      hit[2]
-    } else {
-      ""
-    }
-  }, character(1))
-}
-
-select_gtf_path <- function(clean_gtf, reference_gtf) {
-  for (path in c(clean_gtf, reference_gtf)) {
-    if (nzchar(path) && file.exists(path)) {
-      return(path)
-    }
-  }
-  stop(
-    sprintf("GTF 不存在: %s 或 %s", clean_gtf, reference_gtf),
-    call. = FALSE
-  )
-}
-
-read_reference_annotation_local <- function(clean_gtf, reference_gtf) {
-  gtf_path <- select_gtf_path(clean_gtf, reference_gtf)
-  con <- if (grepl("\\.gz$", gtf_path)) gzfile(gtf_path, open = "rt") else file(gtf_path, open = "rt")
-  on.exit(close(con), add = TRUE)
-  gtf_df <- tryCatch(
-    read.delim(
-      con,
-      sep = "\t",
-      header = FALSE,
-      stringsAsFactors = FALSE,
-      comment.char = "#",
-      quote = ""
-    ),
-    error = function(e) NULL
-  )
-  if (is.null(gtf_df) || nrow(gtf_df) == 0 || ncol(gtf_df) < 9) {
-    stop(sprintf("无法解析 GTF: %s", gtf_path), call. = FALSE)
-  }
-
-  gene_rows <- gtf_df[gtf_df[[3]] == "gene", c(1, 9), drop = FALSE]
-  if (nrow(gene_rows) == 0) {
-    stop(sprintf("GTF 中没有 gene 记录: %s", gtf_path), call. = FALSE)
-  }
-
-  attr_field <- gene_rows[[2]]
-  gene_id <- extract_gtf_attr(attr_field, "gene_id")
-  gene_name <- extract_gtf_attr(attr_field, "gene_name")
-  gene_name[!nzchar(gene_name)] <- extract_gtf_attr(attr_field, "Name")[!nzchar(gene_name)]
-  gene_biotype <- extract_gtf_attr(attr_field, "gene_biotype")
-  gene_biotype[!nzchar(gene_biotype)] <- extract_gtf_attr(attr_field, "gene_type")[!nzchar(gene_biotype)]
-  gene_biotype[!nzchar(gene_biotype)] <- extract_gtf_attr(attr_field, "biotype")[!nzchar(gene_biotype)]
-
-  annotation_df <- unique(data.frame(
-    seqname = as.character(gene_rows[[1]]),
-    gene_id = gene_id,
-    gene_id_stripped = strip_ensembl_version(gene_id),
-    gene_name = gene_name,
-    gene_name_upper = toupper(gene_name),
-    gene_biotype = gene_biotype,
-    stringsAsFactors = FALSE
-  ))
-  annotation_df <- annotation_df[nzchar(annotation_df$gene_id) | nzchar(annotation_df$gene_name), , drop = FALSE]
-  list(gtf_path = gtf_path, annotation_df = annotation_df)
-}
-
-normalize_key <- function(x) {
-  toupper(trimws(as.character(x)))
-}
-
-orthology_bucket <- function(x) {
-  x <- trimws(as.character(x))
-  dplyr::case_when(
-    grepl("one2one$", x) ~ "one2one",
-    grepl("one2many$", x) ~ "one2many",
-    grepl("many2many$", x) ~ "many2many",
-    TRUE ~ "other"
-  )
-}
-
-read_manifest_local <- function(manifest_path) {
-  if (!file.exists(manifest_path)) {
-    stop(sprintf("缺少 manifest: %s", manifest_path), call. = FALSE)
-  }
-  jsonlite::read_json(manifest_path, simplifyVector = FALSE)
-}
-
-resolve_output_local <- function(manifest, key) {
-  entry <- manifest$outputs[[key]]
-  if (is.null(entry) || is.null(entry$path)) {
-    stop(sprintf("manifest 缺少输出键: %s", key), call. = FALSE)
-  }
-  raw_path <- as.character(entry$path)
-  if (grepl("^/", raw_path)) {
-    normalizePath(raw_path, winslash = "/", mustWork = FALSE)
-  } else {
-    normalizePath(file.path(as.character(manifest$base_dir), raw_path), winslash = "/", mustWork = FALSE)
-  }
-}
-
-write_manifest_local <- function(manifest_path, new_outputs, module_name = NULL, base_dir = NULL, inputs = NULL) {
-  if (file.exists(manifest_path)) {
-    existing <- jsonlite::read_json(manifest_path, simplifyVector = FALSE)
-    existing$outputs <- modifyList(existing$outputs %||% list(), new_outputs)
-    existing$timestamp <- timestamp_now()
-    manifest <- existing
-  } else {
-    if (is.null(module_name) || is.null(base_dir) || is.null(inputs)) {
-      stop("manifest 不存在且缺少初始化参数", call. = FALSE)
-    }
-    manifest <- list(
-      module = module_name,
-      version = module_version,
-      timestamp = timestamp_now(),
-      base_dir = base_dir,
-      inputs = inputs,
-      outputs = new_outputs
-    )
-  }
-  jsonlite::write_json(manifest, manifest_path, pretty = TRUE, auto_unbox = TRUE)
-}
-
-relative_path_local <- function(path, base_dir) {
-  normalized_path <- normalizePath(path, winslash = "/", mustWork = FALSE)
-  normalized_base <- normalizePath(base_dir, winslash = "/", mustWork = FALSE)
-  prefix <- paste0(normalized_base, "/")
-  if (startsWith(normalized_path, prefix)) {
-    substring(normalized_path, nchar(prefix) + 1L)
-  } else {
-    normalized_path
-  }
-}
-
-build_output_entry <- function(path, type, produced_by, row_semantics) {
-  list(
-    path = relative_path_local(path, output_dir),
-    type = type,
-    produced_by = produced_by,
-    row_semantics = row_semantics
-  )
-}
-
-write_markdown_local <- function(lines, path) {
-  writeLines(enc2utf8(lines), con = path, useBytes = TRUE)
-}
-
-escape_markdown_cell <- function(x) {
-  x <- ifelse(is.na(x), "", as.character(x))
-  x <- gsub("\\|", "\\\\|", x)
-  gsub("\n", "<br>", x, fixed = TRUE)
-}
-
-render_markdown_table_local <- function(df) {
-  if (is.null(df) || nrow(df) == 0) {
-    return("No data available.")
-  }
-  headers <- paste(sprintf(" %s ", vapply(colnames(df), escape_markdown_cell, character(1))), collapse = "|")
-  divider <- paste(rep(" --- ", ncol(df)), collapse = "|")
-  rows <- apply(df, 1, function(row) {
-    paste(sprintf(" %s ", vapply(row, escape_markdown_cell, character(1))), collapse = "|")
-  })
-  c(paste0("|", headers, "|"), paste0("|", divider, "|"), paste0("|", rows, "|"))
-}
-
-fmt_int <- function(x) {
-  if (is.na(x)) {
-    return("NA")
-  }
-  prettyNum(round(x), big.mark = ",", scientific = FALSE)
-}
-
-fmt_pct <- function(x) {
-  if (is.na(x)) {
-    return("NA")
-  }
-  sprintf("%.1f%%", 100 * x)
-}
 
 fmt_n_pct <- function(n, total) {
   if (is.na(total) || total <= 0) {
@@ -232,46 +32,12 @@ fmt_n_pct <- function(n, total) {
   sprintf("%s (%s)", fmt_int(n), fmt_pct(n / total))
 }
 
-fmt_num <- function(x, digits = 1) {
-  if (is.na(x)) {
-    return("NA")
-  }
-  sprintf(paste0("%.", digits, "f"), x)
-}
-
-safe_quantile <- function(x, prob) {
-  x <- x[is.finite(x)]
-  if (length(x) == 0) {
-    return(NA_real_)
-  }
-  as.numeric(stats::quantile(x, probs = prob, na.rm = TRUE))
-}
-
-safe_median <- function(x) {
-  x <- x[is.finite(x)]
-  if (length(x) == 0) {
-    return(NA_real_)
-  }
-  stats::median(x, na.rm = TRUE)
-}
-
 safe_min <- function(x) {
   x <- x[is.finite(x)]
   if (length(x) == 0) {
     return(NA_real_)
   }
   min(x, na.rm = TRUE)
-}
-
-safe_rate <- function(numerator, denominator) {
-  if (is.na(denominator) || denominator <= 0) {
-    return(NA_real_)
-  }
-  numerator / denominator
-}
-
-save_plot_local <- function(plot_obj, path, width, height) {
-  ggplot2::ggsave(path, plot_obj, width = width, height = height, dpi = 300, bg = "white")
 }
 
 read_csv_required <- function(path) {
@@ -448,20 +214,20 @@ recommend_species <- function(summaries) {
   list(recommended = recommended, reasons = reasons)
 }
 
-ensure_dir(output_dir)
-ensure_dir(figure_dir)
+ensure_dir(cfg$output_dir)
+ensure_dir(cfg$figure_dir)
 
-annotation_payload <- read_reference_annotation_local(clean_gtf, reference_gtf)
+annotation_payload <- read_reference_annotation_local(cfg$clean_gtf, cfg$reference_gtf)
 gtf_path <- annotation_payload$gtf_path
 annotation_df <- annotation_payload$annotation_df
 input_genes <- sort(unique(annotation_df$gene_name[nzchar(annotation_df$gene_name)]))
 
-manifest <- read_manifest_local(manifest_path)
+manifest <- read_manifest_local(cfg$manifest_path)
 best_tables <- list()
 all_tables <- list()
 summaries <- list()
 
-for (species_key in target_species) {
+for (species_key in cfg$target_species) {
   best_path <- resolve_output_local(manifest, paste0(species_key, "_best"))
   all_path <- resolve_output_local(manifest, paste0(species_key, "_all"))
   best_df <- prepare_best_table(read_csv_required(best_path), species_key)
@@ -471,8 +237,8 @@ for (species_key in target_species) {
   summaries[[species_key]] <- build_species_summary(best_df, annotation_df, input_genes)
 }
 
-key_hits <- build_key_hits(all_tables, key_genes)
-key_hits_path <- file.path(output_dir, "ortholog_key_gene_hits.csv")
+key_hits <- build_key_hits(all_tables, cfg$key_genes)
+key_hits_path <- file.path(cfg$output_dir, "ortholog_key_gene_hits.csv")
 write.csv(key_hits, key_hits_path, row.names = FALSE)
 
 coverage_df <- data.frame(Metric = c(
@@ -483,7 +249,7 @@ coverage_df <- data.frame(Metric = c(
   "Unmapped",
   "Coverage"
 ), stringsAsFactors = FALSE)
-for (species_key in target_species) {
+for (species_key in cfg$target_species) {
   summary_item <- summaries[[species_key]]
   coverage_df[[tools::toTitleCase(species_key)]] <- c(
     fmt_int(summary_item$total_input),
@@ -504,7 +270,7 @@ quality_df <- data.frame(
   ),
   stringsAsFactors = FALSE
 )
-for (species_key in target_species) {
+for (species_key in cfg$target_species) {
   summary_item <- summaries[[species_key]]
   quality_df[[tools::toTitleCase(species_key)]] <- c(
     fmt_n_pct(summary_item$gold_count, summary_item$total_input),
@@ -513,7 +279,7 @@ for (species_key in target_species) {
   )
 }
 
-identity_df <- dplyr::bind_rows(lapply(target_species, function(species_key) {
+identity_df <- dplyr::bind_rows(lapply(cfg$target_species, function(species_key) {
   summary_item <- summaries[[species_key]]
   data.frame(
     target_species = species_key,
@@ -534,7 +300,7 @@ genomic_df <- data.frame(
   Metric = c("GOC score available", "GOC >= 75", "WGA coverage available", "WGA >= 50"),
   stringsAsFactors = FALSE
 )
-for (species_key in target_species) {
+for (species_key in cfg$target_species) {
   summary_item <- summaries[[species_key]]
   genomic_df[[tools::toTitleCase(species_key)]] <- c(
     fmt_pct(summary_item$goc_available_rate),
@@ -548,7 +314,7 @@ selection_df <- data.frame(
   Statistic = c("Median dN/dS", "dN/dS > 1"),
   stringsAsFactors = FALSE
 )
-for (species_key in target_species) {
+for (species_key in cfg$target_species) {
   summary_item <- summaries[[species_key]]
   selection_df[[tools::toTitleCase(species_key)]] <- c(
     fmt_num(summary_item$dnds_median, digits = 2),
@@ -556,7 +322,7 @@ for (species_key in target_species) {
   )
 }
 
-coverage_path <- file.path(output_dir, "ortholog_coverage_summary.csv")
+coverage_path <- file.path(cfg$output_dir, "ortholog_coverage_summary.csv")
 write.csv(coverage_df, coverage_path, row.names = FALSE)
 
 identity_plot_df <- dplyr::bind_rows(lapply(best_tables, function(best_df) {
@@ -574,7 +340,7 @@ identity_plot <- ggplot2::ggplot(identity_plot_df, ggplot2::aes(x = perc_id, y =
     color = "Pair quality"
   ) +
   ggplot2::theme_bw(base_size = 11)
-identity_plot_path <- file.path(figure_dir, "ortholog_identity_scatter.png")
+identity_plot_path <- file.path(cfg$figure_dir, "ortholog_identity_scatter.png")
 save_plot_local(identity_plot, identity_plot_path, width = 10, height = 5)
 
 goc_plot_df <- dplyr::bind_rows(lapply(best_tables, function(best_df) {
@@ -591,7 +357,7 @@ goc_plot <- ggplot2::ggplot(goc_plot_df, ggplot2::aes(x = goc_score, fill = targ
     fill = "Target species"
   ) +
   ggplot2::theme_bw(base_size = 11)
-goc_plot_path <- file.path(figure_dir, "ortholog_goc_distribution.png")
+goc_plot_path <- file.path(cfg$figure_dir, "ortholog_goc_distribution.png")
 save_plot_local(goc_plot, goc_plot_path, width = 10, height = 5)
 
 unmapped_plot_df <- dplyr::bind_rows(lapply(names(summaries), function(species_key) {
@@ -616,7 +382,7 @@ unmapped_plot <- ggplot2::ggplot(unmapped_plot_df, ggplot2::aes(
     fill = "Target species"
   ) +
   ggplot2::theme_bw(base_size = 11)
-unmapped_plot_path <- file.path(figure_dir, "ortholog_unmapped_biotype.png")
+unmapped_plot_path <- file.path(cfg$figure_dir, "ortholog_unmapped_biotype.png")
 save_plot_local(unmapped_plot, unmapped_plot_path, width = 10, height = 6)
 
 comparison_plot_df <- build_species_comparison_long(summaries)
@@ -630,7 +396,7 @@ comparison_plot <- ggplot2::ggplot(comparison_plot_df, ggplot2::aes(x = target_s
     fill = "Target species"
   ) +
   ggplot2::theme_bw(base_size = 11)
-comparison_plot_path <- file.path(figure_dir, "ortholog_species_comparison.png")
+comparison_plot_path <- file.path(cfg$figure_dir, "ortholog_species_comparison.png")
 save_plot_local(comparison_plot, comparison_plot_path, width = 10, height = 6)
 
 recommendation <- recommend_species(summaries)
@@ -668,7 +434,7 @@ report_lines <- c(
   ""
 )
 
-for (species_key in target_species) {
+for (species_key in cfg$target_species) {
   unmapped_df <- summaries[[species_key]]$unmapped_biotype
   if (nrow(unmapped_df) > 0) {
     unmapped_df$Fraction <- vapply(safe_rate(unmapped_df$count, sum(unmapped_df$count)), fmt_pct, character(1))
@@ -718,23 +484,25 @@ report_lines <- c(
   sprintf("Species comparison plot: `%s`", comparison_plot_path)
 )
 
-report_path <- file.path(output_dir, "ortholog_quality_report.md")
+report_path <- file.path(cfg$output_dir, "ortholog_quality_report.md")
 write_markdown_local(report_lines, report_path)
 
 write_manifest_local(
-  manifest_path = manifest_path,
+  manifest_path = cfg$manifest_path,
   new_outputs = list(
-    quality_report = build_output_entry(report_path, "md", module_name, "ortholog quality markdown report"),
-    coverage_summary = build_output_entry(coverage_path, "csv", module_name, "cross-species coverage summary"),
-    key_gene_hits = build_output_entry(key_hits_path, "csv", module_name, "key gene audit rows across target species"),
-    identity_scatter = build_output_entry(identity_plot_path, "png", module_name, "identity scatter plot for one2one pairs"),
-    goc_distribution = build_output_entry(goc_plot_path, "png", module_name, "GOC score distribution plot"),
-    unmapped_biotype_plot = build_output_entry(unmapped_plot_path, "png", module_name, "unmapped biotype distribution plot"),
-    species_comparison_plot = build_output_entry(comparison_plot_path, "png", module_name, "cross-species comparison bar chart")
+    quality_report = build_output_entry(report_path, "md", module_name, "ortholog quality markdown report", base_dir = cfg$output_dir),
+    coverage_summary = build_output_entry(coverage_path, "csv", module_name, "cross-species coverage summary", base_dir = cfg$output_dir, schema = infer_schema_from_df(coverage_df)),
+    key_gene_hits = build_output_entry(key_hits_path, "csv", module_name, "key gene audit rows across target species", base_dir = cfg$output_dir, schema = infer_schema_from_df(key_hits)),
+    identity_scatter = build_output_entry(identity_plot_path, "png", module_name, "identity scatter plot for one2one pairs", base_dir = cfg$output_dir),
+    goc_distribution = build_output_entry(goc_plot_path, "png", module_name, "GOC score distribution plot", base_dir = cfg$output_dir),
+    unmapped_biotype_plot = build_output_entry(unmapped_plot_path, "png", module_name, "unmapped biotype distribution plot", base_dir = cfg$output_dir),
+    species_comparison_plot = build_output_entry(comparison_plot_path, "png", module_name, "cross-species comparison bar chart", base_dir = cfg$output_dir)
   ),
-  module_name = module_contract,
-  base_dir = output_dir,
-  inputs = list(gtf_path = gtf_path, target_species = target_species)
+  module_name = cfg$module_contract,
+  base_dir = cfg$output_dir,
+  inputs = list(gtf_path = gtf_path, target_species = cfg$target_species),
+  version = cfg$module_version,
+  depends_on = list()
 )
 
-message("00b 完成。报告目录: ", output_dir)
+message("00b 完成。报告目录: ", cfg$output_dir)

@@ -1,117 +1,28 @@
 #!/usr/bin/env Rscript
 
-load_required_packages <- function(pkgs) {
-  missing <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)]
-  if (length(missing) > 0) {
-    stop(
-      sprintf("缺少 R 包: %s", paste(missing, collapse = ", ")),
-      call. = FALSE
-    )
+.script_dir <- tryCatch(
+  dirname(normalizePath(sys.frame(1)$ofile)),
+  error = function(e) {
+    args <- commandArgs(trailingOnly = FALSE)
+    file_arg <- grep("^--file=", args, value = TRUE)
+    if (length(file_arg) > 0) {
+      dirname(normalizePath(sub("^--file=", "", file_arg[1])))
+    } else {
+      getwd()
+    }
   }
-  invisible(lapply(pkgs, function(pkg) {
-    suppressPackageStartupMessages(library(pkg, character.only = TRUE))
-  }))
-}
+)
+
+source(file.path(.script_dir, "helpers", "runtime_utils.R"))
+source(file.path(.script_dir, "helpers", "config.R"))
+source(file.path(.script_dir, "helpers", "ortholog_utils.R"))
+source(file.path(.script_dir, "helpers", "manifest_utils.R"))
+source(file.path(.script_dir, "helpers", "report_utils.R"))
 
 load_required_packages(c("dplyr", "Seurat", "jsonlite"))
 
-output_dir <- "/home/user_test/syf_f5/05projects/scrna_improve/ortholog_cache"
-manifest_path <- file.path(output_dir, "_manifest.json")
+cfg <- get_single_script_config()
 module_name <- "00c_cc_gene_mapping"
-module_contract <- "00_ortholog_module"
-module_version <- "1.0"
-
-`%||%` <- function(x, y) {
-  if (is.null(x)) y else x
-}
-
-timestamp_now <- function() {
-  format(Sys.time(), "%Y-%m-%dT%H:%M:%S")
-}
-
-ensure_dir <- function(path) {
-  dir.create(path, recursive = TRUE, showWarnings = FALSE)
-}
-
-normalize_key <- function(x) {
-  toupper(trimws(as.character(x)))
-}
-
-orthology_bucket <- function(x) {
-  x <- trimws(as.character(x))
-  dplyr::case_when(
-    grepl("one2one$", x) ~ "one2one",
-    grepl("one2many$", x) ~ "one2many",
-    grepl("many2many$", x) ~ "many2many",
-    TRUE ~ "other"
-  )
-}
-
-read_manifest_local <- function(manifest_path) {
-  if (!file.exists(manifest_path)) {
-    stop(sprintf("缺少 manifest: %s", manifest_path), call. = FALSE)
-  }
-  jsonlite::read_json(manifest_path, simplifyVector = FALSE)
-}
-
-resolve_output_local <- function(manifest, key) {
-  entry <- manifest$outputs[[key]]
-  if (is.null(entry) || is.null(entry$path)) {
-    stop(sprintf("manifest 缺少输出键: %s", key), call. = FALSE)
-  }
-  raw_path <- as.character(entry$path)
-  if (grepl("^/", raw_path)) {
-    normalizePath(raw_path, winslash = "/", mustWork = FALSE)
-  } else {
-    normalizePath(file.path(as.character(manifest$base_dir), raw_path), winslash = "/", mustWork = FALSE)
-  }
-}
-
-write_manifest_local <- function(manifest_path, new_outputs, module_name = NULL, base_dir = NULL, inputs = NULL) {
-  if (file.exists(manifest_path)) {
-    existing <- jsonlite::read_json(manifest_path, simplifyVector = FALSE)
-    existing$outputs <- modifyList(existing$outputs %||% list(), new_outputs)
-    existing$timestamp <- timestamp_now()
-    manifest <- existing
-  } else {
-    if (is.null(module_name) || is.null(base_dir) || is.null(inputs)) {
-      stop("manifest 不存在且缺少初始化参数", call. = FALSE)
-    }
-    manifest <- list(
-      module = module_name,
-      version = module_version,
-      timestamp = timestamp_now(),
-      base_dir = base_dir,
-      inputs = inputs,
-      outputs = new_outputs
-    )
-  }
-  jsonlite::write_json(manifest, manifest_path, pretty = TRUE, auto_unbox = TRUE)
-}
-
-relative_path_local <- function(path, base_dir) {
-  normalized_path <- normalizePath(path, winslash = "/", mustWork = FALSE)
-  normalized_base <- normalizePath(base_dir, winslash = "/", mustWork = FALSE)
-  prefix <- paste0(normalized_base, "/")
-  if (startsWith(normalized_path, prefix)) {
-    substring(normalized_path, nchar(prefix) + 1L)
-  } else {
-    normalized_path
-  }
-}
-
-build_output_entry <- function(path, type, produced_by, row_semantics) {
-  list(
-    path = relative_path_local(path, output_dir),
-    type = type,
-    produced_by = produced_by,
-    row_semantics = row_semantics
-  )
-}
-
-write_markdown_local <- function(lines, path) {
-  writeLines(enc2utf8(lines), con = path, useBytes = TRUE)
-}
 
 read_csv_required <- function(path) {
   if (!file.exists(path)) {
@@ -120,23 +31,9 @@ read_csv_required <- function(path) {
   read.csv(path, stringsAsFactors = FALSE, check.names = FALSE)
 }
 
-fmt_int <- function(x) {
-  if (is.na(x)) {
-    return("NA")
-  }
-  prettyNum(round(x), big.mark = ",", scientific = FALSE)
-}
+ensure_dir(cfg$output_dir)
 
-fmt_pct <- function(x) {
-  if (is.na(x)) {
-    return("NA")
-  }
-  sprintf("%.1f%%", 100 * x)
-}
-
-ensure_dir(output_dir)
-
-manifest <- read_manifest_local(manifest_path)
+manifest <- read_manifest_local(cfg$manifest_path)
 human_all_path <- resolve_output_local(manifest, "human_all")
 human_all <- read_csv_required(human_all_path)
 
@@ -174,9 +71,9 @@ chicken_g2m <- map_phase_genes(cc_genes$g2m.genes, h2c)
 unmapped_s <- cc_genes$s.genes[is.na(h2c[normalize_key(cc_genes$s.genes)])]
 unmapped_g2m <- cc_genes$g2m.genes[is.na(h2c[normalize_key(cc_genes$g2m.genes)])]
 
-cc_rds_path <- file.path(output_dir, "chicken_cc_genes.rds")
-summary_path <- file.path(output_dir, "chicken_cc_genes_summary.csv")
-report_path <- file.path(output_dir, "chicken_cc_genes_report.md")
+cc_rds_path <- file.path(cfg$output_dir, "chicken_cc_genes.rds")
+summary_path <- file.path(cfg$output_dir, "chicken_cc_genes_summary.csv")
+report_path <- file.path(cfg$output_dir, "chicken_cc_genes_report.md")
 
 saveRDS(
   list(
@@ -216,15 +113,17 @@ report_lines <- c(
 write_markdown_local(report_lines, report_path)
 
 write_manifest_local(
-  manifest_path = manifest_path,
+  manifest_path = cfg$manifest_path,
   new_outputs = list(
-    cc_genes = build_output_entry(cc_rds_path, "rds", module_name, "RDS list with s.genes and g2m.genes"),
-    cc_genes_summary = build_output_entry(summary_path, "csv", module_name, "cell-cycle mapping summary by phase"),
-    cc_genes_report = build_output_entry(report_path, "md", module_name, "cell-cycle mapping markdown report")
+    cc_genes = build_output_entry(cc_rds_path, "rds", module_name, "RDS list with s.genes and g2m.genes", base_dir = cfg$output_dir),
+    cc_genes_summary = build_output_entry(summary_path, "csv", module_name, "cell-cycle mapping summary by phase", base_dir = cfg$output_dir, schema = infer_schema_from_df(summary_df)),
+    cc_genes_report = build_output_entry(report_path, "md", module_name, "cell-cycle mapping markdown report", base_dir = cfg$output_dir)
   ),
-  module_name = module_contract,
-  base_dir = output_dir,
-  inputs = list()
+  module_name = cfg$module_contract,
+  base_dir = cfg$output_dir,
+  inputs = list(),
+  version = cfg$module_version,
+  depends_on = list()
 )
 
-message("00c 完成。输出目录: ", output_dir)
+message("00c 完成。输出目录: ", cfg$output_dir)
