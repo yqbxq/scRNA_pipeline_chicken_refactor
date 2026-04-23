@@ -47,7 +47,7 @@ empty_candidate_table <- function() {
   )
 }
 
-standardize_candidates <- function(raw_df, species_key) {
+standardize_candidates <- function(raw_df, species_key, annotation_df) {
   if (is.null(raw_df) || nrow(raw_df) == 0) {
     return(empty_candidate_table())
   }
@@ -63,11 +63,29 @@ standardize_candidates <- function(raw_df, species_key) {
   wga_col <- paste0(prefix, "_homolog_wga_coverage")
   dn_col <- paste0(prefix, "_homolog_dn")
   ds_col <- paste0(prefix, "_homolog_ds")
+  required_cols <- c(
+    "external_gene_name",
+    "ensembl_gene_id",
+    name_col,
+    ensembl_col,
+    type_col,
+    conf_col,
+    perc_id_col,
+    perc_id_r1_col,
+    goc_col,
+    wga_col,
+    dn_col,
+    ds_col
+  )
+  missing_cols <- setdiff(required_cols, names(raw_df))
+  for (col_name in missing_cols) {
+    raw_df[[col_name]] <- NA_character_
+  }
 
   standardized <- raw_df %>%
     dplyr::transmute(
       external_gene_name = trimws(as.character(.data$external_gene_name)),
-      ensembl_gene_id = trimws(as.character(.data$ensembl_gene_id)),
+      ensembl_gene_id = strip_ensembl_version(trimws(as.character(.data$ensembl_gene_id))),
       target_species = species_key,
       target_gene_name = trimws(as.character(.data[[name_col]])),
       target_ensembl_gene = trimws(as.character(.data[[ensembl_col]])),
@@ -107,6 +125,23 @@ standardize_candidates <- function(raw_df, species_key) {
       .keep_all = TRUE
     )
 
+  annotation_lookup <- unique(annotation_df[, c("gene_id_stripped", "preferred_gene_label"), drop = FALSE])
+  standardized <- standardized %>%
+    dplyr::left_join(annotation_lookup, by = c("ensembl_gene_id" = "gene_id_stripped")) %>%
+    dplyr::mutate(
+      external_gene_name = dplyr::if_else(
+        is.na(external_gene_name) | external_gene_name == "",
+        preferred_gene_label,
+        external_gene_name
+      ),
+      external_gene_name = dplyr::if_else(
+        is.na(external_gene_name) | external_gene_name == "",
+        ensembl_gene_id,
+        external_gene_name
+      )
+    ) %>%
+    dplyr::select(-preferred_gene_label)
+
   classify_pair_quality(standardized)
 }
 
@@ -136,10 +171,10 @@ ensure_dir(cfg$figure_dir)
 annotation_payload <- read_reference_annotation_local(cfg$clean_gtf, cfg$reference_gtf)
 gtf_path <- annotation_payload$gtf_path
 annotation_df <- annotation_payload$annotation_df
-genes <- sort(unique(annotation_df$gene_name[nzchar(annotation_df$gene_name)]))
+genes <- sort(unique(annotation_df$gene_id_stripped[nzchar(annotation_df$gene_id_stripped)]))
 
 if (length(genes) == 0) {
-  stop("GTF 中没有可用的 gene_name。", call. = FALSE)
+  stop("GTF 中没有可用的 gene_id。", call. = FALSE)
 }
 
 chunks <- split(genes, ceiling(seq_along(genes) / cfg$chunk_size))
@@ -159,12 +194,13 @@ for (species_key in cfg$target_species) {
       chunk_idx = i,
       total_chunks = length(chunks),
       species_key = species_key,
-      mirrors = cfg$mirrors
+      mirrors = cfg$mirrors,
+      filter_name = "ensembl_gene_id"
     )
   }
 
   ortholog_raw <- dplyr::bind_rows(res_list)
-  ortholog_all <- standardize_candidates(ortholog_raw, species_key)
+  ortholog_all <- standardize_candidates(ortholog_raw, species_key, annotation_df)
   ortholog_best <- select_best_per_gene(ortholog_all)
 
   all_path <- file.path(cfg$output_dir, sprintf("chicken_%s_orthologs_all_candidates.csv", species_key))

@@ -73,7 +73,7 @@ build_species_summary <- function(best_df, annotation_df, input_genes) {
   goc_available_n <- sum(!is.na(best_df$goc_score))
   wga_available_n <- sum(!is.na(best_df$wga_coverage))
 
-  unmapped_biotype <- annotation_df[annotation_df$gene_name %in% unmapped_genes, , drop = FALSE]
+  unmapped_biotype <- annotation_df[annotation_df$preferred_gene_label %in% unmapped_genes, , drop = FALSE]
   if (nrow(unmapped_biotype) > 0) {
     unmapped_biotype <- unmapped_biotype %>%
       dplyr::mutate(gene_biotype = ifelse(is.na(gene_biotype) | gene_biotype == "", "unknown", gene_biotype)) %>%
@@ -220,7 +220,7 @@ ensure_dir(cfg$figure_dir)
 annotation_payload <- read_reference_annotation_local(cfg$clean_gtf, cfg$reference_gtf)
 gtf_path <- annotation_payload$gtf_path
 annotation_df <- annotation_payload$annotation_df
-input_genes <- sort(unique(annotation_df$gene_name[nzchar(annotation_df$gene_name)]))
+input_genes <- sort(unique(annotation_df$preferred_gene_label[nzchar(annotation_df$preferred_gene_label)]))
 
 manifest <- read_manifest_local(cfg$manifest_path)
 best_tables <- list()
