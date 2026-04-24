@@ -13,12 +13,16 @@
   }
 )
 
-source(file.path(.script_dir, "helpers", "runtime_utils.R"))
-source(file.path(.script_dir, "helpers", "config.R"))
-source(file.path(.script_dir, "helpers", "gtf_utils.R"))
-source(file.path(.script_dir, "helpers", "ortholog_utils.R"))
-source(file.path(.script_dir, "helpers", "manifest_utils.R"))
-source(file.path(.script_dir, "helpers", "biomart_utils.R"))
+source_utf8 <- function(path) {
+  source(path, encoding = "UTF-8")
+}
+
+source_utf8(file.path(.script_dir, "helpers", "runtime_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "config.R"))
+source_utf8(file.path(.script_dir, "helpers", "gtf_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "ortholog_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "manifest_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "biomart_utils.R"))
 
 load_required_packages(c("dplyr", "biomaRt", "jsonlite"))
 

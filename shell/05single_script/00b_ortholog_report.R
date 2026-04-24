@@ -13,12 +13,16 @@
   }
 )
 
-source(file.path(.script_dir, "helpers", "runtime_utils.R"))
-source(file.path(.script_dir, "helpers", "config.R"))
-source(file.path(.script_dir, "helpers", "gtf_utils.R"))
-source(file.path(.script_dir, "helpers", "ortholog_utils.R"))
-source(file.path(.script_dir, "helpers", "manifest_utils.R"))
-source(file.path(.script_dir, "helpers", "report_utils.R"))
+source_utf8 <- function(path) {
+  source(path, encoding = "UTF-8")
+}
+
+source_utf8(file.path(.script_dir, "helpers", "runtime_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "config.R"))
+source_utf8(file.path(.script_dir, "helpers", "gtf_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "ortholog_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "manifest_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "report_utils.R"))
 
 load_required_packages(c("dplyr", "ggplot2", "jsonlite"))
 
@@ -53,9 +57,13 @@ prepare_best_table <- function(df, species_key) {
   df
 }
 
-build_species_summary <- function(best_df, annotation_df, input_genes) {
-  mapped_genes <- unique(best_df$external_gene_name)
-  unmapped_genes <- setdiff(input_genes, mapped_genes)
+build_species_summary <- function(best_df, all_df, annotation_df, input_genes) {
+  best_gene_ids <- as.character(best_df$ensembl_gene_id)
+  best_mapped_genes <- unique(best_gene_ids[!is.na(best_gene_ids) & nzchar(best_gene_ids)])
+  any_gene_ids <- as.character(all_df$ensembl_gene_id)
+  any_mapped_genes <- unique(any_gene_ids[!is.na(any_gene_ids) & nzchar(any_gene_ids)])
+  best_unmapped_genes <- setdiff(input_genes, best_mapped_genes)
+  any_unmapped_genes <- setdiff(input_genes, any_mapped_genes)
 
   type_counts <- table(best_df$type_bucket)
   one2one_count <- if ("one2one" %in% names(type_counts)) unname(type_counts["one2one"]) else 0
@@ -73,7 +81,7 @@ build_species_summary <- function(best_df, annotation_df, input_genes) {
   goc_available_n <- sum(!is.na(best_df$goc_score))
   wga_available_n <- sum(!is.na(best_df$wga_coverage))
 
-  unmapped_biotype <- annotation_df[annotation_df$preferred_gene_label %in% unmapped_genes, , drop = FALSE]
+  unmapped_biotype <- annotation_df[annotation_df$gene_id_stripped %in% any_unmapped_genes, , drop = FALSE]
   if (nrow(unmapped_biotype) > 0) {
     unmapped_biotype <- unmapped_biotype %>%
       dplyr::mutate(gene_biotype = ifelse(is.na(gene_biotype) | gene_biotype == "", "unknown", gene_biotype)) %>%
@@ -84,9 +92,12 @@ build_species_summary <- function(best_df, annotation_df, input_genes) {
 
   list(
     total_input = length(input_genes),
-    mapped_count = length(mapped_genes),
-    unmapped_count = length(unmapped_genes),
-    coverage_fraction = safe_rate(length(mapped_genes), length(input_genes)),
+    mapped_count = length(best_mapped_genes),
+    unmapped_count = length(best_unmapped_genes),
+    coverage_fraction = safe_rate(length(best_mapped_genes), length(input_genes)),
+    any_mapped_count = length(any_mapped_genes),
+    any_unmapped_count = length(any_unmapped_genes),
+    any_coverage_fraction = safe_rate(length(any_mapped_genes), length(input_genes)),
     one2one_count = one2one_count,
     one2many_count = one2many_count,
     many2many_count = many2many_count,
@@ -108,7 +119,7 @@ build_species_summary <- function(best_df, annotation_df, input_genes) {
     dnds_median = safe_median(dnds),
     positive_selection_count = sum(dnds > 1, na.rm = TRUE),
     unmapped_biotype = unmapped_biotype,
-    unmapped_genes = unmapped_genes,
+    unmapped_genes = any_unmapped_genes,
     best_df = best_df
   )
 }
@@ -220,7 +231,8 @@ ensure_dir(cfg$figure_dir)
 annotation_payload <- read_reference_annotation_local(cfg$clean_gtf, cfg$reference_gtf)
 gtf_path <- annotation_payload$gtf_path
 annotation_df <- annotation_payload$annotation_df
-input_genes <- sort(unique(annotation_df$preferred_gene_label[nzchar(annotation_df$preferred_gene_label)]))
+annotation_gene_ids <- as.character(annotation_df$gene_id_stripped)
+input_genes <- sort(unique(annotation_gene_ids[!is.na(annotation_gene_ids) & nzchar(annotation_gene_ids)]))
 
 manifest <- read_manifest_local(cfg$manifest_path)
 best_tables <- list()
@@ -234,7 +246,7 @@ for (species_key in cfg$target_species) {
   all_df <- read_csv_required(all_path)
   best_tables[[species_key]] <- best_df
   all_tables[[species_key]] <- all_df
-  summaries[[species_key]] <- build_species_summary(best_df, annotation_df, input_genes)
+  summaries[[species_key]] <- build_species_summary(best_df, all_df, annotation_df, input_genes)
 }
 
 key_hits <- build_key_hits(all_tables, cfg$key_genes)
@@ -243,21 +255,29 @@ write.csv(key_hits, key_hits_path, row.names = FALSE)
 
 coverage_df <- data.frame(Metric = c(
   "Total input genes",
-  "one2one",
-  "one2many",
-  "many2many",
-  "Unmapped",
-  "Coverage"
+  "Best-hit mapped",
+  "Best-hit unmapped",
+  "Best-hit coverage",
+  "Any ortholog mapped",
+  "Any ortholog unmapped",
+  "Any ortholog coverage",
+  "Best-hit one2one",
+  "Best-hit one2many",
+  "Best-hit many2many"
 ), stringsAsFactors = FALSE)
 for (species_key in cfg$target_species) {
   summary_item <- summaries[[species_key]]
   coverage_df[[tools::toTitleCase(species_key)]] <- c(
     fmt_int(summary_item$total_input),
+    fmt_n_pct(summary_item$mapped_count, summary_item$total_input),
+    fmt_n_pct(summary_item$unmapped_count, summary_item$total_input),
+    fmt_pct(summary_item$coverage_fraction),
+    fmt_n_pct(summary_item$any_mapped_count, summary_item$total_input),
+    fmt_n_pct(summary_item$any_unmapped_count, summary_item$total_input),
+    fmt_pct(summary_item$any_coverage_fraction),
     fmt_n_pct(summary_item$one2one_count, summary_item$total_input),
     fmt_n_pct(summary_item$one2many_count, summary_item$total_input),
-    fmt_n_pct(summary_item$many2many_count, summary_item$total_input),
-    fmt_n_pct(summary_item$unmapped_count, summary_item$total_input),
-    fmt_pct(summary_item$coverage_fraction)
+    fmt_n_pct(summary_item$many2many_count, summary_item$total_input)
   )
 }
 
@@ -405,6 +425,9 @@ report_lines <- c(
   "# Ortholog Mapping Quality Report",
   "",
   sprintf("Generated: %s | Source: `%s`", timestamp_now(), gtf_path),
+  "",
+  "Coverage is computed in the same Ensembl gene ID space used by 00a BioMart queries.",
+  "Best-hit coverage counts genes with a selected best row; any ortholog coverage counts genes with at least one candidate pair.",
   "",
   "## Coverage Summary",
   "",

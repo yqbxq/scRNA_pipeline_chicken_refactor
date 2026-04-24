@@ -13,11 +13,15 @@
   }
 )
 
-source(file.path(.script_dir, "helpers", "runtime_utils.R"))
-source(file.path(.script_dir, "helpers", "config.R"))
-source(file.path(.script_dir, "helpers", "ortholog_utils.R"))
-source(file.path(.script_dir, "helpers", "manifest_utils.R"))
-source(file.path(.script_dir, "helpers", "report_utils.R"))
+source_utf8 <- function(path) {
+  source(path, encoding = "UTF-8")
+}
+
+source_utf8(file.path(.script_dir, "helpers", "runtime_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "config.R"))
+source_utf8(file.path(.script_dir, "helpers", "ortholog_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "manifest_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "report_utils.R"))
 
 load_required_packages(c("dplyr", "Seurat", "jsonlite"))
 
@@ -37,6 +41,8 @@ manifest <- read_manifest_local(cfg$manifest_path)
 human_all_path <- resolve_output_local(manifest, "human_all")
 human_all <- read_csv_required(human_all_path)
 
+# 00a writes a chicken-centric best table (one best target per chicken gene).
+# 00c needs the inverse human->chicken direction, so it reselects one2one rows by human symbol.
 human_one2one <- human_all %>%
   dplyr::mutate(type_bucket = orthology_bucket(orthology_type)) %>%
   dplyr::filter(

@@ -15,6 +15,28 @@ if [[ -n "${CONFIG_FILE}" ]]; then
   source "${CONFIG_FILE}"
 fi
 
+choose_pipeline_locale() {
+  local requested="${PIPELINE_LOCALE:-}"
+  local candidate
+  local available
+  available="$(locale -a 2>/dev/null || true)"
+
+  for candidate in "${requested}" en_US.utf8 zh_CN.utf8 en_US.UTF-8 zh_CN.UTF-8 C.utf8 C.UTF-8; do
+    [[ -n "${candidate}" ]] || continue
+    if grep -qi "^${candidate}$" <<< "${available}"; then
+      echo "${candidate}"
+      return 0
+    fi
+  done
+
+  echo "[WARN] 未找到已安装的 UTF-8 locale，回退到 C.UTF-8；如 R 报 locale 警告，请安装 en_US.utf8 或 zh_CN.utf8。" >&2
+  echo "C.UTF-8"
+}
+
+export PIPELINE_LOCALE="${PIPELINE_LOCALE:-$(choose_pipeline_locale)}"
+export LANG="${PIPELINE_LOCALE}"
+export LC_ALL="${PIPELINE_LOCALE}"
+export LC_CTYPE="${PIPELINE_LOCALE}"
 export PROJECT_ROOT="${PROJECT_ROOT:-${PIPELINE_ROOT}}"
 export DATA_DIR="${DATA_DIR:-${PROJECT_ROOT}/data}"
 export RESULTS_DIR="${RESULTS_DIR:-${PROJECT_ROOT}/results}"
@@ -24,7 +46,10 @@ export TABLE_DIR="${TABLE_DIR:-${RESULTS_DIR}/tables}"
 export LOG_DIR="${LOG_DIR:-${PROJECT_ROOT}/logs}"
 export ENV_DIR="${ENV_DIR:-${PROJECT_ROOT}/envs}"
 export RESOURCE_DIR="${RESOURCE_DIR:-${PROJECT_ROOT}/resources}"
+export MANIFEST_DIR="${MANIFEST_DIR:-${RESULTS_DIR}/manifests}"
 export REFERENCE_DIR="${REFERENCE_DIR:-${PROJECT_ROOT}/reference}"
+export REFERENCE_ROOT="${REFERENCE_ROOT:-$(dirname "${REFERENCE_DIR}")}"
+export REFERENCE_VERSION="${REFERENCE_VERSION:-ensembl_release112}"
 export FASTQ_DIR="${FASTQ_DIR:-${PROJECT_ROOT}/fastq}"
 export GENOME_FASTA_GZ="${GENOME_FASTA_GZ:-${REFERENCE_DIR}/genome.fa}"
 export REFERENCE_GTF="${REFERENCE_GTF:-${REFERENCE_DIR}/genes.gtf}"
@@ -61,6 +86,7 @@ export SCENIC_DB_10KB="${SCENIC_DB_10KB:-}"
 export SCENIC_ORTHOLOG_MAP_FILE="${SCENIC_ORTHOLOG_MAP_FILE:-}"
 export ENSEMBL_MIRROR="${ENSEMBL_MIRROR:-asia}"
 export ORTHOLOG_CACHE_DIR="${ORTHOLOG_CACHE_DIR:-${RESULTS_DIR}/ortholog_cache}"
+export ORTHOLOG_MANIFEST="${ORTHOLOG_MANIFEST:-${ORTHOLOG_CACHE_DIR}/_manifest.json}"
 export CELL_CYCLE_GENES_RDS="${CELL_CYCLE_GENES_RDS:-${ORTHOLOG_CACHE_DIR}/chicken_cc_genes.rds}"
 export PROJECT_CONFIG_DIR="${PROJECT_CONFIG_DIR:-${PROJECT_ROOT}/config}"
 export RAW_DIR="${RAW_DIR:-${PROJECT_ROOT}/raw}"
@@ -99,6 +125,9 @@ export STAR_SA_INDEX_NBASES="${STAR_SA_INDEX_NBASES:-13}"
 export INPUT_STANDARDIZE_MODE="${INPUT_STANDARDIZE_MODE:-symlink}"
 export ANNOTATION_HUB_PATH="${ANNOTATION_HUB_PATH:-${CHECKPOINT_DIR}/03_after_annotation.rds}"
 export MIN_BIOLOGICAL_REPLICATES="${MIN_BIOLOGICAL_REPLICATES:-2}"
+export TRIAGE_FRAC_BELOW_CUTOFF="${TRIAGE_FRAC_BELOW_CUTOFF:-0.35}"
+export TRIAGE_FRAC_ABOVE_MITO="${TRIAGE_FRAC_ABOVE_MITO:-0.25}"
+export TRIAGE_DENSITY_PEAKS="${TRIAGE_DENSITY_PEAKS:-2}"
 export AMBIENT_PRIMARY_METHOD="${AMBIENT_PRIMARY_METHOD:-soupx}"
 export AMBIENT_FALLBACK_METHOD="${AMBIENT_FALLBACK_METHOD:-decontx}"
 export AMBIENT_APPLY_POLICY="${AMBIENT_APPLY_POLICY:-manual}"
@@ -460,6 +489,7 @@ prepare_project_state_dirs() {
     "${ANNOTATION_REPORT_DIR}" \
     "${SUBCLUSTER_REPORT_DIR}" \
     "${STATUS_DIR}" \
+    "${MANIFEST_DIR}" \
     "${LOG_DIR}"
   ensure_eda_control_files
   ensure_object_layer_config_file
@@ -468,7 +498,7 @@ prepare_project_state_dirs() {
 }
 
 LIB_DIR="${SCRIPT_DIR}"
-for lib_file in gate.sh stage.sh executor.sh; do
+for lib_file in gate.sh stage.sh env_registry.sh executor.sh; do
   # shellcheck disable=SC1090
   source "${LIB_DIR}/${lib_file}"
 done

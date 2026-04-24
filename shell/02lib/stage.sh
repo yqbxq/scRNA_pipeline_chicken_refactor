@@ -27,11 +27,66 @@ check_stage_deps() {
       require_status_flag_or_warn \
         "status.main_ready" \
         "01_build_raw 需要 main_ready=true。请先完成 metadata、audit、standardize 和 input_summary。"
+      require_status_flag_or_warn \
+        "status.00_ortholog_completed" \
+        "01_build_raw 需要先完成 00_ortholog，并通过 manifest 暴露 cc_genes。"
+      ;;
+    02_qc)
+      sync_workflow_gate_statuses
+      require_status_flag_or_warn \
+        "status.pre_qc_gate_passed" \
+        "02_qc 被 pre_qc gate 阻断。请先审阅 01b pre-QC 报告，并在 eda_gates.tsv 中批准 pre_qc。"
       ;;
     *)
       warn "未定义 ${stage_id} 的依赖规则，按无依赖继续。"
       ;;
   esac
+}
+
+hold_for_gate() {
+  local gate_id="$1"
+  sync_workflow_gate_statuses
+  if ! eda_gate_passed "${gate_id}"; then
+    die "${gate_id} gate 未批准。请审阅对应 EDA 报告，并在 ${EDA_GATE_FILE} 中将 ${gate_id} 设置为 approved。"
+  fi
+}
+
+manifest_output_path() {
+  local manifest_path="$1"
+  local output_key="$2"
+  local python_bin
+  python_bin="$(detect_python)"
+
+  "${python_bin}" - "${manifest_path}" "${output_key}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+manifest_path = Path(sys.argv[1])
+output_key = sys.argv[2]
+if not manifest_path.exists():
+    raise SystemExit(f"missing manifest: {manifest_path}")
+
+manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+entry = (manifest.get("outputs") or {}).get(output_key) or {}
+raw_path = entry.get("path")
+if not raw_path:
+    raise SystemExit(f"manifest missing output key: {output_key}")
+
+path = Path(raw_path)
+if not path.is_absolute():
+    path = Path(manifest.get("base_dir") or manifest_path.parent) / path
+print(path)
+PY
+}
+
+require_manifest_output() {
+  local manifest_path="$1"
+  local output_key="$2"
+  local output_path
+  output_path="$(manifest_output_path "${manifest_path}" "${output_key}")"
+  [[ -e "${output_path}" ]] || die "manifest 输出不存在: ${output_key} -> ${output_path}"
+  echo "${output_path}"
 }
 
 run_stage_if_stale() {
