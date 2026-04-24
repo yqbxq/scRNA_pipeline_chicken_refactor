@@ -13,14 +13,18 @@
   }
 )
 
-source(file.path(.script_dir, "helpers", "runtime_utils.R"))
-source(file.path(.script_dir, "helpers", "config.R"))
-source(file.path(.script_dir, "helpers", "project_paths_01.R"))
-source(file.path(.script_dir, "helpers", "gtf_utils.R"))
-source(file.path(.script_dir, "helpers", "manifest_utils.R"))
-source(file.path(.script_dir, "helpers", "report_utils.R"))
-source(file.path(.script_dir, "helpers", "metadata_io.R"))
-source(file.path(.script_dir, "helpers", "qc_utils.R"))
+source_utf8 <- function(path) {
+  source(path, encoding = "UTF-8")
+}
+
+source_utf8(file.path(.script_dir, "helpers", "runtime_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "config.R"))
+source_utf8(file.path(.script_dir, "helpers", "project_paths_01.R"))
+source_utf8(file.path(.script_dir, "helpers", "gtf_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "manifest_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "report_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "metadata_io.R"))
+source_utf8(file.path(.script_dir, "helpers", "qc_utils.R"))
 
 load_required_packages(c("Seurat", "dplyr", "tibble", "jsonlite"))
 
