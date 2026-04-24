@@ -1,0 +1,254 @@
+is_stale_output() {
+  local output_path="$1"
+  shift || true
+
+  if [[ ! -e "${output_path}" ]]; then
+    return 0
+  fi
+
+  local dep_path
+  for dep_path in "$@"; do
+    [[ -n "${dep_path}" ]] || continue
+    if [[ -e "${dep_path}" && "${dep_path}" -nt "${output_path}" ]]; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+check_stage_deps() {
+  local stage_id="$1"
+  case "${stage_id}" in
+    00_ortholog|alignment|register_delivery|validate_metadata|audit_inputs|standardize_inputs|input_summary|install_envs)
+      return 0
+      ;;
+    01_build_raw)
+      require_status_flag_or_warn \
+        "status.main_ready" \
+        "01_build_raw 需要 main_ready=true。请先完成 metadata、audit、standardize 和 input_summary。"
+      ;;
+    *)
+      warn "未定义 ${stage_id} 的依赖规则，按无依赖继续。"
+      ;;
+  esac
+}
+
+run_stage_if_stale() {
+  local script_path="$1"
+  local output_path="$2"
+  shift 2 || true
+
+  if is_stale_output "${output_path}" "$@"; then
+    echo "运行 ${script_path}"
+    run_r_main "${script_path}"
+  else
+    echo "已存在且未过期，跳过: ${output_path}"
+  fi
+}
+
+sync_workflow_gate_statuses() {
+  local current_stage
+  local next_step
+  current_stage="$(workflow_status_get "current_stage" 2>/dev/null || echo gate_status_synced)"
+  next_step="$(workflow_status_get "next_step" 2>/dev/null || echo "")"
+
+  update_workflow_status \
+    "${current_stage}" \
+    "${next_step}" \
+    "status.pre_qc_gate_passed=$(eda_gate_passed pre_qc && echo true || echo false)" \
+    "status.post_qc_gate_passed=$(eda_gate_passed post_qc && echo true || echo false)" \
+    "status.integration_gate_passed=$(eda_gate_passed integration && echo true || echo false)" \
+    "status.annotation_gate_passed=$(eda_gate_passed annotation && echo true || echo false)" \
+    "status.subcluster_gate_passed=$(eda_gate_passed subcluster && echo true || echo false)"
+}
+
+update_workflow_status() {
+  local stage_name="$1"
+  local next_step="$2"
+  shift 2 || true
+
+  prepare_project_state_dirs
+
+  local python_bin
+  python_bin="$(detect_python)"
+
+  env \
+    WORKFLOW_STATUS_FILE="${WORKFLOW_STATUS_FILE}" \
+    WF_STAGE="${stage_name}" \
+    WF_NEXT_STEP="${next_step}" \
+    WF_PROJECT_ROOT="${PROJECT_ROOT}" \
+    WF_CONFIG_FILE="${CONFIG_FILE}" \
+    WF_PROJECT_INPUT_MODE="${PROJECT_INPUT_MODE:-$(detect_project_input_mode)}" \
+    WF_SAMPLE_SHEET="${SAMPLE_SHEET}" \
+    WF_CANONICAL_SAMPLE_SHEET="${CANONICAL_SAMPLE_SHEET}" \
+    WF_COMPARISON_SHEET="${COMPARISON_SHEET}" \
+    WF_INPUT_INVENTORY_FILE="${INPUT_INVENTORY_FILE}" \
+    WF_BRANCH_READINESS_FILE="${BRANCH_READINESS_FILE}" \
+    WF_INTAKE_SUMMARY_FILE="${INTAKE_SUMMARY_FILE}" \
+    WF_STATUS_DIR="${STATUS_DIR}" \
+    WF_EDA_REPORT_DIR="${EDA_REPORT_DIR}" \
+    WF_AMBIENT_REPORT_DIR="${AMBIENT_REPORT_DIR}" \
+    WF_QC_THRESHOLD_FILE="${QC_THRESHOLD_FILE}" \
+    WF_EDA_GATE_FILE="${EDA_GATE_FILE}" \
+    WF_ANNOTATION_HUB_PATH="${ANNOTATION_HUB_PATH}" \
+    WF_WAIVER_FILE="${WAIVER_FILE}" \
+    "${python_bin}" - "$@" <<'PY'
+import json
+import os
+from pathlib import Path
+from datetime import datetime
+
+status_path = Path(os.environ["WORKFLOW_STATUS_FILE"])
+if status_path.exists():
+    data = json.loads(status_path.read_text(encoding="utf-8"))
+else:
+    data = {}
+
+def coerce_value(raw: str):
+    lowered = raw.lower()
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    if lowered == "null":
+        return None
+    return raw
+
+def set_nested(obj, dotted_key, value):
+    current = obj
+    parts = dotted_key.split(".")
+    for key in parts[:-1]:
+      if key not in current or not isinstance(current[key], dict):
+          current[key] = {}
+      current = current[key]
+    current[parts[-1]] = value
+
+def get_nested(obj, dotted_key, default=None):
+    current = obj
+    for key in dotted_key.split("."):
+        if not isinstance(current, dict) or key not in current:
+            return default
+        current = current[key]
+    return current
+
+for item in os.sys.argv[1:]:
+    if "=" not in item:
+        continue
+    key, raw_value = item.split("=", 1)
+    set_nested(data, key, coerce_value(raw_value))
+
+data["updated_at"] = datetime.now().astimezone().isoformat(timespec="seconds")
+data["project_root"] = os.environ["WF_PROJECT_ROOT"]
+data["config_file"] = os.environ["WF_CONFIG_FILE"]
+data["current_stage"] = os.environ["WF_STAGE"]
+data["next_step"] = os.environ["WF_NEXT_STEP"]
+data["project_input_mode"] = os.environ.get("WF_PROJECT_INPUT_MODE", "")
+
+paths = data.setdefault("paths", {})
+paths["sample_sheet"] = os.environ["WF_SAMPLE_SHEET"]
+paths["canonical_sample_sheet"] = os.environ["WF_CANONICAL_SAMPLE_SHEET"]
+paths["comparison_sheet"] = os.environ["WF_COMPARISON_SHEET"]
+paths["input_inventory"] = os.environ["WF_INPUT_INVENTORY_FILE"]
+paths["branch_readiness"] = os.environ["WF_BRANCH_READINESS_FILE"]
+paths["intake_summary"] = os.environ["WF_INTAKE_SUMMARY_FILE"]
+paths["status_dir"] = os.environ["WF_STATUS_DIR"]
+paths["eda_report_dir"] = os.environ["WF_EDA_REPORT_DIR"]
+paths["ambient_report_dir"] = os.environ["WF_AMBIENT_REPORT_DIR"]
+paths["qc_threshold_file"] = os.environ["WF_QC_THRESHOLD_FILE"]
+paths["eda_gate_file"] = os.environ["WF_EDA_GATE_FILE"]
+
+annotation_path = os.environ["WF_ANNOTATION_HUB_PATH"]
+annotation_exists = Path(annotation_path).exists()
+data["annotation_hub"] = {
+    "path": annotation_path,
+    "exists": annotation_exists,
+    "produced_by": "20_run_main_pipeline.sh / r/03_annotation.R",
+}
+
+waiver_file = Path(os.environ["WF_WAIVER_FILE"])
+waivers = []
+if waiver_file.exists():
+    lines = waiver_file.read_text(encoding="utf-8").splitlines()
+    if lines:
+        headers = lines[0].split("\t")
+        for line in lines[1:]:
+            if not line.strip():
+                continue
+            values = line.split("\t")
+            row = {headers[i]: values[i] if i < len(values) else "" for i in range(len(headers))}
+            waivers.append(row)
+data["waivers"] = waivers
+
+status = data.setdefault("status", {})
+for key in (
+    "metadata_valid",
+    "standardized_inputs",
+    "input_eda_complete",
+    "ambient_branch_complete",
+    "pre_qc_eda_complete",
+    "pre_qc_gate_passed",
+    "post_qc_eda_complete",
+    "post_qc_gate_passed",
+    "integration_eda_complete",
+    "integration_gate_passed",
+    "annotation_eda_complete",
+    "annotation_gate_passed",
+    "main_upstream_ready",
+    "velocity_upstream_ready",
+    "ambient_upstream_ready",
+    "scenic_upstream_ready",
+    "de_replicate_ready",
+):
+    status.setdefault(key, False)
+
+status["main_ready"] = bool(status.get("metadata_valid")) and bool(status.get("standardized_inputs")) and bool(status.get("main_upstream_ready"))
+status["deg_ready"] = annotation_exists and bool(status.get("annotation_gate_passed"))
+status["trajectory_ready"] = annotation_exists and bool(status.get("annotation_gate_passed"))
+status["velocity_reference_ready"] = annotation_exists and bool(status.get("velocity_upstream_ready")) and bool(status.get("annotation_gate_passed"))
+status["scenic_export_ready"] = annotation_exists and bool(status.get("scenic_upstream_ready")) and bool(status.get("annotation_gate_passed"))
+
+status_path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+PY
+}
+
+workflow_status_get() {
+  local dotted_key="$1"
+  [[ -f "${WORKFLOW_STATUS_FILE}" ]] || return 1
+
+  local python_bin
+  python_bin="$(detect_python)"
+  "${python_bin}" - "${WORKFLOW_STATUS_FILE}" "${dotted_key}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+payload = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+current = payload
+for key in sys.argv[2].split("."):
+    if not isinstance(current, dict) or key not in current:
+        raise SystemExit(1)
+    current = current[key]
+if isinstance(current, bool):
+    print("true" if current else "false")
+elif current is None:
+    print("null")
+else:
+    print(current)
+PY
+}
+
+require_status_flag_or_warn() {
+  local dotted_key="$1"
+  local err_message="$2"
+  if [[ ! -f "${WORKFLOW_STATUS_FILE}" ]]; then
+    warn "缺少 workflow 状态文件 ${WORKFLOW_STATUS_FILE}，按兼容模式继续执行。"
+    return 0
+  fi
+
+  local current_value
+  current_value="$(workflow_status_get "${dotted_key}" 2>/dev/null || true)"
+  if [[ "${current_value}" != "true" ]]; then
+    die "${err_message}"
+  fi
+}
