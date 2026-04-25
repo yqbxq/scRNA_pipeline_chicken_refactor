@@ -110,7 +110,7 @@ read_sample_sheet_local <- function(cfg) {
   }
 
   expected_cols <- c(
-    "sample_id", "condition", "biological_replicate", "technical_replicate",
+    "sample_id", "condition", "cell_type_broad", "biological_replicate", "technical_replicate",
     "batch", "input_mode", "input_source", "source_path",
     "platform", "gene_id_type", "reference_version", "group_id", "timepoint",
     "tissue", "chemistry", "run_main", "run_velocity", "run_scenic"

@@ -98,6 +98,36 @@ TRIAGE_SIGNAL_REGISTRY <- list(
     display_name = "Cluster doublet 风险偏高",
     suspected_issue = "某个 provisional cluster 中 primary doublet fraction 偏高，可能代表混合细胞或边界区域。",
     recommended_action = "结合 marker、UMAP 和 doublet score 复核该 cluster，必要时在后续整合前剔除或标注。"
+  ),
+  integration_overcorrection_suspected = list(
+    display_name = "整合疑似过度校正",
+    suspected_issue = "整合后样本/批次效应被显著抑制，但 group/condition 间的真实生物差异也可能被模糊。",
+    recommended_action = "在 03b 报告中对比未整合 baseline 的 sample/group 关联指标与 marker 表现，必要时选用更弱的整合策略。"
+  ),
+  integration_undercorrection_suspected = list(
+    display_name = "整合疑似不足",
+    suspected_issue = "整合后样本仍呈样本驱动结构，未达到合并分析的预期。",
+    recommended_action = "检查 group_var 和样本构成，必要时调整 integration_modes 或增加更强的整合候选后重跑 03a2/03b。"
+  ),
+  integration_method_unavailable = list(
+    display_name = "整合方法环境缺失",
+    suspected_issue = "请求的整合方法在当前 R/Python 环境不可用或运行失败，模块已记录降级原因。",
+    recommended_action = "在 03a2 manifest 和候选索引中确认降级原因；补齐环境后重跑，或从 integration_modes 中移除该方法。"
+  ),
+  resolution_fallback_used = list(
+    display_name = "Resolution 回退到默认值",
+    suspected_issue = "粗+细 resolution 搜索没有精确命中 target_clusters，03c 已选择最接近目标的结果。",
+    recommended_action = "在 03e 报告中确认 cluster 数是否合理；若不合理，调整 target_clusters 或 res_range 后重跑 03c。"
+  ),
+  annotation_low_confidence = list(
+    display_name = "注释置信度偏低",
+    suspected_issue = "确定级别 cluster 占比 < 50%，多数 cluster 仍为暂定或未定。",
+    recommended_action = "补充 marker panel 或检查 module score 阈值；必要时回到 03c 调整 resolution。"
+  ),
+  annotation_panel_conflict = list(
+    display_name = "Panel 之间存在冲突",
+    suspected_issue = "至少 1 个 cluster 同时显著命中两个候选 panel，注释证据不唯一。",
+    recommended_action = "审阅 annotation_evidence.tsv，确认冲突 panel 是否需要合并/拆分，或 cluster 是否需要进一步 subcluster。"
   )
 )
 

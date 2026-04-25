@@ -40,6 +40,15 @@ check_stage_deps() {
         "status.pre_qc_gate_passed" \
         "02_qc 被 pre_qc gate 阻断。请先审阅 01b pre-QC 报告，并在 eda_gates.tsv 中批准 pre_qc。"
       ;;
+    03_panorama)
+      sync_workflow_gate_statuses
+      require_status_flag_or_warn \
+        "status.post_qc_gate_passed" \
+        "03_panorama 被 post_qc gate 阻断。请先审阅 02 post-QC 报告，并在 eda_gates.tsv 中批准 post_qc。"
+      require_status_flag_or_warn \
+        "status.02_qc_completed" \
+        "03_panorama 需要 02_qc 完成（含 ambient + qc + doublet）。"
+      ;;
     *)
       warn "未定义 ${stage_id} 的依赖规则，按无依赖继续。"
       ;;

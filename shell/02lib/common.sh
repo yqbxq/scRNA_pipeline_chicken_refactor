@@ -76,6 +76,19 @@ export QC_MIN_NCOUNT="${QC_MIN_NCOUNT:-1000}"
 export QC_MIN_LOG10UMI="${QC_MIN_LOG10UMI:-0.7}"
 export QC_MAX_MITO_PCT="${QC_MAX_MITO_PCT:-20}"
 export MODULE_02_VERSION="${MODULE_02_VERSION:-1.0}"
+export NORMALIZATION_METHODS="${NORMALIZATION_METHODS:-lognorm}"
+export INTEGRATION_MODES="${INTEGRATION_MODES:-${INTEGRATION_MODE:-harmony}}"
+export VARS_TO_REGRESS_DEFAULT="${VARS_TO_REGRESS_DEFAULT:-}"
+export RES_FINE_STEP="${RES_FINE_STEP:-0.005}"
+export PCA_DIMS_PANORAMA="${PCA_DIMS_PANORAMA:-${PCA_DIMS:-1:30}}"
+export PCA_DIMS_SUBCLUSTER="${PCA_DIMS_SUBCLUSTER:-1:20}"
+export SELECTED_INTEGRATION_FILE="${SELECTED_INTEGRATION_FILE:-${INTEGRATION_REPORT_DIR:-${EDA_REPORT_DIR:-${REPORT_DIR:-${PROJECT_ROOT}/reports}/eda}/integration}/panorama/selected_integration.txt}"
+export LAYER_STATUS_FILE="${LAYER_STATUS_FILE:-${TABLE_DIR}/layer_status.tsv}"
+export SCDESIGN3_N_SIM="${SCDESIGN3_N_SIM:-1}"
+export SCDESIGN3_FAMILY="${SCDESIGN3_FAMILY:-nb}"
+export PANORAMA_LAYER_ID="${PANORAMA_LAYER_ID:-panorama}"
+export ANNOTATION_HUB_PATH_CLUSTERED="${ANNOTATION_HUB_PATH_CLUSTERED:-${CHECKPOINT_DIR}/02_after_clustering.rds}"
+export MODULE_03_VERSION="${MODULE_03_VERSION:-1.0}"
 export USE_EXISTING_SIF="${USE_EXISTING_SIF:-no}"
 export EXISTING_R_SIF="${EXISTING_R_SIF:-}"
 export R_LIBS_MAIN="${R_LIBS_MAIN:-}"
@@ -218,33 +231,39 @@ ensure_object_layer_config_file() {
   {
     printf '# object_layers.tsv\n'
     printf '# - panorama 行是根层，默认从全部 post-QC 细胞建模\n'
-    printf '# - subcluster 行从 parent_layer 的 metadata 中按 selection_column/selection_values 取细胞\n'
-    printf '# - 默认示例保留 subcluster_1 / subcluster_2，但 selection_values 需要在审阅 panorama 后填写\n'
-    printf 'layer_id\tlayer_role\tenabled\tparent_layer\tsample_include\tsample_exclude\tselection_column\tselection_values\trebuild_normalization\thvg_nfeatures\tpca_dims\ttarget_clusters\tres_range\tres_fine_step\tintegration_mode\tdescription\n'
-    printf 'panorama\tpanorama\tyes\t\t\t\t\t\tyes\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    printf '# - subcluster 行从 parent_layer 的 metadata 中按 sample_include 或 selection_column/selection_values 取细胞\n'
+    printf '# - 默认示例保留 subcluster_1 / subcluster_2；请按 sample_include 或 panorama 注释结果填好后再启用\n'
+    printf 'layer_id\tlayer_role\tenabled\tparent_layer\tsample_include\tsample_exclude\tselection_column\tselection_values\trebuild_normalization\thvg_nfeatures\tpca_dims\ttarget_clusters\tres_range\tres_fine_step\tnormalization_methods\tintegration_mode\tvars_to_regress\tdescription\n'
+    printf 'panorama\tpanorama\tyes\t\t\t\t\t\tyes\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
       "${HVG_NFEATURES:-2000}" \
-      "${PCA_DIMS:-1:30}" \
+      "${PCA_DIMS_PANORAMA:-${PCA_DIMS:-1:30}}" \
       "${TARGET_CLUSTERS:-15}" \
       "${RES_RANGE:-0.20,0.25,0.30,0.35,0.40,0.45,0.50,0.55,0.60}" \
       "${RES_FINE_STEP:-0.005}" \
-      "${INTEGRATION_MODE:-harmony}" \
+      "${NORMALIZATION_METHODS:-lognorm}" \
+      "${INTEGRATION_MODES:-${INTEGRATION_MODE:-harmony}}" \
+      "${VARS_TO_REGRESS_DEFAULT:-}" \
       'Root panorama object built from all post-QC cells.'
-    printf 'subcluster_1\tsubcluster\tyes\tpanorama\t\t\tpanorama_cluster\t\tyes\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    printf 'subcluster_1\tsubcluster\tno\tpanorama\t\t\t\t\tyes\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
       "${HVG_NFEATURES:-2000}" \
-      "1:20" \
+      "${PCA_DIMS_SUBCLUSTER:-1:20}" \
       "8" \
       "0.10,0.15,0.20,0.25,0.30,0.35,0.40" \
       "${RES_FINE_STEP:-0.005}" \
-      "${INTEGRATION_MODE:-harmony}" \
-      'Edit selection_column and selection_values to define this subcluster from panorama results.'
-    printf 'subcluster_2\tsubcluster\tyes\tpanorama\t\t\tpanorama_cluster\t\tyes\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+      "lognorm" \
+      "${INTEGRATION_MODES:-${INTEGRATION_MODE:-harmony}}" \
+      "" \
+      'Fill sample_include or selection_column/selection_values from panorama results before enabling this subcluster.'
+    printf 'subcluster_2\tsubcluster\tno\tpanorama\t\t\t\t\tyes\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
       "${HVG_NFEATURES:-2000}" \
-      "1:20" \
+      "${PCA_DIMS_SUBCLUSTER:-1:20}" \
       "6" \
       "0.10,0.15,0.20,0.25,0.30,0.35,0.40" \
       "${RES_FINE_STEP:-0.005}" \
-      "${INTEGRATION_MODE:-harmony}" \
-      'Edit selection_column and selection_values to define this subcluster from panorama results.'
+      "lognorm" \
+      "${INTEGRATION_MODES:-${INTEGRATION_MODE:-harmony}}" \
+      "" \
+      'Fill sample_include or selection_column/selection_values from panorama results before enabling this subcluster.'
   } > "${OBJECT_LAYER_CONFIG_FILE}"
 }
 

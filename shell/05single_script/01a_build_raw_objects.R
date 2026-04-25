@@ -95,6 +95,7 @@ sample_builds <- lapply(sample_ids, function(sample_id) {
   obj$group <- resolved_group
   obj$analysis_group <- resolved_group
   obj$condition <- if (nzchar(sample_row$condition[1])) sample_row$condition[1] else resolved_group
+  obj$cell_type_broad <- normalize_scalar_value(sample_row$cell_type_broad[1])
   obj$biological_replicate <- if (nzchar(sample_row$biological_replicate[1])) sample_row$biological_replicate[1] else sample_id
   obj$technical_replicate <- if (nzchar(sample_row$technical_replicate[1])) sample_row$technical_replicate[1] else "1"
   obj$batch <- if (nzchar(sample_row$batch[1])) sample_row$batch[1] else "default"
@@ -158,7 +159,7 @@ raw_obj@misc$sample_feature_contracts <- sample_feature_contracts
 
 sample_summary <- raw_obj@meta.data %>%
   tibble::rownames_to_column("cell_id") %>%
-  dplyr::group_by(sample_id, analysis_group, batch, platform, gene_id_type, feature_name_profile, reference_version, timepoint, tissue, chemistry) %>%
+  dplyr::group_by(sample_id, analysis_group, condition, cell_type_broad, batch, platform, gene_id_type, feature_name_profile, reference_version, timepoint, tissue, chemistry) %>%
   dplyr::summarise(
     cells_raw = dplyr::n(),
     median_ncount = stats::median(nCount_RNA),
