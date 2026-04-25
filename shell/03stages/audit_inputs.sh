@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-source "$(cd "$(dirname "$0")/../02lib" && pwd)/common.sh"
+LIB_DIR="$(cd "$(dirname "$0")/../02lib" && pwd)"
+source "${LIB_DIR}/common.sh"
+source "${LIB_DIR}/intake.sh"
 
 prepare_project_state_dirs
 

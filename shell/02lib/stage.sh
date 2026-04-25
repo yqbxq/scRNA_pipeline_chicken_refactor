@@ -126,7 +126,12 @@ update_workflow_status() {
   prepare_project_state_dirs
 
   local python_bin
+  local project_input_mode
   python_bin="$(detect_python)"
+  project_input_mode="${PROJECT_INPUT_MODE:-}"
+  if [[ -z "${project_input_mode}" ]] && declare -F detect_project_input_mode >/dev/null 2>&1; then
+    project_input_mode="$(detect_project_input_mode)"
+  fi
 
   env \
     WORKFLOW_STATUS_FILE="${WORKFLOW_STATUS_FILE}" \
@@ -134,7 +139,7 @@ update_workflow_status() {
     WF_NEXT_STEP="${next_step}" \
     WF_PROJECT_ROOT="${PROJECT_ROOT}" \
     WF_CONFIG_FILE="${CONFIG_FILE}" \
-    WF_PROJECT_INPUT_MODE="${PROJECT_INPUT_MODE:-$(detect_project_input_mode)}" \
+    WF_PROJECT_INPUT_MODE="${project_input_mode}" \
     WF_SAMPLE_SHEET="${SAMPLE_SHEET}" \
     WF_CANONICAL_SAMPLE_SHEET="${CANONICAL_SAMPLE_SHEET}" \
     WF_COMPARISON_SHEET="${COMPARISON_SHEET}" \
@@ -198,7 +203,11 @@ data["project_root"] = os.environ["WF_PROJECT_ROOT"]
 data["config_file"] = os.environ["WF_CONFIG_FILE"]
 data["current_stage"] = os.environ["WF_STAGE"]
 data["next_step"] = os.environ["WF_NEXT_STEP"]
-data["project_input_mode"] = os.environ.get("WF_PROJECT_INPUT_MODE", "")
+project_input_mode = os.environ.get("WF_PROJECT_INPUT_MODE", "")
+if project_input_mode:
+    data["project_input_mode"] = project_input_mode
+else:
+    data.setdefault("project_input_mode", "")
 
 paths = data.setdefault("paths", {})
 paths["sample_sheet"] = os.environ["WF_SAMPLE_SHEET"]
