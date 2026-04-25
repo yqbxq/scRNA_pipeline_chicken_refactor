@@ -75,5 +75,6 @@ update_workflow_status \
   "review ${EDA_GATE_FILE} and approve pre_qc before bash ${PIPELINE_ROOT}/shell/03stages/02_qc.sh" \
   "status.01a_build_raw_objects_completed=true" \
   "status.01b_pre_qc_eda_completed=true" \
+  "status.01_pre_qc_eda_completed=true" \
   "status.pre_qc_eda_complete=true" \
   "status.pre_qc_gate_passed=false"

@@ -175,7 +175,7 @@ sample_summary <- raw_obj@meta.data %>%
   ) %>%
   dplyr::left_join(sample_feature_contracts, by = "sample_id")
 
-raw_obj_path <- file.path(cfg$checkpoint_dir, "00_raw_objects.rds")
+raw_obj_path <- file.path(cfg$checkpoint_dir, "01a_raw_objects.rds")
 sample_summary_path <- file.path(cfg$table_dir, "raw_sample_summary.csv")
 feature_contracts_path <- file.path(cfg$table_dir, "sample_feature_contracts.tsv")
 

@@ -34,6 +34,9 @@ check_stage_deps() {
     02_qc)
       sync_workflow_gate_statuses
       require_status_flag_or_warn \
+        "status.01_pre_qc_eda_completed" \
+        "02_qc 需要先完成 01_build_raw，并生成 pre-QC EDA 报告。"
+      require_status_flag_or_warn \
         "status.pre_qc_gate_passed" \
         "02_qc 被 pre_qc gate 阻断。请先审阅 01b pre-QC 报告，并在 eda_gates.tsv 中批准 pre_qc。"
       ;;

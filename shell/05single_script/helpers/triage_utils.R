@@ -68,6 +68,36 @@ TRIAGE_SIGNAL_REGISTRY <- list(
     display_name = "项目级 readiness 仍有限制",
     suspected_issue = "项目级 intake/readiness 还没有完全放行，继续推进前需要确认这些限制是否可接受。",
     recommended_action = "在进入后续整合和分支模块前，先显式记录这些限制及接受理由。"
+  ),
+  heavy_qc_loss = list(
+    display_name = "QC 保留率过低",
+    suspected_issue = "该样本在基础 QC 后细胞保留率偏低，可能是样本质量、文库复杂度或阈值设置问题。",
+    recommended_action = "回看 pre-QC 分布和样本级阈值；若分布连续，优先人工复核后再决定是否放宽阈值。"
+  ),
+  high_primary_doublet_rate = list(
+    display_name = "Primary doublet 检出率偏高",
+    suspected_issue = "scDblFinder 检出的 doublet rate 高于预期，可能存在上样浓度过高或局部混合群。",
+    recommended_action = "重点审阅 doublet score 分布、UMAP 空间位置和高风险 cluster，再决定是否调整过滤策略。"
+  ),
+  primary_secondary_discordance = list(
+    display_name = "Primary/secondary doublet 调用不一致",
+    suspected_issue = "scDblFinder 与 DoubletFinder 对部分细胞给出不同判断，说明 doublet 边界存在不确定性。",
+    recommended_action = "保留 scDblFinder 作为默认主调用器，同时人工复核冲突区域和 score 分布。"
+  ),
+  sample_collapse = list(
+    display_name = "QC/doublet 后样本细胞数过少",
+    suspected_issue = "该样本过滤后剩余细胞太少，后续聚类、整合或差异分析稳定性较差。",
+    recommended_action = "确认该样本是否继续纳入主线；必要时记录为低细胞数风险或从后续分析中排除。"
+  ),
+  ambient_recommended_not_applied = list(
+    display_name = "Ambient 建议替换但未应用",
+    suspected_issue = "ambient 分支估计污染比例达到建议阈值，但主对象仍未替换为校正 counts。",
+    recommended_action = "进入整合前明确是否接受原始 counts；如不接受，调整 AMBIENT_APPLY_POLICY 后重跑 02。"
+  ),
+  doublet_high_risk_cluster = list(
+    display_name = "Cluster doublet 风险偏高",
+    suspected_issue = "某个 provisional cluster 中 primary doublet fraction 偏高，可能代表混合细胞或边界区域。",
+    recommended_action = "结合 marker、UMAP 和 doublet score 复核该 cluster，必要时在后续整合前剔除或标注。"
   )
 )
 
