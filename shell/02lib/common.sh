@@ -87,6 +87,8 @@ export SCDESIGN3_FAMILY="${SCDESIGN3_FAMILY:-nb}"
 export PANORAMA_LAYER_ID="${PANORAMA_LAYER_ID:-panorama}"
 export ANNOTATION_HUB_PATH_CLUSTERED="${ANNOTATION_HUB_PATH_CLUSTERED:-${CHECKPOINT_DIR}/02_after_clustering.rds}"
 export MODULE_03_VERSION="${MODULE_03_VERSION:-1.0}"
+export MODULE_04_VERSION="${MODULE_04_VERSION:-1.0}"
+export MAX_INTEGRATION_CANDIDATES_PER_LAYER="${MAX_INTEGRATION_CANDIDATES_PER_LAYER:-4}"
 export USE_EXISTING_SIF="${USE_EXISTING_SIF:-no}"
 export EXISTING_R_SIF="${EXISTING_R_SIF:-}"
 export R_LIBS_MAIN="${R_LIBS_MAIN:-}"
@@ -135,6 +137,8 @@ export ANNOTATION_REPORT_DIR="${ANNOTATION_REPORT_DIR:-${EDA_REPORT_DIR}/annotat
 export SUBCLUSTER_REPORT_DIR="${SUBCLUSTER_REPORT_DIR:-${EDA_REPORT_DIR}/subcluster}"
 export SELECTED_INTEGRATION_FILE="${SELECTED_INTEGRATION_FILE:-${INTEGRATION_REPORT_DIR}/panorama/selected_integration.txt}"
 export LAYER_STATUS_FILE="${LAYER_STATUS_FILE:-${TABLE_DIR}/layer_status.tsv}"
+export SUBCLUSTER_REVIEW_SUMMARY_FILE="${SUBCLUSTER_REVIEW_SUMMARY_FILE:-${TABLE_DIR}/subcluster/subcluster_review_summary.tsv}"
+export SUBCLUSTER_CANDIDATE_LAYERS_COUNT_FILE="${SUBCLUSTER_CANDIDATE_LAYERS_COUNT_FILE:-${TABLE_DIR}/subcluster/candidate_layers_count.txt}"
 export DNBC4TOOLS_OUT_DIR="${DNBC4TOOLS_OUT_DIR:-${DATA_DIR}/dnbc4tools_out}"
 export STAR_INDEX_DIR="${STAR_INDEX_DIR:-${REFERENCE_DIR}/star_index}"
 export STAR_THREADS="${STAR_THREADS:-${MAIN_THREADS:-8}}"
@@ -250,8 +254,8 @@ ensure_object_layer_config_file() {
       "8" \
       "0.10,0.15,0.20,0.25,0.30,0.35,0.40" \
       "${RES_FINE_STEP:-0.005}" \
-      "lognorm" \
-      "${INTEGRATION_MODES:-${INTEGRATION_MODE:-harmony}}" \
+      "" \
+      "" \
       "" \
       'Fill sample_include or selection_column/selection_values from panorama results before enabling this subcluster.'
     printf 'subcluster_2\tsubcluster\tno\tpanorama\t\t\t\t\tyes\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
@@ -260,8 +264,8 @@ ensure_object_layer_config_file() {
       "6" \
       "0.10,0.15,0.20,0.25,0.30,0.35,0.40" \
       "${RES_FINE_STEP:-0.005}" \
-      "lognorm" \
-      "${INTEGRATION_MODES:-${INTEGRATION_MODE:-harmony}}" \
+      "" \
+      "" \
       "" \
       'Fill sample_include or selection_column/selection_values from panorama results before enabling this subcluster.'
   } > "${OBJECT_LAYER_CONFIG_FILE}"

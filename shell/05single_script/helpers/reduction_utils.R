@@ -21,6 +21,32 @@ strip_reduction_state <- function(seu) {
   seu
 }
 
+strip_reduction_state_preserving_parent_meta <- function(seu, parent_prefix = "panorama_") {
+  parent_prefix <- normalize_scalar_value(parent_prefix, "panorama_")
+  meta_df <- seu@meta.data
+  preserve_cols <- unique(c(
+    "seurat_clusters",
+    "cluster_id",
+    "cell_type",
+    "cell_type_confidence",
+    "annotation_relation",
+    grep("_cluster$", colnames(meta_df), value = TRUE)
+  ))
+  preserve_cols <- intersect(preserve_cols, colnames(meta_df))
+
+  preserved <- list()
+  for (col in preserve_cols) {
+    target_col <- if (startsWith(col, parent_prefix)) col else paste0(parent_prefix, col)
+    preserved[[target_col]] <- meta_df[[col]]
+  }
+
+  seu <- strip_reduction_state(seu)
+  for (target_col in names(preserved)) {
+    seu[[target_col]] <- preserved[[target_col]]
+  }
+  seu
+}
+
 validate_regression_variables <- function(seu, vars_to_regress) {
   vars_to_regress <- vars_to_regress[nzchar(vars_to_regress)]
   if (length(vars_to_regress) == 0) {

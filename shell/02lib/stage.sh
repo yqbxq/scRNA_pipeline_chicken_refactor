@@ -49,6 +49,24 @@ check_stage_deps() {
         "status.02_qc_completed" \
         "03_panorama 需要 02_qc 完成（含 ambient + qc + doublet）。"
       ;;
+    04_subcluster)
+      sync_workflow_gate_statuses
+      require_status_flag_or_warn \
+        "status.annotation_gate_passed" \
+        "04_subcluster 被 annotation gate 阻断。请先审阅 03e panorama 注释报告，并在 eda_gates.tsv 中批准 annotation。"
+      require_status_flag_or_warn \
+        "status.03_panorama_completed" \
+        "04_subcluster 需要 03_panorama 整链完成。"
+      ;;
+    04d_cluster_robustness)
+      sync_workflow_gate_statuses
+      require_status_flag_or_warn \
+        "status.subcluster_gate_passed" \
+        "04d_cluster_robustness 被 subcluster gate 阻断。请先审阅 04c subcluster EDA 报告，并在 eda_gates.tsv 中批准 subcluster。"
+      require_status_flag_or_warn \
+        "status.04_subcluster_completed" \
+        "04d_cluster_robustness 需要 04_subcluster 完成。"
+      ;;
     *)
       warn "未定义 ${stage_id} 的依赖规则，按无依赖继续。"
       ;;
@@ -92,6 +110,33 @@ print(path)
 PY
 }
 
+manifest_has_output_key() {
+  local manifest_path="$1"
+  local output_key="$2"
+  local python_bin
+  python_bin="$(detect_python)"
+
+  "${python_bin}" - "${manifest_path}" "${output_key}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+manifest_path = Path(sys.argv[1])
+output_key = sys.argv[2]
+if not manifest_path.exists():
+    raise SystemExit(1)
+
+try:
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+except Exception:
+    raise SystemExit(1)
+
+outputs = manifest.get("outputs") or {}
+entry = outputs.get(output_key) or {}
+raise SystemExit(0 if entry.get("path") else 1)
+PY
+}
+
 require_manifest_output() {
   local manifest_path="$1"
   local output_key="$2"
@@ -99,6 +144,28 @@ require_manifest_output() {
   output_path="$(manifest_output_path "${manifest_path}" "${output_key}")"
   [[ -e "${output_path}" ]] || die "manifest 输出不存在: ${output_key} -> ${output_path}"
   echo "${output_path}"
+}
+
+run_stage_if_manifest_key_missing() {
+  local script_path="$1"
+  local manifest_path="$2"
+  local output_key="$3"
+  shift 3 || true
+
+  if ! manifest_has_output_key "${manifest_path}" "${output_key}"; then
+    echo "manifest 缺少 ${output_key}，运行 ${script_path}"
+    run_r_main "${script_path}"
+    return
+  fi
+
+  local output_path
+  output_path="$(manifest_output_path "${manifest_path}" "${output_key}")"
+  if is_stale_output "${output_path}" "$@"; then
+    echo "manifest 输出 ${output_key} 缺失或过期，运行 ${script_path}"
+    run_r_main "${script_path}"
+  else
+    echo "manifest 输出已存在且未过期，跳过: ${output_key} -> ${output_path}"
+  fi
 }
 
 run_stage_if_stale() {

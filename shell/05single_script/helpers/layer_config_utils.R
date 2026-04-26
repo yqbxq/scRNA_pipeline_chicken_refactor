@@ -91,8 +91,8 @@ default_object_layer_config_df <- function(cfg) {
       "0.10,0.15,0.20,0.25,0.30,0.35,0.40"
     ),
     res_fine_step = c(cfg$res_fine_step_default, cfg$res_fine_step_default, cfg$res_fine_step_default),
-    normalization_methods = c(cfg$normalization_methods_default, "lognorm", "lognorm"),
-    integration_mode = c(cfg$integration_modes_default, cfg$integration_modes_default, cfg$integration_modes_default),
+    normalization_methods = c(cfg$normalization_methods_default, "", ""),
+    integration_mode = c(cfg$integration_modes_default, "", ""),
     vars_to_regress = c(cfg$vars_to_regress_default, "", ""),
     description = c(
       "Root panorama object built from all post-QC cells.",
@@ -125,10 +125,13 @@ read_object_layer_config <- function(cfg) {
     }
   }
 
-  # Backward-compatible defaults for older object_layers.tsv files.
-  df$normalization_methods[!nzchar(trimws(df$normalization_methods))] <- cfg$normalization_methods_default
-  df$integration_mode[!nzchar(trimws(df$integration_mode))] <- cfg$integration_modes_default
-  df$vars_to_regress[!nzchar(trimws(df$vars_to_regress))] <- cfg$vars_to_regress_default
+  role_raw <- tolower(vapply(df$layer_role, normalize_scalar_value, character(1), default = "subcluster"))
+
+  # Backward-compatible defaults for panorama rows. In subcluster rows, empty
+  # normalization/integration fields intentionally mean "inherit panorama selected".
+  df$normalization_methods[role_raw == "panorama" & !nzchar(trimws(df$normalization_methods))] <- cfg$normalization_methods_default
+  df$integration_mode[role_raw == "panorama" & !nzchar(trimws(df$integration_mode))] <- cfg$integration_modes_default
+  df$vars_to_regress[role_raw == "panorama" & !nzchar(trimws(df$vars_to_regress))] <- cfg$vars_to_regress_default
   df$res_fine_step[!nzchar(trimws(df$res_fine_step))] <- as.character(cfg$res_fine_step_default)
 
   df <- df[, expected_cols, drop = FALSE]
@@ -183,9 +186,6 @@ validate_layer_config <- function(df) {
       if (!nzchar(row$parent_layer)) {
         stop(sprintf("subcluster layer `%s` 必须设置 parent_layer。", row$layer_id), call. = FALSE)
       }
-      if (length(row$sample_include[[1]]) == 0 && !nzchar(row$selection_column)) {
-        stop(sprintf("subcluster layer `%s` 至少需要 sample_include 或 selection_column。", row$layer_id), call. = FALSE)
-      }
     }
   }
   df
@@ -237,4 +237,80 @@ panorama_layer_spec <- function(cfg) {
   enabled <- filter_enabled_layers(df)
   row <- enabled[enabled$layer_role == "panorama", , drop = FALSE]
   layer_config_row_to_spec(row)
+}
+
+layer_spec_has_filter <- function(layer_spec) {
+  length(layer_spec$sample_include) > 0 ||
+    length(layer_spec$sample_exclude) > 0 ||
+    (nzchar(layer_spec$selection_column) && length(layer_spec$selection_values) > 0)
+}
+
+read_selected_integration_value_local <- function(path) {
+  if (!file.exists(path)) {
+    return("")
+  }
+  lines <- trimws(readLines(path, warn = FALSE, encoding = "UTF-8"))
+  lines <- lines[nzchar(lines) & !startsWith(lines, "#")]
+  if (length(lines) == 0) "" else lines[[1]]
+}
+
+parse_selected_integration_local <- function(value) {
+  value <- normalize_scalar_value(value)
+  parts <- strsplit(value, "__", fixed = TRUE)[[1]]
+  if (length(parts) != 2 || !all(nzchar(parts))) {
+    stop(sprintf("selected integration 格式必须是 <normalization>__<integration>: %s", value), call. = FALSE)
+  }
+  list(normalization = parts[[1]], integration = parts[[2]], value = value)
+}
+
+layer_candidate_grid <- function(layer_spec, selected_normalization, selected_integration, cap = 4L) {
+  inherit_normalization <- length(layer_spec$normalization_methods) == 0
+  inherit_integration <- length(layer_spec$integration_mode) == 0
+  normalization_methods <- if (inherit_normalization) selected_normalization else layer_spec$normalization_methods
+  integration_modes <- if (inherit_integration) selected_integration else layer_spec$integration_mode
+
+  rows <- list()
+  for (norm_method in normalization_methods) {
+    for (integration_mode in integration_modes) {
+      rows[[length(rows) + 1]] <- data.frame(
+        normalization = norm_method,
+        integration = integration_mode,
+        candidate_id = sprintf("%s__%s", norm_method, integration_mode),
+        stringsAsFactors = FALSE
+      )
+    }
+  }
+  out <- if (length(rows) > 0) dplyr::bind_rows(rows) else data.frame(
+    normalization = character(0),
+    integration = character(0),
+    candidate_id = character(0),
+    stringsAsFactors = FALSE
+  )
+  if (nrow(out) > 0) {
+    out <- unique(out)
+  }
+
+  original_n <- nrow(out)
+  cap <- suppressWarnings(as.integer(cap))
+  if (is.na(cap) || cap < 1L) {
+    cap <- 4L
+  }
+  capped <- original_n > cap
+  if (capped) {
+    out <- out[seq_len(cap), , drop = FALSE]
+  }
+  out$mode <- if (inherit_normalization && inherit_integration) {
+    "inherited"
+  } else if (nrow(out) > 1) {
+    "candidate"
+  } else {
+    "explicit_single"
+  }
+  out$original_candidate_count <- original_n
+  out$capped <- ifelse(capped, "true", "false")
+  out
+}
+
+cap_layer_candidates <- function(layer_spec, selected_normalization, selected_integration, cap = 4L) {
+  layer_candidate_grid(layer_spec, selected_normalization, selected_integration, cap)
 }

@@ -128,6 +128,26 @@ TRIAGE_SIGNAL_REGISTRY <- list(
     display_name = "Panel 之间存在冲突",
     suspected_issue = "至少 1 个 cluster 同时显著命中两个候选 panel，注释证据不唯一。",
     recommended_action = "审阅 annotation_evidence.tsv，确认冲突 panel 是否需要合并/拆分，或 cluster 是否需要进一步 subcluster。"
+  ),
+  subcluster_skipped_no_filter = list(
+    display_name = "子层缺少过滤条件被跳过",
+    suspected_issue = "object_layers.tsv 中该 subcluster 行未提供 sample_include/sample_exclude，也未提供 selection_column/selection_values。",
+    recommended_action = "根据 panorama 注释结果回填 selection_column+selection_values，或用 sample_include 显式列出样本，再重跑 04a。"
+  ),
+  subcluster_candidate_capped = list(
+    display_name = "子层整合候选被截断",
+    suspected_issue = "该 subcluster 的 normalization_methods × integration_mode 候选数超过上限，04a 已按出现顺序截断。",
+    recommended_action = "如需评估被截断的方法，请提高 MAX_INTEGRATION_CANDIDATES_PER_LAYER 或缩小该层候选列表后重跑。"
+  ),
+  subcluster_low_confidence = list(
+    display_name = "子层注释置信度偏低",
+    suspected_issue = "确定级别 subcluster 占比 < 50%，多数 cluster 仍为暂定或未定。",
+    recommended_action = "补充该层 marker panel，或回到 04a 调整 target_clusters/res_range 后重跑。"
+  ),
+  subcluster_resolution_fallback_used = list(
+    display_name = "子层 resolution 回退",
+    suspected_issue = "子层粗+细 resolution 搜索没有精确命中 target_clusters，04a 已选择最接近目标的结果。",
+    recommended_action = "在 04c 报告中确认 cluster 数是否合理；若不合理，调整该层 target_clusters 或 res_range 后重跑 04a。"
   )
 )
 
