@@ -49,6 +49,7 @@ PANORAMA_ANNOTATED_OBJECT="$(require_manifest_output "${MODULE_03D_MANIFEST}" "a
 MODULE_04A_MANIFEST="${MANIFEST_DIR}/04a_subcluster_build/_manifest.json"
 MODULE_04A_REVIEW_MANIFEST="${MANIFEST_DIR}/04a_review/_manifest.json"
 MODULE_04B_MANIFEST="${MANIFEST_DIR}/04b_subcluster_annotate/_manifest.json"
+MODULE_04C_MANIFEST="${MANIFEST_DIR}/04c_subcluster_eda/_manifest.json"
 
 ensure_eda_control_files
 ensure_object_layer_config_file
@@ -104,8 +105,18 @@ run_stage_if_stale \
 
 require_manifest_output "${MODULE_04B_MANIFEST}" "summary_tsv" >/dev/null
 
+run_stage_if_stale \
+  "${SHELL_ROOT}/05single_script/04c_subcluster_eda.R" \
+  "${MODULE_04C_MANIFEST}" \
+  "${MODULE_04B_MANIFEST}" \
+  "${COMPARISON_SHEET}"
+
+require_manifest_output "${MODULE_04C_MANIFEST}" "subcluster_summary_tsv" >/dev/null
+
 update_workflow_status \
-  "04b_subcluster_annotated" \
-  "next: implement/run 04c_subcluster_eda.R before marking 04_subcluster completed" \
+  "04_subcluster_completed" \
+  "next: review 04c subcluster EDA outputs; optional next bash ${PIPELINE_ROOT}/shell/03stages/04d_cluster_robustness.sh" \
   "status.04a_subcluster_build_completed=true" \
-  "status.04b_subcluster_annotated=true"
+  "status.04b_subcluster_annotated=true" \
+  "status.04c_subcluster_eda_completed=true" \
+  "status.04_subcluster_completed=true"

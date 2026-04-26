@@ -282,6 +282,31 @@ candidate_layers_count <- length(unique(review_summary$layer_id[
 write_tsv_local(review_summary, cfg$subcluster_review_summary_file)
 writeLines(as.character(candidate_layers_count), cfg$subcluster_candidate_layers_count_file, useBytes = TRUE)
 
+review_section_lines <- function(title, df) {
+  c(
+    sprintf("## %s", title),
+    render_markdown_table_local(df),
+    ""
+  )
+}
+
+candidate_review <- review_summary[
+  review_summary$mode == "candidate" & !nzchar(review_summary$clustered_rds),
+  ,
+  drop = FALSE
+]
+inherited_review <- review_summary[
+  review_summary$mode %in% c("inherited", "explicit_single") |
+    (review_summary$mode == "candidate" & nzchar(review_summary$clustered_rds)),
+  ,
+  drop = FALSE
+]
+skipped_review <- review_summary[
+  startsWith(review_summary$mode, "skipped") | startsWith(review_summary$status, "skipped"),
+  ,
+  drop = FALSE
+]
+
 report_path <- file.path(cfg$subcluster_report_dir, "04a_review.md")
 ensure_dir(dirname(report_path))
 report_lines <- c(
@@ -290,11 +315,13 @@ report_lines <- c(
   sprintf("- review_summary: `%s`", cfg$subcluster_review_summary_file),
   sprintf("- candidate_layers_count: `%s`", candidate_layers_count),
   "",
-  "## Layer Review",
-  render_markdown_table_local(review_summary),
-  "",
+  review_section_lines("Candidate Layers (Review Needed)", candidate_review),
+  review_section_lines("Inherited Or Explicit Single Layers", inherited_review),
+  review_section_lines("Skipped Layers", skipped_review),
   "## Review Action",
-  "For rows with `mode=candidate`, edit the corresponding `selected_integration_file` if needed, then approve the `subcluster` gate."
+  "For rows with `mode=candidate`, edit the corresponding `selected_integration_file` if needed, then approve the `subcluster` gate.",
+  "",
+  "After approval and finalize, `subcluster_candidate_index.tsv` may contain only the selected candidate row for candidate-mode layers. Full multi-candidate diagnostics remain in the per-layer `subcluster_integration_compare.tsv` files listed above."
 )
 write_markdown_local(report_lines, report_path)
 
