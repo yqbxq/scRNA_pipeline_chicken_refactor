@@ -62,6 +62,14 @@ layer_subcluster_table_dir_04 <- function(cfg, layer_id) {
   file.path(cfg$subcluster_table_dir, "layers", layer_id)
 }
 
+layer_annotation_report_dir_04 <- function(cfg, layer_id) {
+  file.path(env_or_default_03("ANNOTATION_REPORT_DIR", file.path(cfg$eda_report_dir, "annotation")), "layers", layer_id)
+}
+
+layer_annotation_table_dir_04 <- function(cfg, layer_id) {
+  file.path(cfg$table_dir, "annotation", "layers", layer_id)
+}
+
 selected_integration_file_04 <- function(cfg, layer_id) {
   file.path(layer_integration_report_dir_04(cfg, layer_id), "selected_integration.txt")
 }

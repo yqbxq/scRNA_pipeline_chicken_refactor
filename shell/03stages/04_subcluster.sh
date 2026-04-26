@@ -48,6 +48,7 @@ PANORAMA_ANNOTATED_OBJECT="$(require_manifest_output "${MODULE_03D_MANIFEST}" "a
 
 MODULE_04A_MANIFEST="${MANIFEST_DIR}/04a_subcluster_build/_manifest.json"
 MODULE_04A_REVIEW_MANIFEST="${MANIFEST_DIR}/04a_review/_manifest.json"
+MODULE_04B_MANIFEST="${MANIFEST_DIR}/04b_subcluster_annotate/_manifest.json"
 
 ensure_eda_control_files
 ensure_object_layer_config_file
@@ -95,7 +96,16 @@ fi
 require_manifest_output "${MODULE_04A_MANIFEST}" "subcluster_index_tsv" >/dev/null
 require_manifest_output "${MODULE_04A_MANIFEST}" "candidate_index_tsv" >/dev/null
 
+run_stage_if_stale \
+  "${SHELL_ROOT}/05single_script/04b_subcluster_annotate.R" \
+  "${MODULE_04B_MANIFEST}" \
+  "${MODULE_04A_MANIFEST}" \
+  "${MARKER_PANEL_DIR}"
+
+require_manifest_output "${MODULE_04B_MANIFEST}" "summary_tsv" >/dev/null
+
 update_workflow_status \
-  "04a_subcluster_build_completed" \
-  "next: implement/run 04b_subcluster_annotate.R and 04c_subcluster_eda.R before marking 04_subcluster completed" \
-  "status.04a_subcluster_build_completed=true"
+  "04b_subcluster_annotated" \
+  "next: implement/run 04c_subcluster_eda.R before marking 04_subcluster completed" \
+  "status.04a_subcluster_build_completed=true" \
+  "status.04b_subcluster_annotated=true"
