@@ -18,6 +18,7 @@ env \
   "${python_bin}" - <<'PY'
 import csv
 import os
+import re
 from pathlib import Path
 
 sample_path = Path(os.environ["SAMPLE_SHEET"])
@@ -126,6 +127,7 @@ with canonical_path.open("w", encoding="utf-8", newline="") as handle:
     writer.writerows(canonical_rows)
 
 required_comparison_cols = ["comparison_id", "ident_1", "ident_2", "enabled"]
+safe_subset_column_re = re.compile(r"^[A-Za-z0-9_.:-]+$")
 with comparison_path.open("r", encoding="utf-8", newline="") as handle:
     reader = csv.DictReader(handle, delimiter="\t")
     if reader.fieldnames is None:
@@ -140,6 +142,8 @@ for row in comparison_rows:
     ident_1 = row.get("ident_1", "").strip()
     ident_2 = row.get("ident_2", "").strip()
     enabled = row.get("enabled", "").strip().lower()
+    subset_column = row.get("subset_column", "").strip()
+    subset_value = row.get("subset_value", "").strip()
 
     if not comparison_id:
         raise SystemExit("比较设计表存在空 comparison_id。")
@@ -149,6 +153,13 @@ for row in comparison_rows:
         raise SystemExit(f"{comparison_id} 引用了不存在的 ident_2: {ident_2}")
     if enabled not in {"yes", "no", "true", "false"}:
         raise SystemExit(f"{comparison_id} 的 enabled 非法: {enabled}")
+    if bool(subset_column) != bool(subset_value):
+        raise SystemExit(f"{comparison_id} 的 subset_column/subset_value 必须同时填写或同时留空。")
+    if subset_column and not safe_subset_column_re.match(subset_column):
+        raise SystemExit(
+            f"{comparison_id} 的 subset_column 含非法字符: {subset_column} "
+            "(仅允许字母、数字、下划线、点、冒号和短横线)"
+        )
 
 if not waiver_path.exists():
     waiver_path.parent.mkdir(parents=True, exist_ok=True)

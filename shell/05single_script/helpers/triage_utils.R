@@ -148,6 +148,11 @@ TRIAGE_SIGNAL_REGISTRY <- list(
     display_name = "子层 resolution 回退",
     suspected_issue = "子层粗+细 resolution 搜索没有精确命中 target_clusters，04a 已选择最接近目标的结果。",
     recommended_action = "在 04c 报告中确认 cluster 数是否合理；若不合理，调整该层 target_clusters 或 res_range 后重跑 04a。"
+  ),
+  subcluster_subset_no_match = list(
+    display_name = "比较子集匹配为空",
+    suspected_issue = "comparisons.tsv 的 subset_column/subset_value 未在 metadata 中匹配任何细胞",
+    recommended_action = "确认 subset_column 列存在且值大小写一致，或调整 subset_value 列表"
   )
 )
 

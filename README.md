@@ -180,6 +180,7 @@
 
 - `workflow/02_validate_metadata.sh`
   - 校验 `metadata/samples.tsv` 和 `metadata/comparisons.tsv`
+  - `comparisons.tsv` 支持可选 `subset_column` / `subset_value`，两列必须同时填写或同时留空
   - 生成 canonical sample sheet
 
 ### 5.4 输入审计

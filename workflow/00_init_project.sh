@@ -630,8 +630,8 @@ fi
 } > "${PROJECT_METADATA_DIR}/samples.tsv"
 
 {
-  printf 'comparison_id\tident_1\tident_2\tenabled\tgroup_var\tbatch_var\tlayer_scope\tmin_biological_replicates\n'
-  printf '%s_vs_%s\t%s\t%s\tyes\tgroup_id\tbatch\t*\t2\n' "${GROUP1_NAME}" "${GROUP2_NAME}" "${GROUP1_NAME}" "${GROUP2_NAME}"
+  printf 'comparison_id\tident_1\tident_2\tenabled\tgroup_var\tbatch_var\tlayer_scope\tmin_biological_replicates\tsubset_column\tsubset_value\n'
+  printf '%s_vs_%s\t%s\t%s\tyes\tgroup_id\tbatch\t*\t2\t\t\n' "${GROUP1_NAME}" "${GROUP2_NAME}" "${GROUP1_NAME}" "${GROUP2_NAME}"
 } > "${PROJECT_METADATA_DIR}/comparisons.tsv"
 
 {

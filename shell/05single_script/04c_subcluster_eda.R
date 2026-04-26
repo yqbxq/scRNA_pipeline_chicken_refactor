@@ -26,10 +26,11 @@ source_utf8(file.path(.script_dir, "helpers", "manifest_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "report_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "metadata_io.R"))
 source_utf8(file.path(.script_dir, "helpers", "qc_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "triage_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "layer_config_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "comparison_utils.R"))
 
-load_required_packages(c("Seurat", "dplyr", "tibble", "tidyr", "jsonlite"))
+load_required_packages(c("Seurat", "dplyr", "ggplot2", "tibble", "tidyr", "jsonlite"))
 
 cfg <- get_single_script_config_04()
 module_name <- "04c_subcluster_eda"
@@ -45,6 +46,11 @@ empty_subcluster_summary_04c <- function() {
     tentative_n = integer(0),
     undetermined_n = integer(0),
     determined_fraction = numeric(0),
+    subset_pass_count = integer(0),
+    condition_split_path = character(0),
+    panorama_cross_path = character(0),
+    comparison_subset_summary_path = character(0),
+    summary_plot_png = character(0),
     annotated_rds = character(0),
     report_md = character(0),
     stringsAsFactors = FALSE
@@ -208,11 +214,12 @@ comparison_rows_for_layer_04c <- function(comparisons, layer_id) {
 
 build_comparison_tables_04c <- function(seu, layer_id, comparisons, cluster_col, cell_type_col) {
   if (nrow(comparisons) == 0) {
-    return(list(summary = empty_comparison_summary_04c(), split = empty_comparison_split_04c()))
+    return(list(summary = empty_comparison_summary_04c(), split = empty_comparison_split_04c(), triage = empty_triage_df(include_sample = TRUE)))
   }
 
   summary_rows <- list()
   split_rows <- list()
+  triage_rows <- list()
   for (idx in seq_len(nrow(comparisons))) {
     comparison_row <- comparisons[idx, , drop = FALSE]
     comparison_id <- normalize_scalar_value(comparison_row$comparison_id[[1]], sprintf("comparison_%s", idx))
@@ -221,46 +228,67 @@ build_comparison_tables_04c <- function(seu, layer_id, comparisons, cluster_col,
     ident_2 <- normalize_scalar_value(comparison_row$ident_2[[1]])
     subset_column <- normalize_scalar_value(comparison_row$subset_column[[1]])
     subset_value <- normalize_scalar_value(comparison_row$subset_value[[1]])
-    subset_error <- ""
-    subset_seu <- tryCatch(
-      apply_subset_filter(seu, comparison_row),
-      error = function(e) {
-        subset_error <<- conditionMessage(e)
-        NULL
-      }
-    )
+    subset_requested <- nzchar(subset_column) || nzchar(subset_value)
+    subset_seu <- seu
+    subset_n <- ncol(seu)
+    status <- "ok"
 
-    if (is.null(subset_seu)) {
-      summary_rows[[length(summary_rows) + 1]] <- data.frame(
-        layer_id = layer_id,
-        comparison_id = comparison_id,
-        group_var = group_var,
-        ident_1 = ident_1,
-        ident_2 = ident_2,
-        ident_1_n = NA_integer_,
-        ident_2_n = NA_integer_,
-        subset_n_cells = 0L,
-        subset_column = subset_column,
-        subset_value = subset_value,
-        status = paste0("subset_error:", subset_error),
-        stringsAsFactors = FALSE
-      )
-      next
+    if (isTRUE(subset_requested)) {
+      meta <- seu@meta.data
+      if (!nzchar(subset_column) || !subset_column %in% colnames(meta)) {
+        status <- "subset_column_missing"
+        subset_n <- 0L
+        subset_seu <- NULL
+        triage_rows[[length(triage_rows) + 1]] <- make_triage_row(
+          sample_id = layer_id,
+          severity = "low",
+          signal_id = "subcluster_subset_no_match",
+          evidence = sprintf(
+            "status=subset_column_missing; layer_id=%s; comparison_id=%s; subset_column=%s; subset_value=%s",
+            layer_id,
+            comparison_id,
+            subset_column,
+            subset_value
+          )
+        )
+      } else {
+        keep_values <- split_csv_local(subset_value)
+        keep <- as.character(meta[[subset_column]]) %in% keep_values
+        if (!any(keep)) {
+          status <- "subset_no_match"
+          subset_n <- 0L
+          subset_seu <- NULL
+          triage_rows[[length(triage_rows) + 1]] <- make_triage_row(
+            sample_id = layer_id,
+            severity = "low",
+            signal_id = "subcluster_subset_no_match",
+            evidence = sprintf(
+              "status=subset_no_match; user-requested subset matched 0 cells; layer_id=%s; comparison_id=%s; subset_column=%s; subset_value=%s",
+              layer_id,
+              comparison_id,
+              subset_column,
+              subset_value
+            )
+          )
+        } else {
+          subset_seu <- apply_subset_filter(seu, comparison_row)
+          subset_n <- ncol(subset_seu)
+        }
+      }
     }
 
-    meta <- subset_seu@meta.data
-    subset_n <- ncol(subset_seu)
-    status <- "ok"
+    meta <- if (is.null(subset_seu)) data.frame(stringsAsFactors = FALSE) else subset_seu@meta.data
     ident_1_n <- NA_integer_
     ident_2_n <- NA_integer_
-    if (!nzchar(group_var) || !group_var %in% colnames(meta)) {
-      status <- "missing_group_var"
-    } else {
-      group <- as.character(meta[[group_var]])
-      ident_1_n <- sum(group == ident_1, na.rm = TRUE)
-      ident_2_n <- sum(group == ident_2, na.rm = TRUE)
+    if (identical(status, "ok")) {
       if (subset_n == 0) {
         status <- "empty_subset"
+      } else if (!nzchar(group_var) || !group_var %in% colnames(meta)) {
+        status <- "missing_group_var"
+      } else {
+        group <- as.character(meta[[group_var]])
+        ident_1_n <- sum(group == ident_1, na.rm = TRUE)
+        ident_2_n <- sum(group == ident_2, na.rm = TRUE)
       }
     }
 
@@ -297,8 +325,32 @@ build_comparison_tables_04c <- function(seu, layer_id, comparisons, cluster_col,
 
   list(
     summary = if (length(summary_rows) > 0) dplyr::bind_rows(summary_rows) else empty_comparison_summary_04c(),
-    split = if (length(split_rows) > 0) dplyr::bind_rows(split_rows) else empty_comparison_split_04c()
+    split = if (length(split_rows) > 0) dplyr::bind_rows(split_rows) else empty_comparison_split_04c(),
+    triage = if (length(triage_rows) > 0) dplyr::bind_rows(triage_rows) else empty_triage_df(include_sample = TRUE)
   )
+}
+
+write_summary_plot_04c <- function(path, layer_id, condition_split) {
+  ensure_dir(dirname(path))
+  if (is.null(condition_split) || nrow(condition_split) == 0) {
+    plot_obj <- ggplot2::ggplot() +
+      ggplot2::theme_void() +
+      ggplot2::labs(title = sprintf("Subcluster summary: %s", layer_id))
+  } else {
+    plot_obj <- ggplot2::ggplot(
+      condition_split,
+      ggplot2::aes(x = cluster, y = n_cells, fill = condition)
+    ) +
+      ggplot2::geom_col(position = "stack", width = 0.8) +
+      ggplot2::theme_bw(base_size = 11) +
+      ggplot2::labs(
+        title = sprintf("Subcluster condition split: %s", layer_id),
+        x = "Cluster",
+        y = "Cells",
+        fill = "Condition"
+      )
+  }
+  save_plot_local(plot_obj, path, width = 7, height = 4.5)
 }
 
 write_layer_report_04c <- function(path, layer_id, annotated_rds, summary_row, condition_split, panorama_cross, comparison_summary, comparison_split) {
@@ -309,6 +361,8 @@ write_layer_report_04c <- function(path, layer_id, annotated_rds, summary_row, c
     sprintf("- cluster_count: `%s`", summary_row$cluster_count[[1]]),
     sprintf("- target_clusters: `%s`", summary_row$target_clusters[[1]]),
     sprintf("- determined_fraction: `%s`", format_fraction_04c(summary_row$determined_fraction[[1]])),
+    sprintf("- subset_pass_count: `%s`", summary_row$subset_pass_count[[1]]),
+    sprintf("- summary_plot_png: `%s`", summary_row$summary_plot_png[[1]]),
     "",
     "## Annotation Confidence",
     render_markdown_table_local(summary_row[, c("determined_n", "tentative_n", "undetermined_n", "determined_fraction"), drop = FALSE]),
@@ -341,6 +395,7 @@ condition_rows <- list()
 panorama_rows <- list()
 comparison_summary_rows <- list()
 comparison_split_rows <- list()
+triage_rows <- list()
 output_entries <- list()
 
 for (annotated_key in annotated_keys) {
@@ -389,13 +444,20 @@ for (annotated_key in annotated_keys) {
   panorama_cross_tsv <- file.path(table_dir, sprintf("panorama_subcluster_crosstab_%s.tsv", layer_id))
   comparison_summary_tsv <- file.path(table_dir, sprintf("comparison_subset_summary_%s.tsv", layer_id))
   comparison_split_tsv <- file.path(table_dir, sprintf("comparison_condition_split_%s.tsv", layer_id))
-  report_md <- file.path(report_dir, "04c_report.md")
+  summary_plot_png <- file.path(report_dir, sprintf("subcluster_summary_%s.png", layer_id))
+  report_md <- file.path(report_dir, sprintf("subcluster_eda_%s.md", layer_id))
 
   write_tsv_local(condition_split, condition_split_tsv)
   write_tsv_local(panorama_cross, panorama_cross_tsv)
   write_tsv_local(comparison_tables$summary, comparison_summary_tsv)
   write_tsv_local(comparison_tables$split, comparison_split_tsv)
+  write_summary_plot_04c(summary_plot_png, layer_id, condition_split)
 
+  subset_pass_count <- if (nrow(comparison_tables$summary) > 0) {
+    sum(comparison_tables$summary$status == "ok", na.rm = TRUE)
+  } else {
+    0L
+  }
   summary_row <- data.frame(
     layer_id = layer_id,
     cluster_count = as.integer(cluster_count),
@@ -404,6 +466,11 @@ for (annotated_key in annotated_keys) {
     tentative_n = as.integer(counts$tentative_n),
     undetermined_n = as.integer(counts$undetermined_n),
     determined_fraction = as.numeric(counts$determined_fraction),
+    subset_pass_count = as.integer(subset_pass_count),
+    condition_split_path = normalizePath(condition_split_tsv, winslash = "/", mustWork = FALSE),
+    panorama_cross_path = normalizePath(panorama_cross_tsv, winslash = "/", mustWork = FALSE),
+    comparison_subset_summary_path = normalizePath(comparison_summary_tsv, winslash = "/", mustWork = FALSE),
+    summary_plot_png = normalizePath(summary_plot_png, winslash = "/", mustWork = FALSE),
     annotated_rds = normalizePath(annotated_rds, winslash = "/", mustWork = FALSE),
     report_md = normalizePath(report_md, winslash = "/", mustWork = FALSE),
     stringsAsFactors = FALSE
@@ -424,8 +491,10 @@ for (annotated_key in annotated_keys) {
   panorama_rows[[length(panorama_rows) + 1]] <- panorama_cross
   comparison_summary_rows[[length(comparison_summary_rows) + 1]] <- comparison_tables$summary
   comparison_split_rows[[length(comparison_split_rows) + 1]] <- comparison_tables$split
+  triage_rows[[length(triage_rows) + 1]] <- comparison_tables$triage
 
   output_entries[[paste0("report_md_", layer_id)]] <- build_output_entry(report_md, "md", module_name, sprintf("04c subcluster review report for %s", layer_id), base_dir = cfg$project_root)
+  output_entries[[paste0("summary_plot_png_", layer_id)]] <- build_output_entry(summary_plot_png, "png", module_name, sprintf("04c summary plot for %s", layer_id), base_dir = cfg$project_root)
   output_entries[[paste0("condition_split_tsv_", layer_id)]] <- build_output_entry(condition_split_tsv, "tsv", module_name, sprintf("condition split for %s", layer_id), base_dir = cfg$project_root, schema = infer_schema_from_df(condition_split))
   output_entries[[paste0("panorama_subcluster_crosstab_tsv_", layer_id)]] <- build_output_entry(panorama_cross_tsv, "tsv", module_name, sprintf("panorama vs subcluster crosstab for %s", layer_id), base_dir = cfg$project_root, schema = infer_schema_from_df(panorama_cross))
   output_entries[[paste0("comparison_subset_summary_tsv_", layer_id)]] <- build_output_entry(comparison_summary_tsv, "tsv", module_name, sprintf("comparison subset summary for %s", layer_id), base_dir = cfg$project_root, schema = infer_schema_from_df(comparison_tables$summary))
@@ -437,18 +506,21 @@ condition_df <- if (length(condition_rows) > 0) dplyr::bind_rows(condition_rows)
 panorama_df <- if (length(panorama_rows) > 0) dplyr::bind_rows(panorama_rows) else empty_panorama_cross_04c()
 comparison_summary_df <- if (length(comparison_summary_rows) > 0) dplyr::bind_rows(comparison_summary_rows) else empty_comparison_summary_04c()
 comparison_split_df <- if (length(comparison_split_rows) > 0) dplyr::bind_rows(comparison_split_rows) else empty_comparison_split_04c()
+triage_df <- if (length(triage_rows) > 0) dplyr::bind_rows(triage_rows) else empty_triage_df(include_sample = TRUE)
 
 subcluster_summary_tsv <- file.path(cfg$subcluster_table_dir, "subcluster_summary.tsv")
 condition_split_tsv <- file.path(cfg$subcluster_table_dir, "subcluster_condition_split.tsv")
 panorama_cross_tsv <- file.path(cfg$subcluster_table_dir, "subcluster_panorama_crosstab.tsv")
 comparison_summary_tsv <- file.path(cfg$subcluster_table_dir, "comparison_subset_summary.tsv")
 comparison_split_tsv <- file.path(cfg$subcluster_table_dir, "comparison_condition_split.tsv")
+triage_tsv <- file.path(cfg$subcluster_table_dir, "subcluster_eda_triage.tsv")
 
 write_tsv_local(summary_df, subcluster_summary_tsv)
 write_tsv_local(condition_df, condition_split_tsv)
 write_tsv_local(panorama_df, panorama_cross_tsv)
 write_tsv_local(comparison_summary_df, comparison_summary_tsv)
 write_tsv_local(comparison_split_df, comparison_split_tsv)
+write_tsv_local(triage_df, triage_tsv)
 
 report_path <- file.path(cfg$subcluster_report_dir, "04c_subcluster_eda.md")
 report_lines <- c(
@@ -464,6 +536,9 @@ report_lines <- c(
   "## Comparison Subsets",
   render_markdown_table_local(head(comparison_summary_df, 100)),
   "",
+  "## Triage",
+  render_markdown_table_local(head(triage_df, 100)),
+  "",
   "## Per-Layer Reports",
   render_markdown_table_local(summary_df[, c("layer_id", "report_md"), drop = FALSE])
 )
@@ -475,6 +550,7 @@ output_entries$condition_split_tsv <- build_output_entry(condition_split_tsv, "t
 output_entries$panorama_subcluster_crosstab_tsv <- build_output_entry(panorama_cross_tsv, "tsv", module_name, "panorama vs subcluster cell type crosstab", base_dir = cfg$project_root, schema = infer_schema_from_df(panorama_df))
 output_entries$comparison_subset_summary_tsv <- build_output_entry(comparison_summary_tsv, "tsv", module_name, "comparison subset summary across subcluster layers", base_dir = cfg$project_root, schema = infer_schema_from_df(comparison_summary_df))
 output_entries$comparison_condition_split_tsv <- build_output_entry(comparison_split_tsv, "tsv", module_name, "comparison condition split across subcluster layers", base_dir = cfg$project_root, schema = infer_schema_from_df(comparison_split_df))
+output_entries$subcluster_eda_triage_tsv <- build_output_entry(triage_tsv, "tsv", module_name, "one row per subcluster EDA triage signal", base_dir = cfg$project_root, schema = infer_schema_from_df(triage_df))
 output_entries$report <- build_output_entry(report_path, "md", module_name, "subcluster EDA review report", base_dir = cfg$project_root)
 
 if (file.exists(cfg$module_04c_manifest_path)) {
