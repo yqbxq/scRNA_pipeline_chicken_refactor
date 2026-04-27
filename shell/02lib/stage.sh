@@ -67,6 +67,24 @@ check_stage_deps() {
         "status.04_subcluster_completed" \
         "04d_cluster_robustness 需要 04_subcluster 完成。"
       ;;
+    05_deg)
+      sync_workflow_gate_statuses
+      require_status_flag_or_warn \
+        "status.annotation_gate_passed" \
+        "05_deg 被 annotation gate 阻断。请先审阅 03e panorama 注释报告，并在 eda_gates.tsv 中批准 annotation。"
+      require_status_flag_or_warn \
+        "status.03_panorama_completed" \
+        "05_deg 需要 03_panorama 整链完成。"
+      ;;
+    06_enrichment)
+      sync_workflow_gate_statuses
+      require_status_flag_or_warn \
+        "status.05_deg_completed" \
+        "06_enrichment 需要先完成 05_deg。"
+      require_status_flag_or_warn \
+        "status.deg_gate_passed" \
+        "06_enrichment 被 deg gate 阻断。请先审阅 05d DEG 报告，并在 eda_gates.tsv 中批准 deg。"
+      ;;
     *)
       warn "未定义 ${stage_id} 的依赖规则，按无依赖继续。"
       ;;
@@ -194,7 +212,8 @@ sync_workflow_gate_statuses() {
     "status.post_qc_gate_passed=$(eda_gate_passed post_qc && echo true || echo false)" \
     "status.integration_gate_passed=$(eda_gate_passed integration && echo true || echo false)" \
     "status.annotation_gate_passed=$(eda_gate_passed annotation && echo true || echo false)" \
-    "status.subcluster_gate_passed=$(eda_gate_passed subcluster && echo true || echo false)"
+    "status.subcluster_gate_passed=$(eda_gate_passed subcluster && echo true || echo false)" \
+    "status.deg_gate_passed=$(eda_gate_passed deg && echo true || echo false)"
 }
 
 update_workflow_status() {
@@ -337,6 +356,9 @@ for key in (
     "integration_gate_passed",
     "annotation_eda_complete",
     "annotation_gate_passed",
+    "subcluster_gate_passed",
+    "deg_gate_passed",
+    "05_deg_completed",
     "main_upstream_ready",
     "velocity_upstream_ready",
     "ambient_upstream_ready",
@@ -347,6 +369,7 @@ for key in (
 
 status["main_ready"] = bool(status.get("metadata_valid")) and bool(status.get("standardized_inputs")) and bool(status.get("main_upstream_ready"))
 status["deg_ready"] = annotation_exists and bool(status.get("annotation_gate_passed"))
+status["enrichment_ready"] = bool(status.get("05_deg_completed")) and bool(status.get("deg_gate_passed"))
 status["trajectory_ready"] = annotation_exists and bool(status.get("annotation_gate_passed"))
 status["velocity_reference_ready"] = annotation_exists and bool(status.get("velocity_upstream_ready")) and bool(status.get("annotation_gate_passed"))
 status["scenic_export_ready"] = annotation_exists and bool(status.get("scenic_upstream_ready")) and bool(status.get("annotation_gate_passed"))

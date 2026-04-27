@@ -2,24 +2,35 @@ read_comparisons_with_subset <- function(cfg) {
   df <- read_tsv_optional(cfg$comparison_sheet)
   expected_cols <- c(
     "comparison_id", "ident_1", "ident_2", "enabled", "group_var", "batch_var",
-    "layer_scope", "min_biological_replicates", "subset_column", "subset_value"
+    "layer_scope", "min_biological_replicates", "subset_column", "subset_value",
+    "force_exploratory", "min_cells_per_group", "logfc_threshold"
   )
+  if (nrow(df) == 0) {
+    for (col in expected_cols) {
+      if (!col %in% colnames(df)) {
+        df[[col]] <- character(0)
+      }
+    }
+    return(df[, expected_cols, drop = FALSE])
+  }
   for (col in expected_cols) {
     if (!col %in% colnames(df)) {
       df[[col]] <- ""
     }
   }
-  if (nrow(df) == 0) {
-    return(df[, expected_cols, drop = FALSE])
-  }
 
   df <- df[, expected_cols, drop = FALSE]
-  for (col in setdiff(expected_cols, "min_biological_replicates")) {
+  for (col in setdiff(expected_cols, c("min_biological_replicates", "min_cells_per_group", "logfc_threshold"))) {
     df[[col]] <- vapply(df[[col]], normalize_scalar_value, character(1))
   }
   df$enabled <- normalize_flag(df$enabled, "yes")
+  df$force_exploratory <- normalize_flag(df$force_exploratory, "no")
   df$min_biological_replicates <- suppressWarnings(as.integer(df$min_biological_replicates))
   df$min_biological_replicates[is.na(df$min_biological_replicates)] <- cfg$min_biological_replicates %||% 2L
+  df$min_cells_per_group <- suppressWarnings(as.integer(df$min_cells_per_group))
+  df$min_cells_per_group[is.na(df$min_cells_per_group)] <- 3L
+  df$logfc_threshold <- suppressWarnings(as.numeric(df$logfc_threshold))
+  df$logfc_threshold[is.na(df$logfc_threshold)] <- 0
   df$subset_column[is.na(df$subset_column)] <- ""
   df$subset_value[is.na(df$subset_value)] <- ""
   df

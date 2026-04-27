@@ -46,6 +46,7 @@ export PRE_QC_REPORT_DIR="${PRE_QC_REPORT_DIR:-${EDA_REPORT_DIR}/pre_qc}"
 export POST_QC_REPORT_DIR="${POST_QC_REPORT_DIR:-${EDA_REPORT_DIR}/post_qc}"
 export INTEGRATION_REPORT_DIR="${INTEGRATION_REPORT_DIR:-${EDA_REPORT_DIR}/integration}"
 export ANNOTATION_REPORT_DIR="${ANNOTATION_REPORT_DIR:-${EDA_REPORT_DIR}/annotation}"
+export DEG_REPORT_DIR="${DEG_REPORT_DIR:-${EDA_REPORT_DIR}/deg}"
 export INPUT_STANDARDIZE_MODE="${INPUT_STANDARDIZE_MODE:-symlink}"
 export ANNOTATION_HUB_PATH="${ANNOTATION_HUB_PATH:-${CHECKPOINT_DIR}/03_after_annotation.rds}"
 export MIN_BIOLOGICAL_REPLICATES="${MIN_BIOLOGICAL_REPLICATES:-2}"
@@ -91,7 +92,8 @@ ensure_eda_control_files() {
     "${PRE_QC_REPORT_DIR}" \
     "${POST_QC_REPORT_DIR}" \
     "${INTEGRATION_REPORT_DIR}" \
-    "${ANNOTATION_REPORT_DIR}"
+    "${ANNOTATION_REPORT_DIR}" \
+    "${DEG_REPORT_DIR}"
 
   if [[ ! -s "${EDA_GATE_FILE}" ]]; then
     cat > "${EDA_GATE_FILE}" <<'EOF'
@@ -100,11 +102,12 @@ pre_qc	pending
 post_qc	pending		
 integration	pending		
 annotation	pending		
+deg	pending
 EOF
   fi
 
   local gate_id
-  for gate_id in pre_qc post_qc integration annotation; do
+  for gate_id in pre_qc post_qc integration annotation deg; do
     if ! awk -F '\t' -v gate="${gate_id}" 'NR > 1 && $1 == gate { found = 1 } END { exit(found ? 0 : 1) }' "${EDA_GATE_FILE}" >/dev/null 2>&1; then
       printf '%s\tpending\t\t\n' "${gate_id}" >> "${EDA_GATE_FILE}"
     fi
@@ -373,6 +376,7 @@ prepare_project_state_dirs() {
     "${POST_QC_REPORT_DIR}" \
     "${INTEGRATION_REPORT_DIR}" \
     "${ANNOTATION_REPORT_DIR}" \
+    "${DEG_REPORT_DIR}" \
     "${STATUS_DIR}" \
     "${LOG_DIR}"
   ensure_eda_control_files
@@ -495,7 +499,8 @@ sync_workflow_gate_statuses() {
     "status.pre_qc_gate_passed=$(eda_gate_passed pre_qc && echo true || echo false)" \
     "status.post_qc_gate_passed=$(eda_gate_passed post_qc && echo true || echo false)" \
     "status.integration_gate_passed=$(eda_gate_passed integration && echo true || echo false)" \
-    "status.annotation_gate_passed=$(eda_gate_passed annotation && echo true || echo false)"
+    "status.annotation_gate_passed=$(eda_gate_passed annotation && echo true || echo false)" \
+    "status.deg_gate_passed=$(eda_gate_passed deg && echo true || echo false)"
 }
 
 update_workflow_status() {
@@ -629,6 +634,8 @@ for key in (
     "integration_gate_passed",
     "annotation_eda_complete",
     "annotation_gate_passed",
+    "deg_gate_passed",
+    "05_deg_completed",
     "main_upstream_ready",
     "velocity_upstream_ready",
     "ambient_upstream_ready",
@@ -639,6 +646,7 @@ for key in (
 
 status["main_ready"] = bool(status.get("metadata_valid")) and bool(status.get("standardized_inputs")) and bool(status.get("main_upstream_ready"))
 status["deg_ready"] = annotation_exists and bool(status.get("annotation_gate_passed"))
+status["enrichment_ready"] = bool(status.get("05_deg_completed")) and bool(status.get("deg_gate_passed"))
 status["trajectory_ready"] = annotation_exists and bool(status.get("annotation_gate_passed"))
 status["velocity_reference_ready"] = annotation_exists and bool(status.get("velocity_upstream_ready")) and bool(status.get("annotation_gate_passed"))
 status["scenic_export_ready"] = annotation_exists and bool(status.get("scenic_upstream_ready")) and bool(status.get("annotation_gate_passed"))

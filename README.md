@@ -231,8 +231,7 @@
     - `02b_finalize_clustering.R`
     - `03_annotation.R`
     - `03a_annotation_eda.R`
-    - `04_deg_enrichment.R`
-    - `05_trajectory.R`
+    - legacy annotation statistics: `04_marker_discovery.R` / `04a_pseudobulk_ds.R` / `04b_composition.R`
   - 会在 `pre_qc / post_qc / integration / annotation` 四个 gate 自动停住
   - 审阅对应 `reports/eda/<stage>/report.md` 后，在 `config/eda_gates.tsv` 中把该 gate 设为 `approved`，再重跑同一个 `20_run_main_pipeline.sh`
 
@@ -272,7 +271,26 @@ gate 规则采用 Option B：
 | `status.04_subcluster_completed` | 04a→04b→04c 全链完成后写入 |
 | `status.04d_cluster_robustness_completed` | 独立 04d placeholder stage 完成后写入 |
 
-### 5.11 RNA velocity
+### 5.11 05 DEG 模块（shell standalone）
+
+05 DEG 走当前 shell-native stage，不再使用旧的 `workflow/r/04_deg_enrichment.R` 别名：
+
+- `shell/03stages/05_deg.sh`
+  - `05a_marker_discovery.R`：逐 layer / comparison / cluster 运行探索性 Wilcoxon marker discovery。
+  - `05b_pseudobulk_de.R`：复制门通过时运行 muscat pseudobulk DE；复制门失败时只写探索性状态和 05a fallback 路径。
+  - `05c_composition.R`：复制门通过时运行 propeller；复制门失败时只写探索性状态。
+  - `05d_deg_eda.R`：汇总 marker / pseudobulk / composition manifest，输出 `reports/eda/deg/report.md`。
+
+`comparisons.tsv` 支持 05 专用可选列：
+
+- `subset_column` / `subset_value`：先过滤细胞，再做组间比较；`subset_value` 支持 CSV。
+- `force_exploratory`：默认 `no`；设为 `yes` 时 N=1 等复制门失败结果会标记为 `exploratory_forced`，仅供探索和下游富集预览。
+- `min_cells_per_group`：默认 `3`，控制 05a 的 FindMarkers 最小细胞数。
+- `logfc_threshold`：默认 `0`，控制 05a 的 FindMarkers logFC 阈值。
+
+05 完成后会把 `deg` gate 置为 `pending`。审阅 `reports/eda/deg/report.md` 后，在 `config/eda_gates.tsv` 中批准 `deg`，后续 06 enrichment 才能继续。
+
+### 5.12 RNA velocity
 
 - `workflow/30_run_velocyto.sh`
   - 需要：

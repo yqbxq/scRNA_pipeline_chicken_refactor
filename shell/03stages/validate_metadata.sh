@@ -144,6 +144,9 @@ for row in comparison_rows:
     enabled = row.get("enabled", "").strip().lower()
     subset_column = row.get("subset_column", "").strip()
     subset_value = row.get("subset_value", "").strip()
+    force_exploratory = row.get("force_exploratory", "").strip().lower()
+    min_cells_per_group = row.get("min_cells_per_group", "").strip()
+    logfc_threshold = row.get("logfc_threshold", "").strip()
 
     if not comparison_id:
         raise SystemExit("比较设计表存在空 comparison_id。")
@@ -160,6 +163,20 @@ for row in comparison_rows:
             f"{comparison_id} 的 subset_column 含非法字符: {subset_column} "
             "(仅允许字母、数字、下划线、点、冒号和短横线)"
         )
+    if force_exploratory and force_exploratory not in {"yes", "no", "true", "false", "1", "0", "on", "off"}:
+        raise SystemExit(f"{comparison_id} 的 force_exploratory 非法: {force_exploratory}")
+    if min_cells_per_group:
+        try:
+            min_cells_value = int(min_cells_per_group)
+        except ValueError:
+            raise SystemExit(f"{comparison_id} 的 min_cells_per_group 必须是整数。")
+        if min_cells_value < 1:
+            raise SystemExit(f"{comparison_id} 的 min_cells_per_group 必须 >= 1。")
+    if logfc_threshold:
+        try:
+            float(logfc_threshold)
+        except ValueError:
+            raise SystemExit(f"{comparison_id} 的 logfc_threshold 必须是数字。")
 
 if not waiver_path.exists():
     waiver_path.parent.mkdir(parents=True, exist_ok=True)

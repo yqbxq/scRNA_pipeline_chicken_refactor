@@ -88,6 +88,7 @@ export PANORAMA_LAYER_ID="${PANORAMA_LAYER_ID:-panorama}"
 export ANNOTATION_HUB_PATH_CLUSTERED="${ANNOTATION_HUB_PATH_CLUSTERED:-${CHECKPOINT_DIR}/02_after_clustering.rds}"
 export MODULE_03_VERSION="${MODULE_03_VERSION:-1.0}"
 export MODULE_04_VERSION="${MODULE_04_VERSION:-1.0}"
+export MODULE_05_VERSION="${MODULE_05_VERSION:-1.0}"
 export MAX_INTEGRATION_CANDIDATES_PER_LAYER="${MAX_INTEGRATION_CANDIDATES_PER_LAYER:-4}"
 export USE_EXISTING_SIF="${USE_EXISTING_SIF:-no}"
 export EXISTING_R_SIF="${EXISTING_R_SIF:-}"
@@ -135,6 +136,7 @@ export POST_QC_REPORT_DIR="${POST_QC_REPORT_DIR:-${EDA_REPORT_DIR}/post_qc}"
 export INTEGRATION_REPORT_DIR="${INTEGRATION_REPORT_DIR:-${EDA_REPORT_DIR}/integration}"
 export ANNOTATION_REPORT_DIR="${ANNOTATION_REPORT_DIR:-${EDA_REPORT_DIR}/annotation}"
 export SUBCLUSTER_REPORT_DIR="${SUBCLUSTER_REPORT_DIR:-${EDA_REPORT_DIR}/subcluster}"
+export DEG_REPORT_DIR="${DEG_REPORT_DIR:-${EDA_REPORT_DIR}/deg}"
 export SELECTED_INTEGRATION_FILE="${SELECTED_INTEGRATION_FILE:-${INTEGRATION_REPORT_DIR}/panorama/selected_integration.txt}"
 export LAYER_STATUS_FILE="${LAYER_STATUS_FILE:-${TABLE_DIR}/layer_status.tsv}"
 export SUBCLUSTER_REVIEW_SUMMARY_FILE="${SUBCLUSTER_REVIEW_SUMMARY_FILE:-${TABLE_DIR}/subcluster/subcluster_review_summary.tsv}"
@@ -147,6 +149,9 @@ export STAR_SA_INDEX_NBASES="${STAR_SA_INDEX_NBASES:-13}"
 export INPUT_STANDARDIZE_MODE="${INPUT_STANDARDIZE_MODE:-symlink}"
 export ANNOTATION_HUB_PATH="${ANNOTATION_HUB_PATH:-${CHECKPOINT_DIR}/03_after_annotation.rds}"
 export MIN_BIOLOGICAL_REPLICATES="${MIN_BIOLOGICAL_REPLICATES:-2}"
+export DEG_MIN_CELLS_PER_GROUP="${DEG_MIN_CELLS_PER_GROUP:-3}"
+export DEG_LOGFC_THRESHOLD="${DEG_LOGFC_THRESHOLD:-0}"
+export DEG_ALPHA="${DEG_ALPHA:-0.05}"
 export TRIAGE_FRAC_BELOW_CUTOFF="${TRIAGE_FRAC_BELOW_CUTOFF:-0.35}"
 export TRIAGE_FRAC_ABOVE_MITO="${TRIAGE_FRAC_ABOVE_MITO:-0.25}"
 export TRIAGE_DENSITY_PEAKS="${TRIAGE_DENSITY_PEAKS:-2}"
@@ -201,7 +206,8 @@ ensure_eda_control_files() {
     "${POST_QC_REPORT_DIR}" \
     "${INTEGRATION_REPORT_DIR}" \
     "${ANNOTATION_REPORT_DIR}" \
-    "${SUBCLUSTER_REPORT_DIR}"
+    "${SUBCLUSTER_REPORT_DIR}" \
+    "${DEG_REPORT_DIR}"
 
   if [[ ! -s "${EDA_GATE_FILE}" ]]; then
     {
@@ -211,11 +217,12 @@ ensure_eda_control_files() {
       printf 'integration\tpending\t\t\n'
       printf 'annotation\tpending\t\t\n'
       printf 'subcluster\tpending\t\t\n'
+      printf 'deg\tpending\t\t\n'
     } > "${EDA_GATE_FILE}"
   fi
 
   local gate_id
-  for gate_id in pre_qc post_qc integration annotation subcluster; do
+  for gate_id in pre_qc post_qc integration annotation subcluster deg; do
     if ! awk -F '\t' -v gate="${gate_id}" 'NR > 1 && $1 == gate { found = 1 } END { exit(found ? 0 : 1) }' "${EDA_GATE_FILE}" >/dev/null 2>&1; then
       printf '%s\tpending\t\t\n' "${gate_id}" >> "${EDA_GATE_FILE}"
     fi
@@ -387,6 +394,7 @@ prepare_project_state_dirs() {
     "${INTEGRATION_REPORT_DIR}" \
     "${ANNOTATION_REPORT_DIR}" \
     "${SUBCLUSTER_REPORT_DIR}" \
+    "${DEG_REPORT_DIR}" \
     "${STATUS_DIR}" \
     "${MANIFEST_DIR}" \
     "${LOG_DIR}"

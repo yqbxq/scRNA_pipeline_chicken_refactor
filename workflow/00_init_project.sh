@@ -267,6 +267,7 @@ mkdir -p \
   "${PROJECT_REPORT_DIR}/eda/post_qc" \
   "${PROJECT_REPORT_DIR}/eda/integration" \
   "${PROJECT_REPORT_DIR}/eda/annotation" \
+  "${PROJECT_REPORT_DIR}/eda/deg" \
   "${PROJECT_STATUS_DIR}" \
   "${PROJECT_ROOT}/data" \
   "${PROJECT_ROOT}/results/checkpoints" \
@@ -367,6 +368,9 @@ CELLRANGER_REF_LOCAL="${PROJECT_ROOT}/reference/cellranger_ref"
   echo '# 差异分析对比组。应填写上面 ANALYSIS_GROUP_*_NAME 的名字。'
   write_export DEG_IDENT_1 "${GROUP1_NAME}"
   write_export DEG_IDENT_2 "${GROUP2_NAME}"
+  write_export DEG_MIN_CELLS_PER_GROUP "3"
+  write_export DEG_LOGFC_THRESHOLD "0"
+  write_export DEG_ALPHA "0.05"
   echo
   echo '# RNA velocity 使用的 raw 样本。'
   echo '# 正式项目里通常与 SAMPLE_NAMES 保持一致；论文验证模式才会出现 SAMPLE_NAMES 与 RAW_SAMPLES 不同。'
@@ -462,6 +466,7 @@ CELLRANGER_REF_LOCAL="${PROJECT_ROOT}/reference/cellranger_ref"
   echo 'export POST_QC_REPORT_DIR="${EDA_REPORT_DIR}/post_qc"'
   echo 'export INTEGRATION_REPORT_DIR="${EDA_REPORT_DIR}/integration"'
   echo 'export ANNOTATION_REPORT_DIR="${EDA_REPORT_DIR}/annotation"'
+  echo 'export DEG_REPORT_DIR="${EDA_REPORT_DIR}/deg"'
   echo
   echo 'export R_MAIN_ENV_PREFIX="${PIPELINE_ENV_DIR}/conda/r_main"'
   echo 'export R_SCENIC_ENV_PREFIX="${PIPELINE_ENV_DIR}/conda/r_scenic"'
@@ -630,8 +635,8 @@ fi
 } > "${PROJECT_METADATA_DIR}/samples.tsv"
 
 {
-  printf 'comparison_id\tident_1\tident_2\tenabled\tgroup_var\tbatch_var\tlayer_scope\tmin_biological_replicates\tsubset_column\tsubset_value\n'
-  printf '%s_vs_%s\t%s\t%s\tyes\tgroup_id\tbatch\t*\t2\t\t\n' "${GROUP1_NAME}" "${GROUP2_NAME}" "${GROUP1_NAME}" "${GROUP2_NAME}"
+  printf 'comparison_id\tident_1\tident_2\tenabled\tgroup_var\tbatch_var\tlayer_scope\tmin_biological_replicates\tsubset_column\tsubset_value\tforce_exploratory\tmin_cells_per_group\tlogfc_threshold\n'
+  printf '%s_vs_%s\t%s\t%s\tyes\tgroup_id\tbatch\t*\t2\t\tno\t3\t0\n' "${GROUP1_NAME}" "${GROUP2_NAME}" "${GROUP1_NAME}" "${GROUP2_NAME}"
 } > "${PROJECT_METADATA_DIR}/comparisons.tsv"
 
 {
@@ -648,6 +653,7 @@ fi
   printf 'post_qc\tpending\t\t\n'
   printf 'integration\tpending\t\t\n'
   printf 'annotation\tpending\t\t\n'
+  printf 'deg\tpending\t\t\n'
 } > "${PROJECT_CONFIG_DIR}/eda_gates.tsv"
 
 {
@@ -726,6 +732,8 @@ cat > "${PROJECT_STATUS_FILE}" <<EOF
     "integration_gate_passed": false,
     "annotation_eda_complete": false,
     "annotation_gate_passed": false,
+    "deg_gate_passed": false,
+    "05_deg_completed": false,
     "main_upstream_ready": false,
     "velocity_upstream_ready": false,
     "ambient_upstream_ready": false,
@@ -733,6 +741,7 @@ cat > "${PROJECT_STATUS_FILE}" <<EOF
     "de_replicate_ready": false,
     "main_ready": false,
     "deg_ready": false,
+    "enrichment_ready": false,
     "trajectory_ready": false,
     "velocity_reference_ready": false,
     "scenic_export_ready": false
