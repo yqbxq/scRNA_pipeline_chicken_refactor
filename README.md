@@ -290,7 +290,27 @@ gate 规则采用 Option B：
 
 05 完成后会把 `deg` gate 置为 `pending`。审阅 `reports/eda/deg/report.md` 后，在 `config/eda_gates.tsv` 中批准 `deg`，后续 06 enrichment 才能继续。
 
-### 5.12 RNA velocity
+### 5.12 06 Enrichment 模块（shell standalone）
+
+06 enrichment 依赖 05 DEG 完成且 `deg` gate 已批准：
+
+- `shell/03stages/06_enrichment.sh`
+  - `06a_go_enrichment.R`：按 layer / comparison / cluster / up-down-all 运行 GO BP/CC/MF 富集。
+  - `06b_kegg_enrichment.R`：按相同粒度运行 KEGG 富集。
+  - `06c_enrichment_eda.R`：汇总 GO/KEGG manifest，输出 `reports/eda/enrichment/report.md`、跨 cluster 热图和 shared pathways。
+
+物种策略默认是 `ENRICHMENT_SPECIES_STRATEGY=chicken_primary`。如果设置为包含 `human`、`dual`、`both` 或 `mapped`，06 会额外使用 00 ortholog cache 将鸡基因映射到人类符号后跑辅助通道。运行后端优先使用可加载的 `clusterProfiler`；如果当前环境中 `clusterProfiler` 因 `DOSE` 等依赖不可加载，会回退到 `gprofiler2` 并在 manifest 的 `status` / `reason` 中记录。
+
+主要输出：
+
+- `results/tables/enrichment/go/go_enrichment_manifest.tsv`
+- `results/tables/enrichment/kegg/kegg_enrichment_manifest.tsv`
+- `results/tables/enrichment/enrichment_summary.tsv`
+- `results/figures/enrichment/cross_cluster_go_bp_heatmap.png`
+- `results/figures/enrichment/cross_cluster_kegg_heatmap.png`
+- `reports/eda/enrichment/report.md`
+
+### 5.13 RNA velocity
 
 - `workflow/30_run_velocyto.sh`
   - 需要：
@@ -302,7 +322,7 @@ gate 规则采用 Option B：
   - 先准备参考对象
   - 再跑 `scVelo`
 
-### 5.12 SCENIC
+### 5.14 SCENIC
 
 - `workflow/40_build_ortholog_cache.sh`
   - 构建同源映射缓存
