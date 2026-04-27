@@ -106,9 +106,6 @@ render_triage_section_v04 <- function(triage_df) {
   if (is.null(triage_df)) {
     return(character())
   }
-  if (exists("render_triage_markdown", mode = "function")) {
-    return(render_triage_markdown(triage_df))
-  }
   render_markdown_table_local(triage_df)
 }
 
@@ -148,9 +145,10 @@ build_report_lines_v04 <- function(
       section_title <- section_names[[i]]
       section_lines <- as.character(extra_sections[[i]])
       if (!nzchar(section_title)) {
-        next
+        lines <- c(lines, "", section_lines)
+      } else {
+        lines <- c(lines, "", sprintf("## %s", section_title), section_lines)
       }
-      lines <- c(lines, "", sprintf("## %s", section_title), section_lines)
     }
   }
 

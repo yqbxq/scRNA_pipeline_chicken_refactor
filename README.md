@@ -236,9 +236,9 @@
   - 会在 `pre_qc / post_qc / integration / annotation` 四个 gate 自动停住
   - 审阅对应 `reports/eda/<stage>/report.md` 后，在 `config/eda_gates.tsv` 中把该 gate 设为 `approved`，再重跑同一个 `20_run_main_pipeline.sh`
 
-### 5.10 v04 04 subcluster 模块
+### 5.10 04 子聚类模块（v04 分支）
 
-v04 的 04 模块走 standalone stage 入口，不并入旧的 `workflow/20_run_main_pipeline.sh`：
+v04 分支的 04 子聚类模块走 standalone stage 入口，不并入旧的 `workflow/20_run_main_pipeline.sh`：
 
 - `shell/03stages/04_subcluster.sh`
   - `04a_subcluster_build.R`：按 `object_layers.tsv` 生成 subcluster 层；默认继承 panorama 选定的 normalization/integration，只有 layer 显式配置多候选时才进入候选模式。
