@@ -62,6 +62,7 @@ for (idx in seq_len(nrow(keys))) {
   comp_path <- if (nrow(comp_hit) > 0 && "formal_results_tsv" %in% colnames(comp_hit)) normalize_scalar_value(comp_hit$formal_results_tsv[[1]]) else ""
   marker_path <- if (nrow(marker_hit) > 0 && "exploratory_results_tsv" %in% colnames(marker_hit)) normalize_scalar_value(marker_hit$exploratory_results_tsv[[1]]) else ""
 
+  marker_counts <- count_significant_rows_05(marker_path, alpha = cfg$deg_alpha)
   pb_counts <- count_significant_rows_05(pb_path, alpha = cfg$deg_alpha)
   comp_counts <- count_significant_rows_05(comp_path, alpha = cfg$deg_alpha)
 
@@ -79,6 +80,8 @@ for (idx in seq_len(nrow(keys))) {
   summary_rows[[length(summary_rows) + 1]] <- data.frame(
     layer_id = layer_id,
     comparison_id = comparison_id,
+    exploratory_marker_total_n = marker_counts$total_n,
+    exploratory_marker_significant_n = marker_counts$significant_n,
     formal_de_total_n = pb_counts$total_n,
     formal_de_significant_n = pb_counts$significant_n,
     significant_composition_cluster_n = comp_counts$significant_n,
@@ -92,7 +95,8 @@ status_df <- if (length(status_rows) > 0) dplyr::bind_rows(status_rows) else emp
   "composition_status", "marker_results_tsv", "pseudobulk_results_tsv", "composition_results_tsv"
 ))
 summary_df <- if (length(summary_rows) > 0) dplyr::bind_rows(summary_rows) else empty_df_05(c(
-  "layer_id", "comparison_id", "formal_de_total_n", "formal_de_significant_n", "significant_composition_cluster_n", "alpha"
+  "layer_id", "comparison_id", "exploratory_marker_total_n", "exploratory_marker_significant_n",
+  "formal_de_total_n", "formal_de_significant_n", "significant_composition_cluster_n", "alpha"
 ))
 
 paths <- deg_report_paths_05(cfg)
