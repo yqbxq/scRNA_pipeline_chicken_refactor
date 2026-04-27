@@ -236,7 +236,43 @@
   - 会在 `pre_qc / post_qc / integration / annotation` 四个 gate 自动停住
   - 审阅对应 `reports/eda/<stage>/report.md` 后，在 `config/eda_gates.tsv` 中把该 gate 设为 `approved`，再重跑同一个 `20_run_main_pipeline.sh`
 
-### 5.10 RNA velocity
+### 5.10 v04 04 subcluster 模块
+
+v04 的 04 模块走 standalone stage 入口，不并入旧的 `workflow/20_run_main_pipeline.sh`：
+
+- `shell/03stages/04_subcluster.sh`
+  - `04a_subcluster_build.R`：按 `object_layers.tsv` 生成 subcluster 层；默认继承 panorama 选定的 normalization/integration，只有 layer 显式配置多候选时才进入候选模式。
+  - `04a_review.R`：汇总 candidate diagnostics，写 `subcluster_review_summary.tsv` 和每层 `selected_integration.txt`。
+  - `04b_subcluster_annotate.R`：对已经 finalize 的 `clustered_<layer_id>` 复用 annotation helper，写 `annotated_<layer_id>` 和跨层注释汇总。
+  - `04c_subcluster_eda.R`：生成 subcluster review 报告，汇总 cluster count、注释置信度、condition split、panorama-vs-subcluster 对照。
+- `shell/03stages/04d_cluster_robustness.sh`
+  - `04d_cluster_robustness.R`：当前是 runnable placeholder，只写空 metrics schema 和报告；真实 scDesign3 robustness 留到后续里程碑。
+
+gate 规则采用 Option B：
+
+- 运行 `04_subcluster.sh` 前必须已经通过 `annotation` gate，且 `03_panorama_completed=true`。
+- 如果所有 subcluster 都是 inherited 模式，`04a_review` 不会强制设置 `subcluster` gate，流程直接进入 04b/04c。
+- 如果存在 candidate 模式 layer，`04a_review` 会把 `subcluster` gate 设为 `pending`；审阅 `subcluster_review_summary.tsv` 和各层 `selected_integration.txt` 后，把 `subcluster` gate 改为 `approved`，再重跑 `04_subcluster.sh`。
+- `04c` 完成后不会再次重置 `subcluster` gate；是否运行 04d 由你在审阅 04c 报告后决定。
+- 独立运行 `04d_cluster_robustness.sh` 时会同时校验 `subcluster_gate_passed=true` 和 `04_subcluster_completed=true`。
+
+`comparisons.tsv` 在 04c 中支持可选子集列：
+
+- `subset_column` 和 `subset_value` 必须同时填写或同时留空。
+- `subset_value` 支持 CSV，语义是 OR。
+- 典型用法是先按 `panorama_cell_type` 或 `<layer_id>_cell_type` 过滤细胞，再做 condition split 或后续比较预览。
+
+04 模块相关 status 字段：
+
+| status 字段 | 写入时机 |
+| --- | --- |
+| `status.04a_subcluster_build_completed` | `04_subcluster.sh` 完成 04a/04a_review/finalize 后随 04c 完成态一起写入 |
+| `status.04b_subcluster_annotated` | `04b_subcluster_annotate.R` 完成后随 04c 完成态一起写入 |
+| `status.04c_subcluster_eda_completed` | `04c_subcluster_eda.R` 完成后写入 |
+| `status.04_subcluster_completed` | 04a→04b→04c 全链完成后写入 |
+| `status.04d_cluster_robustness_completed` | 独立 04d placeholder stage 完成后写入 |
+
+### 5.11 RNA velocity
 
 - `workflow/30_run_velocyto.sh`
   - 需要：
@@ -248,7 +284,7 @@
   - 先准备参考对象
   - 再跑 `scVelo`
 
-### 5.11 SCENIC
+### 5.12 SCENIC
 
 - `workflow/40_build_ortholog_cache.sh`
   - 构建同源映射缓存

@@ -68,18 +68,27 @@ metrics_tsv <- file.path(cfg$subcluster_table_dir, "cluster_robustness_metrics.t
 write_tsv_local(metrics_df, metrics_tsv)
 
 report_path <- file.path(cfg$subcluster_report_dir, "04d_cluster_robustness.md")
-report_lines <- c(
-  "# 04d Cluster Robustness (Placeholder)",
-  "",
-  "This is a C5 milestone placeholder. Real scDesign3 robustness computation is pending a subsequent milestone.",
-  "",
-  sprintf("- placeholder_status: `%s`", "pending_scdesign3_implementation"),
-  sprintf("- metrics_tsv: `%s`", metrics_tsv),
-  sprintf("- source_04c_manifest: `%s`", cfg$module_04c_manifest_path),
-  sprintf("- source_04b_manifest: `%s`", cfg$module_04b_manifest_path),
-  "",
-  "## Expected Layers",
-  render_markdown_table_local(data.frame(layer_id = layer_ids, stringsAsFactors = FALSE))
+report_lines <- build_report_lines_v04(
+  title = "04d Cluster Robustness (Placeholder)",
+  header_bullets = c(
+    "C5 milestone placeholder; real scDesign3 robustness computation is pending a subsequent milestone.",
+    sprintf("placeholder_status: `%s`", "pending_scdesign3_implementation"),
+    sprintf("expected layer count: `%s`", length(layer_ids))
+  ),
+  key_files = list(
+    metrics_tsv = metrics_tsv,
+    report = report_path,
+    module_04c_manifest = cfg$module_04c_manifest_path,
+    module_04b_manifest = cfg$module_04b_manifest_path
+  ),
+  review_focus = c(
+    "Confirm this report is only a placeholder and does not contain real robustness evidence.",
+    "Use `metrics_tsv` only as a schema placeholder; it is expected to contain zero data rows in S5.",
+    "Implement true scDesign3 fit/simulate/recluster metrics in the next robustness milestone before using 04d for biological conclusions."
+  ),
+  extra_sections = list(
+    "Expected Layers" = render_markdown_table_local(data.frame(layer_id = layer_ids, stringsAsFactors = FALSE))
+  )
 )
 ensure_dir(dirname(report_path))
 write_markdown_local(report_lines, report_path)
