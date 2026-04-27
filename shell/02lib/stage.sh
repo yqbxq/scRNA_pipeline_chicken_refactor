@@ -75,6 +75,12 @@ check_stage_deps() {
       require_status_flag_or_warn \
         "status.03_panorama_completed" \
         "05_deg 需要 03_panorama 整链完成。"
+      require_status_flag_or_warn \
+        "status.subcluster_gate_passed" \
+        "05_deg 被 subcluster gate 阻断。请先审阅 04c 子层注释报告，并在 eda_gates.tsv 中批准 subcluster。"
+      require_status_flag_or_warn \
+        "status.04_subcluster_completed" \
+        "05_deg 需要 04_subcluster 完成。"
       ;;
     06_enrichment)
       sync_workflow_gate_statuses
