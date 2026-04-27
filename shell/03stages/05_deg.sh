@@ -54,9 +54,9 @@ require_manifest_output "${MODULE_05B_MANIFEST}" "pseudobulk_manifest_tsv" >/dev
 run_deg_stage_if_stale \
   "${SHELL_ROOT}/05single_script/05c_composition.R" \
   "${MODULE_05C_MANIFEST}" \
-  "${MODULE_05B_MANIFEST}" \
   "${LAYER_STATUS_FILE}" \
-  "${COMPARISON_SHEET}"
+  "${COMPARISON_SHEET}" \
+  "${MODULE_03D_MANIFEST}"
 require_manifest_output "${MODULE_05C_MANIFEST}" "composition_manifest_tsv" >/dev/null
 
 run_deg_stage_if_stale \

@@ -65,7 +65,7 @@ export SAMPLE_NAMES="S1,S2"
 export DEG_IDENT_1="Ctrl"
 export DEG_IDENT_2="Treat"
 export MIN_BIOLOGICAL_REPLICATES="2"
-export DEG_MIN_CELLS_PER_GROUP="2"
+export DEG_MIN_CELLS_PER_GROUP="3"
 export DEG_LOGFC_THRESHOLD="0"
 export RANDOM_SEED="42"
 
@@ -77,8 +77,8 @@ EOF
 
 cat > "${COMPARISON_SHEET}" <<'EOF'
 comparison_id	ident_1	ident_2	enabled	group_var	batch_var	layer_scope	min_biological_replicates	subset_column	subset_value	force_exploratory	min_cells_per_group	logfc_threshold
-Ctrl_vs_Treat	Ctrl	Treat	yes	group_id	batch	*	2			no	2	0
-GC_forced	Ctrl	Treat	yes	group_id	batch	*	2	cell_type	GC	yes	2	0
+Ctrl_vs_Treat	Ctrl	Treat	yes	group_id	batch	*	2			no	3	0
+GC_forced	Ctrl	Treat	yes	group_id	batch	*	2	cell_type	GC	yes	3	0
 EOF
 
 "${R_BIN}" - <<'EOF'
@@ -152,6 +152,7 @@ marker_manifest <- read.delim(file.path(table_dir, "marker_discovery", "marker_d
 pb_manifest <- read.delim(file.path(table_dir, "pseudobulk_ds", "pseudobulk_manifest.tsv"), sep = "\t", stringsAsFactors = FALSE, check.names = FALSE)
 comp_manifest <- read.delim(file.path(table_dir, "composition", "composition_manifest.tsv"), sep = "\t", stringsAsFactors = FALSE, check.names = FALSE)
 status_matrix <- read.delim(file.path(table_dir, "deg", "deg_status_matrix.tsv"), sep = "\t", stringsAsFactors = FALSE, check.names = FALSE)
+deg_summary <- read.delim(file.path(table_dir, "deg", "deg_summary.tsv"), sep = "\t", stringsAsFactors = FALSE, check.names = FALSE)
 
 stopifnot(any(pb_manifest$comparison_id == "Ctrl_vs_Treat" & pb_manifest$inference_status == "exploratory_only"))
 stopifnot(any(pb_manifest$comparison_id == "GC_forced" & pb_manifest$inference_status == "exploratory_forced"))
@@ -159,6 +160,8 @@ stopifnot(any(comp_manifest$comparison_id == "Ctrl_vs_Treat" & comp_manifest$inf
 stopifnot(any(comp_manifest$comparison_id == "GC_forced" & comp_manifest$inference_status == "exploratory_forced"))
 stopifnot(file.exists(file.path(report_dir, "deg", "report.md")))
 stopifnot(any(status_matrix$comparison_id == "GC_forced" & status_matrix$pseudobulk_status == "exploratory_forced"))
+stopifnot(all(c("exploratory_marker_total_n", "exploratory_marker_significant_n") %in% colnames(deg_summary)))
+stopifnot(any(deg_summary$comparison_id == "GC_forced" & deg_summary$exploratory_marker_total_n > 0))
 
 gc_summary_path <- marker_manifest$exploratory_summary_tsv[marker_manifest$comparison_id == "GC_forced"][[1]]
 gc_summary <- read.delim(gc_summary_path, sep = "\t", stringsAsFactors = FALSE, check.names = FALSE)

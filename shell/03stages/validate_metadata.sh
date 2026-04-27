@@ -170,8 +170,8 @@ for row in comparison_rows:
             min_cells_value = int(min_cells_per_group)
         except ValueError:
             raise SystemExit(f"{comparison_id} 的 min_cells_per_group 必须是整数。")
-        if min_cells_value < 1:
-            raise SystemExit(f"{comparison_id} 的 min_cells_per_group 必须 >= 1。")
+        if min_cells_value < 3:
+            raise SystemExit(f"{comparison_id} 的 min_cells_per_group 必须 >= 3（Wilcoxon 在 < 3 时 p 值不可信）。")
     if logfc_threshold:
         try:
             float(logfc_threshold)
