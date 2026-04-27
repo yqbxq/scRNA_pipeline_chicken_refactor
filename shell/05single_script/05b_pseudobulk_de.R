@@ -104,6 +104,7 @@ for (idx in seq_len(nrow(layer_status_df))) {
   obj <- load_layer_for_deg(cfg, layer_row)
 
   layer_paths <- pseudobulk_paths_05(cfg, layer_id)
+  ensure_dir(layer_paths$table_dir)
   aggregation <- aggregate_cluster_sample_counts_05(obj, cluster_var = "cluster_id")
   saveRDS(aggregation$counts, layer_paths$aggregation_rds)
   write_tsv_local(aggregation$metadata, layer_paths$aggregation_tsv)
