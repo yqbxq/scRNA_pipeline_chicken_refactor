@@ -36,7 +36,7 @@ set.seed(cfg$random_seed)
 chicken_org_db <- get_org_db_06("org.Gg.eg.db")
 human_enabled <- human_strategy_enabled_06(cfg)
 human_org_db <- if (human_enabled) optional_org_db_06("org.Hs.eg.db") else NULL
-ortholog_map <- if (human_enabled) load_ortholog_map(cfg) else empty_df_05(c("chicken_symbol", "human_symbol"))
+ortholog_map <- if (human_enabled) load_ortholog_map(cfg) else empty_df_06(c("chicken_symbol", "human_symbol"))
 input_grid <- read_enrichment_input_grid_06(cfg)
 
 write_kegg_result <- function(layer_id, comparison_id, cluster_id, direction, source_species, organism, deg_source, deg_status, genes, org_db, enrichment_source) {
@@ -57,7 +57,7 @@ write_kegg_result <- function(layer_id, comparison_id, cluster_id, direction, so
   if (length(genes) < cfg$enrichment_min_input_genes) {
     result_df <- empty_enrichment_result_06(names(extra))
     counts <- write_enrichment_result_06(result_df, paths, cfg)
-    return(data.frame(
+    return(build_enrichment_manifest_row_06(
       layer_id = layer_id,
       comparison_id = comparison_id,
       cluster_id = cluster_id,
@@ -73,11 +73,7 @@ write_kegg_result <- function(layer_id, comparison_id, cluster_id, direction, so
       mapped_gene_n = 0L,
       mapping_rate = NA_real_,
       significant_term_n = counts$significant_n,
-      enrichment_tsv = normalize_path_06(paths$enrichment_tsv),
-      enrichment_significant_tsv = normalize_path_06(paths$enrichment_significant_tsv),
-      dotplot_png = "",
-      barplot_png = "",
-      stringsAsFactors = FALSE
+      paths = paths
     ))
   }
 
@@ -98,7 +94,7 @@ write_kegg_result <- function(layer_id, comparison_id, cluster_id, direction, so
       dotplot <- plot_enrichment_dotplot(result_df, plot_title, top_n = 20L, output_png = paths$dotplot_png)
       barplot <- plot_enrichment_barplot(result_df, plot_title, top_n = 15L, output_png = paths$barplot_png)
     }
-    return(data.frame(
+    return(build_enrichment_manifest_row_06(
       layer_id = layer_id,
       comparison_id = comparison_id,
       cluster_id = cluster_id,
@@ -114,11 +110,32 @@ write_kegg_result <- function(layer_id, comparison_id, cluster_id, direction, so
       mapped_gene_n = NA_integer_,
       mapping_rate = NA_real_,
       significant_term_n = counts$significant_n,
-      enrichment_tsv = normalize_path_06(paths$enrichment_tsv),
-      enrichment_significant_tsv = normalize_path_06(paths$enrichment_significant_tsv),
+      paths = paths,
       dotplot_png = normalize_scalar_value(dotplot),
-      barplot_png = normalize_scalar_value(barplot),
-      stringsAsFactors = FALSE
+      barplot_png = normalize_scalar_value(barplot)
+    ))
+  }
+
+  if (is.null(org_db)) {
+    result_df <- empty_enrichment_result_06(names(extra))
+    counts <- write_enrichment_result_06(result_df, paths, cfg)
+    return(build_enrichment_manifest_row_06(
+      layer_id = layer_id,
+      comparison_id = comparison_id,
+      cluster_id = cluster_id,
+      gene_direction = direction,
+      analysis_type = "kegg",
+      ontology = "KEGG",
+      source_species = source_species,
+      deg_source = deg_source,
+      deg_inference_status = deg_status,
+      status = if (identical(source_species, "human")) "human_orgdb_missing" else "orgdb_missing",
+      reason = sprintf("%s OrgDb is not available for clusterProfiler KEGG backend", source_species),
+      input_gene_n = length(genes),
+      mapped_gene_n = 0L,
+      mapping_rate = NA_real_,
+      significant_term_n = counts$significant_n,
+      paths = paths
     ))
   }
 
@@ -126,7 +143,7 @@ write_kegg_result <- function(layer_id, comparison_id, cluster_id, direction, so
   if (length(conversion$ids) < cfg$enrichment_min_input_genes) {
     result_df <- empty_enrichment_result_06(names(extra))
     counts <- write_enrichment_result_06(result_df, paths, cfg)
-    return(data.frame(
+    return(build_enrichment_manifest_row_06(
       layer_id = layer_id,
       comparison_id = comparison_id,
       cluster_id = cluster_id,
@@ -142,11 +159,7 @@ write_kegg_result <- function(layer_id, comparison_id, cluster_id, direction, so
       mapped_gene_n = conversion$mapped_n,
       mapping_rate = conversion$mapping_rate,
       significant_term_n = counts$significant_n,
-      enrichment_tsv = normalize_path_06(paths$enrichment_tsv),
-      enrichment_significant_tsv = normalize_path_06(paths$enrichment_significant_tsv),
-      dotplot_png = "",
-      barplot_png = "",
-      stringsAsFactors = FALSE
+      paths = paths
     ))
   }
 
@@ -156,7 +169,8 @@ write_kegg_result <- function(layer_id, comparison_id, cluster_id, direction, so
     pvalue_cutoff = cfg$enrichment_pvalue_cutoff,
     qvalue_cutoff = cfg$enrichment_qvalue_cutoff,
     min_gs_size = cfg$enrichment_min_gs_size,
-    max_gs_size = cfg$enrichment_max_gs_size
+    max_gs_size = cfg$enrichment_max_gs_size,
+    timeout_sec = cfg$enrichment_kegg_timeout_sec
   )
   result_df <- format_enrichment_result_tsv(run_res$result, extra)
   counts <- write_enrichment_result_06(result_df, paths, cfg)
@@ -168,7 +182,7 @@ write_kegg_result <- function(layer_id, comparison_id, cluster_id, direction, so
     barplot <- plot_enrichment_barplot(run_res$result, plot_title, top_n = 15L, output_png = paths$barplot_png)
   }
 
-  data.frame(
+  build_enrichment_manifest_row_06(
     layer_id = layer_id,
     comparison_id = comparison_id,
     cluster_id = cluster_id,
@@ -184,11 +198,9 @@ write_kegg_result <- function(layer_id, comparison_id, cluster_id, direction, so
     mapped_gene_n = conversion$mapped_n,
     mapping_rate = conversion$mapping_rate,
     significant_term_n = counts$significant_n,
-    enrichment_tsv = normalize_path_06(paths$enrichment_tsv),
-    enrichment_significant_tsv = normalize_path_06(paths$enrichment_significant_tsv),
+    paths = paths,
     dotplot_png = normalize_scalar_value(dotplot),
-    barplot_png = normalize_scalar_value(barplot),
-    stringsAsFactors = FALSE
+    barplot_png = normalize_scalar_value(barplot)
   )
 }
 
@@ -201,7 +213,7 @@ for (idx in seq_len(nrow(input_grid))) {
   message("06b KEGG enrichment: ", layer_id, " / ", comparison_id)
 
   if (!nzchar(item$deg_tsv[[1]]) || !file.exists(item$deg_tsv[[1]])) {
-    manifest_rows[[length(manifest_rows) + 1]] <- data.frame(
+    manifest_rows[[length(manifest_rows) + 1]] <- build_enrichment_manifest_row_06(
       layer_id = layer_id,
       comparison_id = comparison_id,
       cluster_id = "",
@@ -216,12 +228,7 @@ for (idx in seq_len(nrow(input_grid))) {
       input_gene_n = 0L,
       mapped_gene_n = 0L,
       mapping_rate = NA_real_,
-      significant_term_n = 0L,
-      enrichment_tsv = "",
-      enrichment_significant_tsv = "",
-      dotplot_png = "",
-      barplot_png = "",
-      stringsAsFactors = FALSE
+      significant_term_n = 0L
     )
     next
   }
@@ -254,7 +261,7 @@ for (idx in seq_len(nrow(input_grid))) {
         if (is.null(human_org_db) && clusterprofiler_available_06()) {
           paths <- enrichment_paths_06(cfg, layer_id, comparison_id, cluster_id, "kegg", "human", direction)
           write_enrichment_result_06(empty_enrichment_result_06(), paths, cfg)
-          manifest_rows[[length(manifest_rows) + 1]] <- data.frame(
+          manifest_rows[[length(manifest_rows) + 1]] <- build_enrichment_manifest_row_06(
             layer_id = layer_id,
             comparison_id = comparison_id,
             cluster_id = cluster_id,
@@ -270,11 +277,7 @@ for (idx in seq_len(nrow(input_grid))) {
             mapped_gene_n = 0L,
             mapping_rate = NA_real_,
             significant_term_n = 0L,
-            enrichment_tsv = normalize_path_06(paths$enrichment_tsv),
-            enrichment_significant_tsv = normalize_path_06(paths$enrichment_significant_tsv),
-            dotplot_png = "",
-            barplot_png = "",
-            stringsAsFactors = FALSE
+            paths = paths
           )
         } else {
           human_map <- map_genes_to_human(genes, ortholog_map)

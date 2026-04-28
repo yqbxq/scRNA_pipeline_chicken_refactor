@@ -1,5 +1,12 @@
+empty_df_06 <- function(cols = character()) {
+  if (exists("empty_df_05", mode = "function")) {
+    return(empty_df_05(cols))
+  }
+  as.data.frame(setNames(replicate(length(cols), character(0), simplify = FALSE), cols), stringsAsFactors = FALSE)
+}
+
 empty_enrichment_manifest_06 <- function() {
-  empty_df_05(c(
+  empty_df_06(c(
     "layer_id", "comparison_id", "cluster_id", "gene_direction",
     "analysis_type", "ontology", "source_species", "deg_source",
     "deg_inference_status", "status", "reason", "input_gene_n",
@@ -9,12 +16,61 @@ empty_enrichment_manifest_06 <- function() {
 }
 
 empty_enrichment_result_06 <- function(extra_cols = character()) {
-  standard_cols <- c("ID", "Description", "GeneRatio", "BgRatio", "pvalue", "p.adjust", "qvalue", "geneID", "Count")
-  empty_df_05(unique(c(extra_cols, standard_cols)))
+  standard_cols <- c("ID", "Description", "GeneRatio", "BgRatio", "pvalue", "p.adjust", "qvalue", "p_adjust_method", "geneID", "Count")
+  empty_df_06(unique(c(extra_cols, standard_cols)))
 }
 
 normalize_path_06 <- function(path) {
   normalizePath(path, winslash = "/", mustWork = FALSE)
+}
+
+build_enrichment_manifest_row_06 <- function(
+    layer_id,
+    comparison_id,
+    cluster_id,
+    gene_direction,
+    analysis_type,
+    ontology,
+    source_species,
+    deg_source,
+    deg_inference_status,
+    status,
+    reason = "",
+    input_gene_n = 0L,
+    mapped_gene_n = 0L,
+    mapping_rate = NA_real_,
+    significant_term_n = 0L,
+    paths = NULL,
+    enrichment_tsv = "",
+    enrichment_significant_tsv = "",
+    dotplot_png = "",
+    barplot_png = "") {
+  if (!is.null(paths)) {
+    enrichment_tsv <- paths$enrichment_tsv %||% enrichment_tsv
+    enrichment_significant_tsv <- paths$enrichment_significant_tsv %||% enrichment_significant_tsv
+  }
+  data.frame(
+    layer_id = layer_id,
+    comparison_id = comparison_id,
+    cluster_id = cluster_id,
+    gene_direction = gene_direction,
+    analysis_type = analysis_type,
+    ontology = ontology,
+    source_species = source_species,
+    deg_source = deg_source,
+    deg_inference_status = deg_inference_status,
+    status = status,
+    reason = reason,
+    input_gene_n = input_gene_n,
+    mapped_gene_n = mapped_gene_n,
+    mapping_rate = mapping_rate,
+    significant_term_n = significant_term_n,
+    enrichment_tsv = if (nzchar(enrichment_tsv)) normalize_path_06(enrichment_tsv) else "",
+    enrichment_significant_tsv = if (nzchar(enrichment_significant_tsv)) normalize_path_06(enrichment_significant_tsv) else "",
+    dotplot_png = normalize_scalar_value(dotplot_png),
+    barplot_png = normalize_scalar_value(barplot_png),
+    stringsAsFactors = FALSE
+  )
 }
 
 human_strategy_enabled_06 <- function(cfg) {
@@ -68,7 +124,7 @@ load_ortholog_map <- function(cfg) {
     map_path <- file.path(cfg$ortholog_cache_dir, "chicken_human_orthologs.csv")
   }
   if (!file.exists(map_path)) {
-    out <- empty_df_05(c("chicken_symbol", "human_symbol"))
+    out <- empty_df_06(c("chicken_symbol", "human_symbol"))
     attr(out, "stats") <- list(map_path = map_path, available = FALSE, retained_n = 0L)
     return(out)
   }
@@ -76,7 +132,7 @@ load_ortholog_map <- function(cfg) {
   raw <- read.csv(map_path, stringsAsFactors = FALSE, check.names = FALSE)
   required <- c("external_gene_name", "target_gene_name")
   if (!all(required %in% colnames(raw))) {
-    out <- empty_df_05(c("chicken_symbol", "human_symbol"))
+    out <- empty_df_06(c("chicken_symbol", "human_symbol"))
     attr(out, "stats") <- list(map_path = map_path, available = FALSE, retained_n = 0L)
     return(out)
   }
@@ -146,14 +202,14 @@ read_enrichment_input_grid_06 <- function(cfg) {
     if (!col %in% colnames(pb_df)) pb_df[[col]] <- character(nrow(pb_df))
     if (!col %in% colnames(status_df)) status_df[[col]] <- character(nrow(status_df))
   }
-  keyed_empty <- empty_df_05(key_cols)
+  keyed_empty <- empty_df_06(key_cols)
   keys <- dplyr::bind_rows(
     if (all(key_cols %in% colnames(status_df))) status_df[, key_cols, drop = FALSE] else keyed_empty,
     if (all(key_cols %in% colnames(marker_df))) marker_df[, key_cols, drop = FALSE] else keyed_empty,
     if (all(key_cols %in% colnames(pb_df))) pb_df[, key_cols, drop = FALSE] else keyed_empty
   )
   if (nrow(keys) == 0) {
-    return(empty_df_05(c(
+    return(empty_df_06(c(
       "layer_id", "comparison_id", "deg_tsv", "deg_source", "deg_inference_status",
       "marker_results_tsv", "pseudobulk_results_tsv"
     )))
@@ -385,7 +441,11 @@ run_go_enrichment_single <- function(gene_list, org_db, ont, pvalue_cutoff, qval
   list(result = res, status = "ok", reason = "")
 }
 
-run_kegg_enrichment_single <- function(gene_list, organism, pvalue_cutoff, qvalue_cutoff, min_gs_size = 10L, max_gs_size = 500L) {
+is_timeout_error_06 <- function(message) {
+  grepl("time.?out|timed out|Timeout", message, ignore.case = TRUE)
+}
+
+run_kegg_enrichment_single <- function(gene_list, organism, pvalue_cutoff, qvalue_cutoff, min_gs_size = 10L, max_gs_size = 500L, timeout_sec = 60L) {
   if (!clusterprofiler_available_06()) {
     return(list(result = NULL, status = "clusterprofiler_unavailable", reason = "clusterProfiler is not loadable in this runtime"))
   }
@@ -409,6 +469,14 @@ run_kegg_enrichment_single <- function(gene_list, organism, pvalue_cutoff, qvalu
     c(base_args, list(keyType = "kegg")),
     base_args
   )
+  timeout_sec <- suppressWarnings(as.numeric(timeout_sec))
+  if (!is.finite(timeout_sec) || timeout_sec <= 0) {
+    timeout_sec <- 60
+  }
+  old_timeout <- getOption("timeout")
+  options(timeout = timeout_sec)
+  on.exit(options(timeout = old_timeout), add = TRUE)
+
   last_error <- NULL
   for (args in attempts) {
     res <- tryCatch(run_attempt(args), error = function(e) e)
@@ -420,6 +488,9 @@ run_kegg_enrichment_single <- function(gene_list, organism, pvalue_cutoff, qvalu
       return(list(result = res, status = "ok", reason = ""))
     }
     last_error <- conditionMessage(res)
+    if (is_timeout_error_06(last_error)) {
+      return(list(result = NULL, status = "timeout", reason = sprintf("enrichKEGG timed out after %s seconds: %s", timeout_sec, last_error)))
+    }
   }
   list(result = NULL, status = "error", reason = last_error %||% "enrichKEGG failed")
 }
@@ -450,9 +521,10 @@ format_gprofiler_result_06 <- function(gost_result, extra_cols = list()) {
     Description = value_or("term_name", ""),
     GeneRatio = ifelse(is.finite(intersection_size) & is.finite(query_size), paste0(intersection_size, "/", query_size), ""),
     BgRatio = ifelse(is.finite(term_size) & is.finite(effective_domain_size), paste0(term_size, "/", effective_domain_size), ""),
-    pvalue = p,
+    pvalue = NA_real_,
     p.adjust = p,
-    qvalue = p,
+    qvalue = NA_real_,
+    p_adjust_method = "g_SCS",
     geneID = intersection,
     Count = intersection_size,
     stringsAsFactors = FALSE
@@ -514,8 +586,11 @@ format_enrichment_result_tsv <- function(enrich_result, extra_cols = list()) {
       df[[col]] <- ""
     }
   }
+  if (!"p_adjust_method" %in% colnames(df)) {
+    df$p_adjust_method <- ""
+  }
   extra_first <- extra_names[extra_names %in% colnames(df)]
-  df[, unique(c(extra_first, standard_cols, setdiff(colnames(df), c(extra_first, standard_cols)))), drop = FALSE]
+  df[, unique(c(extra_first, standard_cols, "p_adjust_method", setdiff(colnames(df), c(extra_first, standard_cols, "p_adjust_method")))), drop = FALSE]
 }
 
 significant_enrichment_df_06 <- function(df, pvalue_cutoff, qvalue_cutoff) {
@@ -547,6 +622,15 @@ top_plot_df_06 <- function(enrich_result, top_n) {
   padj[!is.finite(padj)] <- 1
   df <- df[order(padj, -suppressWarnings(as.numeric(df$Count))), , drop = FALSE]
   df[seq_len(min(top_n, nrow(df))), , drop = FALSE]
+}
+
+is_enrichplot_result_06 <- function(enrich_result) {
+  if (is.null(enrich_result) || is.data.frame(enrich_result)) {
+    return(FALSE)
+  }
+  any(vapply(c("enrichResult", "gseaResult", "compareClusterResult"), function(cls) {
+    inherits(enrich_result, cls) || isTRUE(tryCatch(methods::is(enrich_result, cls), error = function(e) FALSE))
+  }, logical(1)))
 }
 
 plot_enrichment_fallback_06 <- function(enrich_result, title, top_n, output_png, geom = c("dot", "bar")) {
@@ -582,7 +666,7 @@ plot_enrichment_dotplot <- function(enrich_result, title, top_n = 20L, output_pn
   }
   ensure_dir(dirname(output_png))
   plotted <- FALSE
-  if (requireNamespace("enrichplot", quietly = TRUE)) {
+  if (is_enrichplot_result_06(enrich_result) && requireNamespace("enrichplot", quietly = TRUE)) {
     plotted <- tryCatch({
       p <- enrichplot::dotplot(enrich_result, showCategory = min(top_n, nrow(as.data.frame(enrich_result)))) +
         ggplot2::ggtitle(title) +
@@ -603,9 +687,9 @@ plot_enrichment_barplot <- function(enrich_result, title, top_n = 15L, output_pn
   }
   ensure_dir(dirname(output_png))
   plotted <- FALSE
-  if (requireNamespace("enrichplot", quietly = TRUE)) {
+  if (is_enrichplot_result_06(enrich_result) && requireNamespace("enrichplot", quietly = TRUE)) {
     plotted <- tryCatch({
-      p <- enrichplot::barplot(enrich_result, showCategory = min(top_n, nrow(as.data.frame(enrich_result)))) +
+      p <- graphics::barplot(enrich_result, showCategory = min(top_n, nrow(as.data.frame(enrich_result)))) +
         ggplot2::ggtitle(title) +
         ggplot2::theme_bw(base_size = 10)
       ggplot2::ggsave(output_png, p, width = 7.5, height = 5.5, dpi = 300, bg = "white")
@@ -688,7 +772,7 @@ plot_cross_cluster_heatmap <- function(combined_results, value_col, output_png, 
 
 build_shared_pathways_06 <- function(combined_results, min_cluster_n = 2L) {
   if (is.null(combined_results) || nrow(combined_results) == 0) {
-    return(empty_df_05(c("analysis_type", "ontology", "source_species", "ID", "Description", "cluster_n", "clusters", "min_p_adjust")))
+    return(empty_df_06(c("analysis_type", "ontology", "source_species", "ID", "Description", "cluster_n", "clusters", "min_p_adjust")))
   }
   df <- combined_results
   for (col in c("analysis_type", "ontology", "source_species", "ID", "Description", "layer_id", "comparison_id", "cluster_id", "p.adjust")) {

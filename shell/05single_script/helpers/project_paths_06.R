@@ -38,6 +38,7 @@ get_single_script_config_06 <- function() {
   base$enrichment_min_input_genes <- env_integer_06("ENRICHMENT_MIN_INPUT_GENES", 5L)
   base$enrichment_min_gs_size <- env_integer_06("ENRICHMENT_MIN_GS_SIZE", 10L)
   base$enrichment_max_gs_size <- env_integer_06("ENRICHMENT_MAX_GS_SIZE", 500L)
+  base$enrichment_kegg_timeout_sec <- env_integer_06("ENRICHMENT_KEGG_TIMEOUT_SEC", 60L)
   base$module_version <- env_or_default_03("MODULE_06_VERSION", "1.0")
   base
 }
