@@ -310,7 +310,28 @@ gate 规则采用 Option B：
 - `results/figures/enrichment/cross_cluster_kegg_heatmap.png`
 - `reports/eda/enrichment/report.md`
 
-### 5.13 RNA velocity
+### 5.13 07 Communication 模块（shell standalone）
+
+07 communication 使用 `metadata/communication_pairs.tsv` 驱动，不复用 `comparisons.tsv`。每行是一个 `layer_scope + sender + receiver + condition_split` 通讯任务，适合 TC→GC、GC→TC、GC 亚群发育流等有方向的问题。
+
+- `shell/03stages/07_communication.sh`
+  - `07a_cellchat.R`：按 layer / pair / condition 在 `r_interaction` 中运行 CellChat，并用 00 ortholog cache 将鸡表达矩阵映射到人类符号。
+  - `07b_nichenet.R`：按 sender→receiver 方向运行 NicheNet；优先读 05 DEG，缺失时使用 receiver marker fallback。
+  - `07c_communication_eda.R`：按 `pair_id + layer + condition` 汇总 CellChat / NicheNet 共识，输出审阅报告。
+
+`communication_pairs.tsv` 支持 `sender` / `receiver` 精确 cell type、CSV、`*` 和 `prefix_*`。`condition_split_var` / `condition_split_values` 用于把 syf、f5 等阶段拆开分别跑。NicheNet 三件套资源可用 `workflow/45_download_nichenet_resources.sh` 准备。
+
+主要输出：
+
+- `results/tables/communication/cellchat/cellchat_index.tsv`
+- `results/tables/communication/nichenet/nichenet_index.tsv`
+- `results/tables/communication/cross_validation.tsv`
+- `results/tables/communication/consensus_lr.tsv`
+- `reports/eda/communication/report.md`
+
+07 完成后会把 `communication` gate 置为 `pending`，该 gate 目前只作为审阅记录，不阻塞下游模块。
+
+### 5.14 RNA velocity
 
 - `workflow/30_run_velocyto.sh`
   - 需要：
@@ -322,7 +343,7 @@ gate 规则采用 Option B：
   - 先准备参考对象
   - 再跑 `scVelo`
 
-### 5.14 SCENIC
+### 5.15 SCENIC
 
 - `workflow/40_build_ortholog_cache.sh`
   - 构建同源映射缓存

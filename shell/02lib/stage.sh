@@ -91,6 +91,25 @@ check_stage_deps() {
         "status.deg_gate_passed" \
         "06_enrichment 被 deg gate 阻断。请先审阅 05d DEG 报告，并在 eda_gates.tsv 中批准 deg。"
       ;;
+    07_communication)
+      sync_workflow_gate_statuses
+      require_status_flag_or_warn \
+        "status.annotation_gate_passed" \
+        "07_communication 被 annotation gate 阻断。请先审阅 03e panorama 注释报告，并在 eda_gates.tsv 中批准 annotation。"
+      require_status_flag_or_warn \
+        "status.03_panorama_completed" \
+        "07_communication 需要 03_panorama 整链完成。"
+      require_status_flag_or_warn \
+        "status.00_ortholog_completed" \
+        "07_communication 需要先完成 00_ortholog，并通过 manifest 暴露 human_best。"
+      if [[ -f "${WORKFLOW_STATUS_FILE}" ]]; then
+        local subcluster_done
+        subcluster_done="$(workflow_status_get "status.04_subcluster_completed" 2>/dev/null || true)"
+        if [[ "${subcluster_done}" != "true" ]]; then
+          warn "04_subcluster 尚未标记完成；07 将只使用当前已注释并可发现的 layer，panorama 不受影响。"
+        fi
+      fi
+      ;;
     *)
       warn "未定义 ${stage_id} 的依赖规则，按无依赖继续。"
       ;;
@@ -171,14 +190,23 @@ require_manifest_output() {
 }
 
 run_stage_if_manifest_key_missing() {
-  local script_path="$1"
-  local manifest_path="$2"
-  local output_key="$3"
-  shift 3 || true
+  run_stage_if_manifest_key_missing_with_runner run_r_main "$@"
+}
+
+run_stage_if_manifest_key_missing_interaction() {
+  run_stage_if_manifest_key_missing_with_runner run_r_interaction "$@"
+}
+
+run_stage_if_manifest_key_missing_with_runner() {
+  local runner_fn="$1"
+  local script_path="$2"
+  local manifest_path="$3"
+  local output_key="$4"
+  shift 4 || true
 
   if ! manifest_has_output_key "${manifest_path}" "${output_key}"; then
     echo "manifest 缺少 ${output_key}，运行 ${script_path}"
-    run_r_main "${script_path}"
+    "${runner_fn}" "${script_path}"
     return
   fi
 
@@ -186,20 +214,29 @@ run_stage_if_manifest_key_missing() {
   output_path="$(manifest_output_path "${manifest_path}" "${output_key}")"
   if is_stale_output "${output_path}" "$@"; then
     echo "manifest 输出 ${output_key} 缺失或过期，运行 ${script_path}"
-    run_r_main "${script_path}"
+    "${runner_fn}" "${script_path}"
   else
     echo "manifest 输出已存在且未过期，跳过: ${output_key} -> ${output_path}"
   fi
 }
 
 run_stage_if_stale() {
-  local script_path="$1"
-  local output_path="$2"
-  shift 2 || true
+  run_stage_if_stale_with_runner run_r_main "$@"
+}
+
+run_stage_if_stale_interaction() {
+  run_stage_if_stale_with_runner run_r_interaction "$@"
+}
+
+run_stage_if_stale_with_runner() {
+  local runner_fn="$1"
+  local script_path="$2"
+  local output_path="$3"
+  shift 3 || true
 
   if is_stale_output "${output_path}" "$@"; then
     echo "运行 ${script_path}"
-    run_r_main "${script_path}"
+    "${runner_fn}" "${script_path}"
   else
     echo "已存在且未过期，跳过: ${output_path}"
   fi
@@ -219,7 +256,8 @@ sync_workflow_gate_statuses() {
     "status.integration_gate_passed=$(eda_gate_passed integration && echo true || echo false)" \
     "status.annotation_gate_passed=$(eda_gate_passed annotation && echo true || echo false)" \
     "status.subcluster_gate_passed=$(eda_gate_passed subcluster && echo true || echo false)" \
-    "status.deg_gate_passed=$(eda_gate_passed deg && echo true || echo false)"
+    "status.deg_gate_passed=$(eda_gate_passed deg && echo true || echo false)" \
+    "status.communication_gate_passed=$(eda_gate_passed communication && echo true || echo false)"
 }
 
 update_workflow_status() {

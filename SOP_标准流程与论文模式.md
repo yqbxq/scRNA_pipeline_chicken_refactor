@@ -30,6 +30,7 @@
 - `workflow/40_build_ortholog_cache.sh`
 - `workflow/41_download_scenic_resources.sh`
 - `workflow/42_run_scenic.sh`
+- `workflow/45_download_nichenet_resources.sh`
 
 旧编号脚本仍保留兼容，但不再是推荐的主入口。
 
@@ -75,6 +76,10 @@
 - 同源映射缓存构建已经补入标准流程
   - 默认 `strict`
   - 可选 `relaxed`
+- 细胞通讯 07 模块已经进入标准流程
+  - `communication_pairs.tsv` 四元组驱动
+  - CellChat / NicheNet
+  - syf/f5 condition split
 
 ### 2.2 已完成但仍属于论文模式的部分
 
@@ -162,6 +167,7 @@
 - `workflow/40_build_ortholog_cache.sh`
 - `workflow/41_download_scenic_resources.sh`
 - `workflow/42_run_scenic.sh`
+- `workflow/45_download_nichenet_resources.sh`
 
 ---
 

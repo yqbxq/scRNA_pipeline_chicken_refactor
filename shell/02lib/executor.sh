@@ -128,8 +128,14 @@ run_r_legacy() {
 }
 
 run_r_interaction() {
+  local script_path="$1"
+  shift || true
+  local -a ENV_ARGS=()
+  append_env_vars "${ENV_SPECS_R_INTERACTION[@]}"
+
+  [[ -n "${CONDA_FRONTEND}" ]] || die "系统中找不到 micromamba/mamba/conda，无法运行通讯分析 R 环境。"
   [[ -d "${R_INTERACTION_ENV_PREFIX}" ]] || die "通讯分析 R 环境不存在: ${R_INTERACTION_ENV_PREFIX}"
-  run_in_conda_prefix "${R_INTERACTION_ENV_PREFIX}" Rscript "$@"
+  env "${ENV_ARGS[@]}" "${CONDA_FRONTEND}" run -p "${R_INTERACTION_ENV_PREFIX}" Rscript "${script_path}" "$@"
 }
 
 run_r_spatial() {

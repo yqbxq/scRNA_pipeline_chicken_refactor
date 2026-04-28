@@ -94,8 +94,10 @@ export USE_EXISTING_SIF="${USE_EXISTING_SIF:-no}"
 export EXISTING_R_SIF="${EXISTING_R_SIF:-}"
 export R_LIBS_MAIN="${R_LIBS_MAIN:-}"
 export R_LIBS_SCENIC="${R_LIBS_SCENIC:-}"
+export R_LIBS_INTERACTION="${R_LIBS_INTERACTION:-}"
 export R_MAIN_ENV_PREFIX="${R_MAIN_ENV_PREFIX:-${ENV_DIR}/conda/r_main}"
 export R_SCENIC_ENV_PREFIX="${R_SCENIC_ENV_PREFIX:-${ENV_DIR}/conda/r_scenic}"
+export R_INTERACTION_ENV_PREFIX="${R_INTERACTION_ENV_PREFIX:-${ENV_DIR}/conda/r_interaction}"
 export PYSCENIC_ENV_PREFIX="${PYSCENIC_ENV_PREFIX:-${ENV_DIR}/conda/pyscenic}"
 export SCVELO_ENV_PREFIX="${SCVELO_ENV_PREFIX:-${ENV_DIR}/conda/scvelo}"
 export SCENIC_TF_LIST="${SCENIC_TF_LIST:-}"
@@ -119,6 +121,7 @@ export WORKFLOW_STATUS_FILE="${WORKFLOW_STATUS_FILE:-${STATUS_DIR}/workflow_stat
 export SAMPLE_SHEET="${SAMPLE_SHEET:-${METADATA_DIR}/samples.tsv}"
 export CANONICAL_SAMPLE_SHEET="${CANONICAL_SAMPLE_SHEET:-${METADATA_DIR}/samples.canonical.tsv}"
 export COMPARISON_SHEET="${COMPARISON_SHEET:-${METADATA_DIR}/comparisons.tsv}"
+export COMMUNICATION_PAIRS_SHEET="${COMMUNICATION_PAIRS_SHEET:-${METADATA_DIR}/communication_pairs.tsv}"
 export DELIVERY_MANIFEST="${DELIVERY_MANIFEST:-${METADATA_DIR}/delivery_manifest.tsv}"
 export RECEIVED_FILES_MANIFEST="${RECEIVED_FILES_MANIFEST:-${METADATA_DIR}/received_files_manifest.tsv}"
 export INPUT_INVENTORY_FILE="${INPUT_INVENTORY_FILE:-${INTAKE_REPORT_DIR}/input_inventory.tsv}"
@@ -138,6 +141,7 @@ export ANNOTATION_REPORT_DIR="${ANNOTATION_REPORT_DIR:-${EDA_REPORT_DIR}/annotat
 export SUBCLUSTER_REPORT_DIR="${SUBCLUSTER_REPORT_DIR:-${EDA_REPORT_DIR}/subcluster}"
 export DEG_REPORT_DIR="${DEG_REPORT_DIR:-${EDA_REPORT_DIR}/deg}"
 export ENRICHMENT_REPORT_DIR="${ENRICHMENT_REPORT_DIR:-${EDA_REPORT_DIR}/enrichment}"
+export COMMUNICATION_REPORT_DIR="${COMMUNICATION_REPORT_DIR:-${EDA_REPORT_DIR}/communication}"
 export SELECTED_INTEGRATION_FILE="${SELECTED_INTEGRATION_FILE:-${INTEGRATION_REPORT_DIR}/panorama/selected_integration.txt}"
 export LAYER_STATUS_FILE="${LAYER_STATUS_FILE:-${TABLE_DIR}/layer_status.tsv}"
 export SUBCLUSTER_REVIEW_SUMMARY_FILE="${SUBCLUSTER_REVIEW_SUMMARY_FILE:-${TABLE_DIR}/subcluster/subcluster_review_summary.tsv}"
@@ -162,6 +166,15 @@ export ENRICHMENT_MIN_INPUT_GENES="${ENRICHMENT_MIN_INPUT_GENES:-5}"
 export ENRICHMENT_MIN_GS_SIZE="${ENRICHMENT_MIN_GS_SIZE:-10}"
 export ENRICHMENT_MAX_GS_SIZE="${ENRICHMENT_MAX_GS_SIZE:-500}"
 export ENRICHMENT_KEGG_TIMEOUT_SEC="${ENRICHMENT_KEGG_TIMEOUT_SEC:-60}"
+export MODULE_07_VERSION="${MODULE_07_VERSION:-1.0}"
+export COMMUNICATION_MIN_CELLS_PER_CELLTYPE="${COMMUNICATION_MIN_CELLS_PER_CELLTYPE:-20}"
+export COMMUNICATION_ORTHOLOG_MIN_COVERAGE="${COMMUNICATION_ORTHOLOG_MIN_COVERAGE:-0.30}"
+export CELLCHAT_MIN_CELLS_PER_GROUP="${CELLCHAT_MIN_CELLS_PER_GROUP:-20}"
+export CELLCHAT_PROB_CUTOFF="${CELLCHAT_PROB_CUTOFF:-0.05}"
+export NICHENET_RESOURCE_DIR="${NICHENET_RESOURCE_DIR:-${RESOURCE_DIR}/nichenet}"
+export NICHENET_EXPRESSION_PCT="${NICHENET_EXPRESSION_PCT:-0.10}"
+export NICHENET_TOP_LIGAND_N="${NICHENET_TOP_LIGAND_N:-20}"
+export NICHENET_TOP_TARGET_N="${NICHENET_TOP_TARGET_N:-200}"
 export TRIAGE_FRAC_BELOW_CUTOFF="${TRIAGE_FRAC_BELOW_CUTOFF:-0.35}"
 export TRIAGE_FRAC_ABOVE_MITO="${TRIAGE_FRAC_ABOVE_MITO:-0.25}"
 export TRIAGE_DENSITY_PEAKS="${TRIAGE_DENSITY_PEAKS:-2}"
@@ -218,7 +231,8 @@ ensure_eda_control_files() {
     "${ANNOTATION_REPORT_DIR}" \
     "${SUBCLUSTER_REPORT_DIR}" \
     "${DEG_REPORT_DIR}" \
-    "${ENRICHMENT_REPORT_DIR}"
+    "${ENRICHMENT_REPORT_DIR}" \
+    "${COMMUNICATION_REPORT_DIR}"
 
   if [[ ! -s "${EDA_GATE_FILE}" ]]; then
     {
@@ -229,11 +243,12 @@ ensure_eda_control_files() {
       printf 'annotation\tpending\t\t\n'
       printf 'subcluster\tpending\t\t\n'
       printf 'deg\tpending\t\t\n'
+      printf 'communication\tpending\t\t\n'
     } > "${EDA_GATE_FILE}"
   fi
 
   local gate_id
-  for gate_id in pre_qc post_qc integration annotation subcluster deg; do
+  for gate_id in pre_qc post_qc integration annotation subcluster deg communication; do
     if ! awk -F '\t' -v gate="${gate_id}" 'NR > 1 && $1 == gate { found = 1 } END { exit(found ? 0 : 1) }' "${EDA_GATE_FILE}" >/dev/null 2>&1; then
       printf '%s\tpending\t\t\n' "${gate_id}" >> "${EDA_GATE_FILE}"
     fi
@@ -316,6 +331,22 @@ ensure_mito_gene_list_file() {
 # One mito gene identifier per line.
 # Use gene symbols or feature IDs that exactly match your matrix rownames.
 # Leave this file unchanged when GTF-based mito detection is sufficient.
+EOF
+}
+
+ensure_communication_pairs_sheet() {
+  ensure_dir "${METADATA_DIR}"
+  [[ -s "${COMMUNICATION_PAIRS_SHEET}" ]] && return 0
+
+  cat > "${COMMUNICATION_PAIRS_SHEET}" <<'EOF'
+pair_id	layer_scope	sender	receiver	subset_column	subset_value	condition_split_var	condition_split_values	tool	enabled	notes
+TC_to_GC_panorama	panorama	TC	GC			group	syf,f5	both	no	Enable after panorama cell_type labels use TC and GC.
+GC_to_TC_panorama	panorama	GC	TC			group	syf,f5	both	no	Reverse two-cell direction.
+GC_intra_subcluster	GC_subcluster	*	*			group	syf,f5	cellchat_only	no	Enable after GC subcluster layer is named in layer_scope.
+pGC_to_eGC	GC_subcluster	pGCs	eGCs			group	syf,f5	nichenet_only	no	Enable after GC subcluster annotation is finalized.
+eGC_to_rgGC	GC_subcluster	eGCs	rgGCs			group	syf,f5	nichenet_only	no	Enable after GC subcluster annotation is finalized.
+rgGC_to_lGC	GC_subcluster	rgGCs	lGCs			group	syf,f5	nichenet_only	no	Enable after GC subcluster annotation is finalized.
+TC_sub_to_lGC	panorama	TC_*	lGCs			group	syf,f5	nichenet_only	planned	Placeholder until TC subclusters are annotated.
 EOF
 }
 
@@ -406,6 +437,8 @@ prepare_project_state_dirs() {
     "${ANNOTATION_REPORT_DIR}" \
     "${SUBCLUSTER_REPORT_DIR}" \
     "${DEG_REPORT_DIR}" \
+    "${ENRICHMENT_REPORT_DIR}" \
+    "${COMMUNICATION_REPORT_DIR}" \
     "${STATUS_DIR}" \
     "${MANIFEST_DIR}" \
     "${LOG_DIR}"
@@ -413,6 +446,7 @@ prepare_project_state_dirs() {
   ensure_object_layer_config_file
   ensure_marker_panel_dir
   ensure_mito_gene_list_file
+  ensure_communication_pairs_sheet
 }
 
 LIB_DIR="${SCRIPT_DIR}"
