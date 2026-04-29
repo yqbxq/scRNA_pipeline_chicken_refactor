@@ -27,12 +27,12 @@ C04_GC_subtypes_pairwise_f5__pGC_vs_lGC_f5	C04_GC_subtypes_pairwise_f5	GC_subclu
 C04_GC_subtypes_pairwise_f5__eGC_vs_rgGC_f5	C04_GC_subtypes_pairwise_f5	GC_subcluster	pairwise	eGC	rgGC	group	f5	cell_subtype	batch	yes	2	no	3	0	-
 C04_GC_subtypes_pairwise_f5__eGC_vs_lGC_f5	C04_GC_subtypes_pairwise_f5	GC_subcluster	pairwise	eGC	lGC	group	f5	cell_subtype	batch	yes	2	no	3	0	-
 C04_GC_subtypes_pairwise_f5__rgGC_vs_lGC_f5	C04_GC_subtypes_pairwise_f5	GC_subcluster	pairwise	rgGC	lGC	group	f5	cell_subtype	batch	yes	2	no	3	0	-
-D01_GC_stage_DEG__GC_syf_vs_f5	D01_GC_stage_DEG	panorama	contrast_only	syf	f5	cell_subtype	GC	group	batch	yes	2	no	3	0	-
-D02_TC_stage_DEG__TC_syf_vs_f5	D02_TC_stage_DEG	panorama	contrast_only	syf	f5	cell_subtype	TC	group	batch	yes	2	no	3	0	-
-D03_GC_subtype_stage_DEG__pGC_syf_vs_f5	D03_GC_subtype_stage_DEG	GC_subcluster	contrast_only	syf	f5	cell_subtype	pGC	group	batch	yes	2	no	3	0	-
-D03_GC_subtype_stage_DEG__eGC_syf_vs_f5	D03_GC_subtype_stage_DEG	GC_subcluster	contrast_only	syf	f5	cell_subtype	eGC	group	batch	yes	2	no	3	0	-
-D03_GC_subtype_stage_DEG__rgGC_syf_vs_f5	D03_GC_subtype_stage_DEG	GC_subcluster	contrast_only	syf	f5	cell_subtype	rgGC	group	batch	yes	2	no	3	0	-
-D03_GC_subtype_stage_DEG__lGC_syf_vs_f5	D03_GC_subtype_stage_DEG	GC_subcluster	contrast_only	syf	f5	cell_subtype	lGC	group	batch	yes	2	no	3	0	-
-D05_panorama_global_stage__all_cells_syf_vs_f5	D05_panorama_global_stage	panorama	contrast_only	syf	f5			group	batch	yes	2	no	3	0	-
-E01_GC_subtype_compo__composition_pGC_eGC_rgGC_lGC	E01_GC_subtype_compo	panorama	composition	syf	f5	cell_subtype	pGC,eGC,rgGC,lGC	group	batch	yes	2	no	3	0	composition_only
-E03_layer_compo__composition_GC_TC	E03_layer_compo	panorama	composition	syf	f5	cell_subtype	GC,TC	group	batch	yes	2	no	3	0	composition_only
+D01_GC_stage_DEG__GC_syf_vs_f5	D01_GC_stage_DEG	panorama	contrast_only	syf	f5	cell_subtype	GC	group_id	batch	yes	2	no	3	0	-
+D02_TC_stage_DEG__TC_syf_vs_f5	D02_TC_stage_DEG	panorama	contrast_only	syf	f5	cell_subtype	TC	group_id	batch	yes	2	no	3	0	-
+D03_GC_subtype_stage_DEG__pGC_syf_vs_f5	D03_GC_subtype_stage_DEG	GC_subcluster	contrast_only	syf	f5	cell_subtype	pGC	group_id	batch	yes	2	no	3	0	-
+D03_GC_subtype_stage_DEG__eGC_syf_vs_f5	D03_GC_subtype_stage_DEG	GC_subcluster	contrast_only	syf	f5	cell_subtype	eGC	group_id	batch	yes	2	no	3	0	-
+D03_GC_subtype_stage_DEG__rgGC_syf_vs_f5	D03_GC_subtype_stage_DEG	GC_subcluster	contrast_only	syf	f5	cell_subtype	rgGC	group_id	batch	yes	2	no	3	0	-
+D03_GC_subtype_stage_DEG__lGC_syf_vs_f5	D03_GC_subtype_stage_DEG	GC_subcluster	contrast_only	syf	f5	cell_subtype	lGC	group_id	batch	yes	2	no	3	0	-
+D05_panorama_global_stage__all_cells_syf_vs_f5	D05_panorama_global_stage	panorama	contrast_only	syf	f5			group_id	batch	yes	2	no	3	0	-
+E01_GC_subtype_compo__composition_pGC_eGC_rgGC_lGC	E01_GC_subtype_compo	panorama	composition	syf	f5	cell_subtype	pGC,eGC,rgGC,lGC	group_id	batch	yes	2	no	3	0	composition_only
+E03_layer_compo__composition_GC_TC	E03_layer_compo	panorama	composition	syf	f5	cell_subtype	GC,TC	group_id	batch	yes	2	no	3	0	composition_only

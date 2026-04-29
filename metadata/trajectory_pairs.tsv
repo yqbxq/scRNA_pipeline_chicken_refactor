@@ -1,5 +1,5 @@
 # AUTO-GENERATED. Edit metadata/analysis_questions.tsv instead.
 trajectory_id	source_question_id	layer_scope	root_group	terminal_group	condition_split_var	condition_split_values	method	enabled	notes
 H01_GC_trajectory_baseline__pGC_to_lGC	H01_GC_trajectory_baseline	GC_subcluster	pGC	lGC			trajectory	yes	-
-H02_GC_trajectory_split__pGC_to_lGC	H02_GC_trajectory_split	GC_subcluster	pGC	lGC	group	syf,f5	trajectory	yes	-
+H02_GC_trajectory_split__pGC_to_lGC	H02_GC_trajectory_split	GC_subcluster	pGC	lGC	group_id	syf,f5	trajectory	yes	-
 H05_GC_velocity__velocity	H05_GC_velocity	GC_subcluster	*	*			velocity	yes	-

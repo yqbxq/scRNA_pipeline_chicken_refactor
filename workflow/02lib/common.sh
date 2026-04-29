@@ -356,22 +356,6 @@ ensure_mito_gene_list_file() {
 EOF
 }
 
-ensure_communication_pairs_sheet() {
-  ensure_dir "${METADATA_DIR}"
-  [[ -s "${COMMUNICATION_PAIRS_SHEET}" ]] && return 0
-
-  cat > "${COMMUNICATION_PAIRS_SHEET}" <<'EOF'
-pair_id	layer_scope	sender	receiver	subset_column	subset_value	condition_split_var	condition_split_values	tool	enabled	notes
-TC_to_GC_panorama	panorama	TC	GC			group	syf,f5	both	no	Enable after panorama cell_type labels use TC and GC.
-GC_to_TC_panorama	panorama	GC	TC			group	syf,f5	both	no	Reverse two-cell direction.
-GC_intra_subcluster	GC_subcluster	*	*			group	syf,f5	cellchat_only	no	Enable after GC subcluster layer is named in layer_scope.
-pGC_to_eGC	GC_subcluster	pGCs	eGCs			group	syf,f5	nichenet_only	no	Enable after GC subcluster annotation is finalized.
-eGC_to_rgGC	GC_subcluster	eGCs	rgGCs			group	syf,f5	nichenet_only	no	Enable after GC subcluster annotation is finalized.
-rgGC_to_lGC	GC_subcluster	rgGCs	lGCs			group	syf,f5	nichenet_only	no	Enable after GC subcluster annotation is finalized.
-TC_sub_to_lGC	panorama	TC_*	lGCs			group	syf,f5	nichenet_only	planned	Placeholder until TC subclusters are annotated.
-EOF
-}
-
 now_iso() {
   date --iso-8601=seconds
 }
@@ -469,7 +453,6 @@ prepare_project_state_dirs() {
   ensure_object_layer_config_file
   ensure_marker_panel_dir
   ensure_mito_gene_list_file
-  ensure_communication_pairs_sheet
 }
 
 LIB_DIR="${SCRIPT_DIR}"

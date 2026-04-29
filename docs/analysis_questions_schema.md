@@ -18,7 +18,7 @@ than hand-maintained.
 | `scope` | enum | `panorama` | One of `panorama`, `GC_subcluster`, `TC_subcluster`, `ST_section`. |
 | `sender_groups` | DSL | `[TC]` | Primary group expression. |
 | `receiver_groups` | DSL | `[pGC]\|[eGC]` | Secondary group expression; use `-` when absent. |
-| `condition_split` | split DSL | `group:syf,f5` | `-`, `syf_only`, `f5_only`, or `column:value1,value2`. |
+| `condition_split` | split DSL | `group_id:syf,f5` | `-`, `syf_only`, `f5_only`, or `column:value1,value2`. |
 | `contrast_axis` | enum | `bidirectional` | Selects fan-out rule. |
 | `tools_to_run` | tool list | `cellchat+nichenet` | `+` separated tool names. |
 | `priority` | enum | `P0` | One of `P0`, `P1`, `P2`, `P3`. |
@@ -64,7 +64,7 @@ communication task per receiver.
 | `-` | No split. |
 | `syf_only` | Subset to syf. |
 | `f5_only` | Subset to f5. |
-| `group:syf,f5` | Split by metadata column `group` with values `syf` and `f5`. |
+| `group_id:syf,f5` | Split by metadata column `group_id` with values `syf` and `f5`. |
 | `section:syf,f5` | Future ST split by section metadata. |
 
 When an annotated object exists, M2 checks that the referenced split column is
