@@ -141,9 +141,10 @@ save_cellchat_plots_07a <- function(cc, paths) {
   )
 }
 
-run_cellchat_one_07a <- function(seu, mat_human, cell_type_col, paths) {
+run_cellchat_one_07a <- function(seu, mat_human, cell_type_col, paths, sample_label) {
   meta <- seu@meta.data
   meta$cellchat_group <- as.character(meta[[cell_type_col]])
+  meta$samples <- sample_label
   mat_human <- mat_human[, colnames(mat_human) %in% rownames(meta), drop = FALSE]
   meta <- meta[colnames(mat_human), , drop = FALSE]
 
@@ -300,7 +301,16 @@ for (layer_idx in seq_len(nrow(layers))) {
             status <- "skipped_no_orthologs"
             reason <- "0 genes retained after chicken-to-human mapping"
           } else {
-            run_res <- tryCatch(run_cellchat_one_07a(obj, mat_human, cell_type_col, paths), error = function(e) e)
+            run_res <- tryCatch(
+              run_cellchat_one_07a(
+                obj,
+                mat_human,
+                cell_type_col,
+                paths,
+                sample_label = paste(layer_id, condition_value, sep = "_")
+              ),
+              error = function(e) e
+            )
             if (inherits(run_res, "error")) {
               status <- "error"
               reason <- conditionMessage(run_res)

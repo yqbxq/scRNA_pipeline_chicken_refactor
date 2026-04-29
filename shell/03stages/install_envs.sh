@@ -132,7 +132,7 @@ fi
 
 if [[ "${INSTALL_SCENIC_RESOURCES}" == "yes" ]] && { target_enabled "r_scenic" || target_enabled "pyscenic"; }; then
   run_with_log "${LOG_DIR}/install_scenic_resources.log" \
-    "${PIPELINE_ROOT}/shell/03stages/08_regulation.sh"
+    env SCENIC_RESOURCES_ONLY=yes bash "${PIPELINE_ROOT}/shell/03stages/08_regulation.sh"
 fi
 
 echo "服务器环境安装完成。"

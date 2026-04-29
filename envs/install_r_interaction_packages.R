@@ -110,6 +110,7 @@ for (pkg in c(
 
 ensure_decoupleR()
 
+ensure_github("presto", "immunogenomics/presto")
 ensure_github("CellChat", "jinworks/CellChat")
 ensure_github("nichenetr", "saeyslab/nichenetr")
 
@@ -118,7 +119,7 @@ required_pkgs <- c(
   "readr", "ggplot2", "patchwork", "cowplot", "ggrepel", "data.table",
   "future", "future.apply", "igraph", "circlize", "RColorBrewer", "NMF",
   "SingleCellExperiment", "clusterProfiler", "org.Gg.eg.db", "biomaRt",
-  "ComplexHeatmap", "decoupleR", "gprofiler2", "CellChat", "nichenetr"
+  "ComplexHeatmap", "decoupleR", "gprofiler2", "presto", "CellChat", "nichenetr"
 )
 assert_pkgs(required_pkgs, "通讯分析")
 

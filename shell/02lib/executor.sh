@@ -119,7 +119,10 @@ create_or_update_conda_env() {
 
 run_pyscenic() {
   [[ -d "${PYSCENIC_ENV_PREFIX}" ]] || die "pySCENIC 环境不存在: ${PYSCENIC_ENV_PREFIX}"
-  run_in_conda_prefix "${PYSCENIC_ENV_PREFIX}" "$@"
+  local -a ENV_ARGS=()
+  append_env_vars "${ENV_SPECS_PYSCENIC[@]}"
+  [[ -n "${CONDA_FRONTEND}" ]] || die "系统中找不到 micromamba/mamba/conda。"
+  env "${ENV_ARGS[@]}" "${CONDA_FRONTEND}" run -p "${PYSCENIC_ENV_PREFIX}" "$@"
 }
 
 run_r_legacy() {

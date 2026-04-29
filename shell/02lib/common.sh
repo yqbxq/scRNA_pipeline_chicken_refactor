@@ -98,12 +98,22 @@ export R_LIBS_INTERACTION="${R_LIBS_INTERACTION:-}"
 export R_MAIN_ENV_PREFIX="${R_MAIN_ENV_PREFIX:-${ENV_DIR}/conda/r_main}"
 export R_SCENIC_ENV_PREFIX="${R_SCENIC_ENV_PREFIX:-${ENV_DIR}/conda/r_scenic}"
 export R_INTERACTION_ENV_PREFIX="${R_INTERACTION_ENV_PREFIX:-${ENV_DIR}/conda/r_interaction}"
+export R_LEGACY_ENV_PREFIX="${R_LEGACY_ENV_PREFIX:-${ENV_DIR}/conda/r_legacy}"
 export PYSCENIC_ENV_PREFIX="${PYSCENIC_ENV_PREFIX:-${ENV_DIR}/conda/pyscenic}"
+export VELOCITY_ENV_PREFIX="${VELOCITY_ENV_PREFIX:-${ENV_DIR}/conda/velocity}"
 export SCVELO_ENV_PREFIX="${SCVELO_ENV_PREFIX:-${ENV_DIR}/conda/scvelo}"
-export SCENIC_TF_LIST="${SCENIC_TF_LIST:-}"
-export SCENIC_MOTIF_ANN="${SCENIC_MOTIF_ANN:-}"
-export SCENIC_DB_500BP="${SCENIC_DB_500BP:-}"
-export SCENIC_DB_10KB="${SCENIC_DB_10KB:-}"
+export VELOCITY_DIR="${VELOCITY_DIR:-${RESULTS_DIR}/velocity}"
+export VELOCITY_INPUT_DIR="${VELOCITY_INPUT_DIR:-${VELOCITY_DIR}/input}"
+export VELOCITY_LOOM_DIR="${VELOCITY_LOOM_DIR:-${VELOCITY_DIR}/loom}"
+export VELOCITY_OUTPUT_DIR="${VELOCITY_OUTPUT_DIR:-${VELOCITY_DIR}/output}"
+export SCENIC_DB_DIR="${SCENIC_DB_DIR:-${RESOURCE_DIR}/scenic_db}"
+export SCENIC_INPUT_DIR="${SCENIC_INPUT_DIR:-${RESULTS_DIR}/scenic_input}"
+export SCENIC_OUTPUT_DIR="${SCENIC_OUTPUT_DIR:-${RESULTS_DIR}/scenic_output}"
+export SCENIC_TF_LIST="${SCENIC_TF_LIST:-${SCENIC_DB_DIR}/hs_hgnc_tfs.txt}"
+export SCENIC_MOTIF_ANN="${SCENIC_MOTIF_ANN:-${SCENIC_DB_DIR}/motifs-v9-nr.hgnc-m0.001-o0.0.tbl}"
+export SCENIC_DB_500BP="${SCENIC_DB_500BP:-${SCENIC_DB_DIR}/hg38__refseq-r80__500bp_up_and_100bp_down_tss.mc9nr.genes_vs_motifs.rankings.feather}"
+export SCENIC_DB_10KB="${SCENIC_DB_10KB:-${SCENIC_DB_DIR}/hg38__refseq-r80__10kb_up_and_down_tss.mc9nr.genes_vs_motifs.rankings.feather}"
+export SCENIC_RESOURCE_MANIFEST="${SCENIC_RESOURCE_MANIFEST:-${SCENIC_DB_DIR}/scenic_resources_manifest.json}"
 export SCENIC_ORTHOLOG_MAP_FILE="${SCENIC_ORTHOLOG_MAP_FILE:-}"
 export ENSEMBL_MIRROR="${ENSEMBL_MIRROR:-asia}"
 export ORTHOLOG_CACHE_DIR="${ORTHOLOG_CACHE_DIR:-${RESULTS_DIR}/ortholog_cache}"
@@ -142,6 +152,7 @@ export SUBCLUSTER_REPORT_DIR="${SUBCLUSTER_REPORT_DIR:-${EDA_REPORT_DIR}/subclus
 export DEG_REPORT_DIR="${DEG_REPORT_DIR:-${EDA_REPORT_DIR}/deg}"
 export ENRICHMENT_REPORT_DIR="${ENRICHMENT_REPORT_DIR:-${EDA_REPORT_DIR}/enrichment}"
 export COMMUNICATION_REPORT_DIR="${COMMUNICATION_REPORT_DIR:-${EDA_REPORT_DIR}/communication}"
+export REGULATION_REPORT_DIR="${REGULATION_REPORT_DIR:-${EDA_REPORT_DIR}/regulation}"
 export SELECTED_INTEGRATION_FILE="${SELECTED_INTEGRATION_FILE:-${INTEGRATION_REPORT_DIR}/panorama/selected_integration.txt}"
 export LAYER_STATUS_FILE="${LAYER_STATUS_FILE:-${TABLE_DIR}/layer_status.tsv}"
 export SUBCLUSTER_REVIEW_SUMMARY_FILE="${SUBCLUSTER_REVIEW_SUMMARY_FILE:-${TABLE_DIR}/subcluster/subcluster_review_summary.tsv}"
@@ -175,6 +186,15 @@ export NICHENET_RESOURCE_DIR="${NICHENET_RESOURCE_DIR:-${RESOURCE_DIR}/nichenet}
 export NICHENET_EXPRESSION_PCT="${NICHENET_EXPRESSION_PCT:-0.10}"
 export NICHENET_TOP_LIGAND_N="${NICHENET_TOP_LIGAND_N:-20}"
 export NICHENET_TOP_TARGET_N="${NICHENET_TOP_TARGET_N:-200}"
+export MODULE_08_VERSION="${MODULE_08_VERSION:-1.0}"
+export REGULATION_LAYERS="${REGULATION_LAYERS:-${PANORAMA_LAYER_ID:-panorama}}"
+export SCENIC_MODULE_TOP_N="${SCENIC_MODULE_TOP_N:-50}"
+export SCENIC_MODULE_MIN_GENES="${SCENIC_MODULE_MIN_GENES:-10}"
+export SCENIC_REGULON_MIN_TARGETS="${SCENIC_REGULON_MIN_TARGETS:-5}"
+export SCENIC_NES_THRESHOLD="${SCENIC_NES_THRESHOLD:-3}"
+export SCENIC_AUC_MAX_RANK_FRACTION="${SCENIC_AUC_MAX_RANK_FRACTION:-0.05}"
+export SCENIC_THREADS="${SCENIC_THREADS:-8}"
+export SCENIC_ORTHOLOG_MIN_COVERAGE="${SCENIC_ORTHOLOG_MIN_COVERAGE:-0.30}"
 export TRIAGE_FRAC_BELOW_CUTOFF="${TRIAGE_FRAC_BELOW_CUTOFF:-0.35}"
 export TRIAGE_FRAC_ABOVE_MITO="${TRIAGE_FRAC_ABOVE_MITO:-0.25}"
 export TRIAGE_DENSITY_PEAKS="${TRIAGE_DENSITY_PEAKS:-2}"
@@ -232,7 +252,8 @@ ensure_eda_control_files() {
     "${SUBCLUSTER_REPORT_DIR}" \
     "${DEG_REPORT_DIR}" \
     "${ENRICHMENT_REPORT_DIR}" \
-    "${COMMUNICATION_REPORT_DIR}"
+    "${COMMUNICATION_REPORT_DIR}" \
+    "${REGULATION_REPORT_DIR}"
 
   if [[ ! -s "${EDA_GATE_FILE}" ]]; then
     {
@@ -244,11 +265,12 @@ ensure_eda_control_files() {
       printf 'subcluster\tpending\t\t\n'
       printf 'deg\tpending\t\t\n'
       printf 'communication\tpending\t\t\n'
+      printf 'regulation\tpending\t\t\n'
     } > "${EDA_GATE_FILE}"
   fi
 
   local gate_id
-  for gate_id in pre_qc post_qc integration annotation subcluster deg communication; do
+  for gate_id in pre_qc post_qc integration annotation subcluster deg communication regulation; do
     if ! awk -F '\t' -v gate="${gate_id}" 'NR > 1 && $1 == gate { found = 1 } END { exit(found ? 0 : 1) }' "${EDA_GATE_FILE}" >/dev/null 2>&1; then
       printf '%s\tpending\t\t\n' "${gate_id}" >> "${EDA_GATE_FILE}"
     fi
@@ -439,6 +461,7 @@ prepare_project_state_dirs() {
     "${DEG_REPORT_DIR}" \
     "${ENRICHMENT_REPORT_DIR}" \
     "${COMMUNICATION_REPORT_DIR}" \
+    "${REGULATION_REPORT_DIR}" \
     "${STATUS_DIR}" \
     "${MANIFEST_DIR}" \
     "${LOG_DIR}"

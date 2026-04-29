@@ -110,6 +110,25 @@ check_stage_deps() {
         fi
       fi
       ;;
+    08_regulation)
+      sync_workflow_gate_statuses
+      require_status_flag_or_warn \
+        "status.annotation_gate_passed" \
+        "08_regulation 被 annotation gate 阻断。请先审阅 03e panorama 注释报告，并在 eda_gates.tsv 中批准 annotation。"
+      require_status_flag_or_warn \
+        "status.03_panorama_completed" \
+        "08_regulation 需要 03_panorama 整链完成。"
+      require_status_flag_or_warn \
+        "status.00_ortholog_completed" \
+        "08_regulation 需要先完成 00_ortholog，并通过 manifest 暴露 human_best。"
+      if [[ -f "${WORKFLOW_STATUS_FILE}" ]]; then
+        local subcluster_done
+        subcluster_done="$(workflow_status_get "status.04_subcluster_completed" 2>/dev/null || true)"
+        if [[ "${subcluster_done}" != "true" ]]; then
+          warn "04_subcluster 尚未标记完成；08 默认只使用 panorama。需要子层时请在 REGULATION_LAYERS 中显式列出已注释 layer。"
+        fi
+      fi
+      ;;
     *)
       warn "未定义 ${stage_id} 的依赖规则，按无依赖继续。"
       ;;
@@ -257,7 +276,8 @@ sync_workflow_gate_statuses() {
     "status.annotation_gate_passed=$(eda_gate_passed annotation && echo true || echo false)" \
     "status.subcluster_gate_passed=$(eda_gate_passed subcluster && echo true || echo false)" \
     "status.deg_gate_passed=$(eda_gate_passed deg && echo true || echo false)" \
-    "status.communication_gate_passed=$(eda_gate_passed communication && echo true || echo false)"
+    "status.communication_gate_passed=$(eda_gate_passed communication && echo true || echo false)" \
+    "status.regulation_gate_passed=$(eda_gate_passed regulation && echo true || echo false)"
 }
 
 update_workflow_status() {
