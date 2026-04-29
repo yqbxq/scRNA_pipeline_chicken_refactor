@@ -67,6 +67,9 @@ empty_annotation_summary_04 <- function() {
 
 manifest_clustered_keys_04 <- function(manifest) {
   output_names <- names(manifest$outputs %||% list())
+  if (is.null(output_names)) {
+    return(character(0))
+  }
   output_names[startsWith(output_names, "clustered_")]
 }
 
