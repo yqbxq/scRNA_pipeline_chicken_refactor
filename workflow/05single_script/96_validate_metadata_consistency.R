@@ -438,8 +438,14 @@ for (name in names(generated_tables)) {
 if (exists("questions") && nrow(questions) > 0 && length(missing_cols) == 0) {
   comparisons <- loaded_generated$comparisons
   nichenet_rows <- questions[questions$status == "active" & grepl("nichenet", questions$tools_to_run, ignore.case = TRUE), , drop = FALSE]
-  if (nrow(nichenet_rows) > 0 && nrow(comparisons) == 0) {
-    pass("semantic.nichenet_deg_consistency", "comparisons.tsv is empty, so NicheNet/DEG consistency is deferred until M3")
+  comparisons_is_m3_generated <- nrow(comparisons) > 0 &&
+    all(c("source_question_id", "contrast_axis") %in% colnames(comparisons))
+  if (nrow(nichenet_rows) > 0 && !comparisons_is_m3_generated) {
+    if (nrow(comparisons) == 0) {
+      pass("semantic.nichenet_deg_consistency", "comparisons.tsv is empty, so NicheNet/DEG consistency is deferred until M3")
+    } else {
+      pass("semantic.nichenet_deg_consistency", "comparisons.tsv is not M3-generated, so NicheNet/DEG consistency is deferred until M3")
+    }
   } else if (nrow(nichenet_rows) > 0) {
     searchable <- paste(apply(comparisons, 1, paste, collapse = " "), collapse = "\n")
     for (idx in seq_len(nrow(nichenet_rows))) {
