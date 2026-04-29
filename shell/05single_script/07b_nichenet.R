@@ -251,18 +251,35 @@ run_nichenet_one_07b <- function(geneset, background, potential_ligands, paths) 
   top_ligands <- head(activity$test_ligand, cfg$nichenet_top_ligand_n)
 
   links <- tryCatch(
-    nichenetr::get_weighted_ligand_target_links(
-      ligands = top_ligands,
-      geneset = geneset,
-      ligand_target_matrix = ligand_target_matrix_chicken,
-      n = cfg$nichenet_top_target_n
-    ),
-    error = function(e) data.frame(stringsAsFactors = FALSE)
+    {
+      per_ligand <- lapply(top_ligands, function(lg) {
+        tryCatch(
+          nichenetr::get_weighted_ligand_target_links(
+            ligand = lg,
+            geneset = geneset,
+            ligand_target_matrix = ligand_target_matrix_chicken,
+            n = cfg$nichenet_top_target_n
+          ),
+          error = function(e) NULL
+        )
+      })
+      per_ligand <- per_ligand[!vapply(per_ligand, is.null, logical(1))]
+      if (length(per_ligand) == 0) {
+        data.frame(ligand = character(0), target = character(0), weight = numeric(0), stringsAsFactors = FALSE)
+      } else {
+        dplyr::bind_rows(per_ligand)
+      }
+    },
+    error = function(e) data.frame(ligand = character(0), target = character(0), weight = numeric(0), stringsAsFactors = FALSE)
   )
   links <- as.data.frame(links, stringsAsFactors = FALSE)
-  for (col in c("ligand", "target", "weight")) {
-    if (!col %in% colnames(links)) {
-      links[[col]] <- if (identical(col, "weight")) NA_real_ else ""
+  if (nrow(links) == 0) {
+    links <- data.frame(ligand = character(0), target = character(0), weight = numeric(0), stringsAsFactors = FALSE)
+  } else {
+    for (col in c("ligand", "target", "weight")) {
+      if (!col %in% colnames(links)) {
+        links[[col]] <- if (identical(col, "weight")) NA_real_ else ""
+      }
     }
   }
   links <- links[, c("ligand", "target", "weight"), drop = FALSE]
