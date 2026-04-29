@@ -7,6 +7,7 @@ PIPELINE_ROOT="${PIPELINE_ROOT:-$(cd "${WORKFLOW_ROOT}/.." && pwd)}"
 
 source "${WORKFLOW_ROOT}/02lib/common.sh"
 
+ensure_metadata_fresh
 check_stage_deps "05_deg"
 
 MODULE_03D_MANIFEST="${MANIFEST_DIR}/03d_annotate/_manifest.json"

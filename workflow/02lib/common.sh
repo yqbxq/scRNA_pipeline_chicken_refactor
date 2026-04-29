@@ -132,6 +132,11 @@ export SAMPLE_SHEET="${SAMPLE_SHEET:-${METADATA_DIR}/samples.tsv}"
 export CANONICAL_SAMPLE_SHEET="${CANONICAL_SAMPLE_SHEET:-${METADATA_DIR}/samples.canonical.tsv}"
 export COMPARISON_SHEET="${COMPARISON_SHEET:-${METADATA_DIR}/comparisons.tsv}"
 export COMMUNICATION_PAIRS_SHEET="${COMMUNICATION_PAIRS_SHEET:-${METADATA_DIR}/communication_pairs.tsv}"
+export TRAJECTORY_PAIRS_SHEET="${TRAJECTORY_PAIRS_SHEET:-${METADATA_DIR}/trajectory_pairs.tsv}"
+export SCENIC_TARGETS_SHEET="${SCENIC_TARGETS_SHEET:-${METADATA_DIR}/scenic_targets.tsv}"
+export ENRICHMENT_TARGETS_SHEET="${ENRICHMENT_TARGETS_SHEET:-${METADATA_DIR}/enrichment_targets.tsv}"
+export DECONV_PAIRS_SHEET="${DECONV_PAIRS_SHEET:-${METADATA_DIR}/deconv_pairs.tsv}"
+export SPATIAL_PAIRS_SHEET="${SPATIAL_PAIRS_SHEET:-${METADATA_DIR}/spatial_pairs.tsv}"
 export DELIVERY_MANIFEST="${DELIVERY_MANIFEST:-${METADATA_DIR}/delivery_manifest.tsv}"
 export RECEIVED_FILES_MANIFEST="${RECEIVED_FILES_MANIFEST:-${METADATA_DIR}/received_files_manifest.tsv}"
 export INPUT_INVENTORY_FILE="${INPUT_INVENTORY_FILE:-${INTAKE_REPORT_DIR}/input_inventory.tsv}"
@@ -427,6 +432,43 @@ tsv_require_columns() {
       die "TSV 文件 ${file_path} 缺少必需列: ${column_name}"
     fi
   done
+}
+
+ensure_metadata_fresh() {
+  local questions_file="${ANALYSIS_QUESTIONS_FILE:-${METADATA_DIR}/analysis_questions.tsv}"
+  local generated_tables=(
+    "${COMPARISON_SHEET}"
+    "${COMMUNICATION_PAIRS_SHEET}"
+    "${TRAJECTORY_PAIRS_SHEET}"
+    "${SCENIC_TARGETS_SHEET}"
+    "${ENRICHMENT_TARGETS_SHEET}"
+    "${DECONV_PAIRS_SHEET}"
+    "${SPATIAL_PAIRS_SHEET}"
+  )
+  local generator="${PIPELINE_ROOT}/workflow/03stages/95_run_metadata_generator.sh"
+  local validator="${PIPELINE_ROOT}/workflow/03stages/96_validate_metadata.sh"
+  local table_path
+  local needs_generate=0
+
+  [[ -s "${questions_file}" ]] || die "缺少 analysis questions 表: ${questions_file}"
+  [[ -x "${generator}" ]] || die "缺少可执行 metadata generator: ${generator}"
+  [[ -x "${validator}" ]] || die "缺少可执行 metadata validator: ${validator}"
+
+  for table_path in "${generated_tables[@]}"; do
+    if [[ ! -s "${table_path}" || "${questions_file}" -nt "${table_path}" ]]; then
+      needs_generate=1
+      break
+    fi
+  done
+
+  if [[ "${needs_generate}" == "1" ]]; then
+    echo "[metadata] analysis_questions.tsv 更新或 Tier 2 表缺失，重新生成 metadata。"
+    RUN_METADATA_VALIDATION_AFTER_GENERATE=no bash "${generator}"
+  else
+    echo "[metadata] Tier 2 metadata 已是最新。"
+  fi
+
+  bash "${validator}"
 }
 
 prepare_project_state_dirs() {

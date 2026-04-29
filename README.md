@@ -192,6 +192,17 @@
   - `comparisons.tsv` 支持可选 `subset_column` / `subset_value`，两列必须同时填写或同时留空
   - 生成 canonical sample sheet
 
+### 5.3a 分析意图驱动 metadata
+
+`metadata/analysis_questions.tsv` 是分析问题的 Tier 1 单一真相。05/06/07
+stage 不直接维护模块输入表，而是在运行前调用 `ensure_metadata_fresh`：
+
+- 当 `analysis_questions.tsv` 比生成表更新，或任一 Tier 2 表缺失时，自动运行 `workflow/03stages/95_run_metadata_generator.sh`。
+- 随后运行 `workflow/03stages/96_validate_metadata.sh`，保证生成表和真实对象 metadata 的当前一致性。
+- 生成表包括 `comparisons.tsv`、`communication_pairs.tsv`、`trajectory_pairs.tsv`、`scenic_targets.tsv`、`enrichment_targets.tsv`、`deconv_pairs.tsv` 和 `spatial_pairs.tsv`。
+
+Tier 2 表为自动生成文件，不应手工编辑。后续新增 ST 或联合分析 stage 时，按 `docs/st_stage_metadata_hook_template.md` 在 `source common.sh` 后接入同一行 hook。
+
 ### 5.4 输入审计
 
 - `workflow/03stages/audit_inputs.sh`
