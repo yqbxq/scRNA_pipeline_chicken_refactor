@@ -36,6 +36,7 @@ get_single_script_config_07 <- function() {
   base$communication_summary_plot_png <- file.path(base$communication_figure_dir, "summary_jaccard.png")
   base$communication_report_md <- file.path(base$communication_report_dir, "report.md")
 
+  base$communication_cell_type_col <- env_or_default_03("COMMUNICATION_CELL_TYPE_COL", "cell_subtype")
   base$nichenet_resource_dir <- env_or_default_03("NICHENET_RESOURCE_DIR", file.path(base$project_root, "resources", "nichenet"))
   base$nichenet_lr_network_rds <- env_or_default_03("NICHENET_LR_NETWORK_RDS", file.path(base$nichenet_resource_dir, "lr_network_human_21122021.rds"))
   base$nichenet_ligand_target_matrix_rds <- env_or_default_03("NICHENET_LIGAND_TARGET_MATRIX_RDS", file.path(base$nichenet_resource_dir, "ligand_target_matrix_nsga2r_final.rds"))

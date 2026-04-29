@@ -154,9 +154,10 @@ Reserved tokens such as `all_cells`, `GC_subtypes`, `TC_subtypes`, `regions`,
 scope-specific rule or passes them to the future ST fan-out path.
 
 M2 semantic checks look for concrete subtype tokens in `cell_subtype` when an
-annotated object exposes that column. M5 panorama backfill must provide
-`cell_subtype` before subtype-level sender/receiver rows such as pGC/eGC/rgGC/lGC
-are treated as fully semantic-checked runtime inputs.
+annotated object exposes that column. M5 provides `cell_subtype` by defaulting
+panorama cells to broad `cell_type` labels and overwriting subcluster cells from
+04b annotations before subtype-level sender/receiver rows such as
+pGC/eGC/rgGC/lGC are treated as fully semantic-checked runtime inputs.
 
 ## Derived Communication Rows
 

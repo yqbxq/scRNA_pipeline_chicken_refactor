@@ -262,7 +262,7 @@ Tier 2 表为自动生成文件，不应手工编辑。后续新增 ST 或联合
 - `workflow/03stages/04_subcluster.sh`
   - `04a_subcluster_build.R`：按 `object_layers.tsv` 生成 subcluster 层；默认继承 panorama 选定的 normalization/integration，只有 layer 显式配置多候选时才进入候选模式。
   - `04a_review.R`：汇总 candidate diagnostics，写 `subcluster_review_summary.tsv` 和每层 `selected_integration.txt`。
-  - `04b_subcluster_annotate.R`：对已经 finalize 的 `clustered_<layer_id>` 复用 annotation helper，写 `annotated_<layer_id>` 和跨层注释汇总。
+  - `04b_subcluster_annotate.R`：对已经 finalize 的 `clustered_<layer_id>` 复用 annotation helper，写 `annotated_<layer_id>` 和跨层注释汇总，并把子层注释回填到 panorama 的 `cell_subtype` metadata。
   - `04c_subcluster_eda.R`：生成 subcluster review 报告，汇总 cluster count、注释置信度、condition split、panorama-vs-subcluster 对照。
 - `workflow/03stages/04d_cluster_robustness.sh`
   - `04d_cluster_robustness.R`：当前是 runnable placeholder，只写空 metrics schema 和报告；真实 scDesign3 robustness 留到后续里程碑。
@@ -339,7 +339,7 @@ gate 规则采用 Option B：
   - `07b_nichenet.R`：按 sender→receiver 方向运行 NicheNet；优先读 05 DEG，缺失时使用 receiver marker fallback。
   - `07c_communication_eda.R`：按 `pair_id + layer + condition` 汇总 CellChat / NicheNet 共识，输出审阅报告。
 
-`communication_pairs.tsv` 支持 `sender` / `receiver` 精确 cell type、CSV、`*` 和 `prefix_*`。`condition_split_var` / `condition_split_values` 用于把 syf、f5 等阶段拆开分别跑。NicheNet 三件套资源可用 `workflow/06tools/download_nichenet_resources.sh` 准备。
+`communication_pairs.tsv` 支持 `sender` / `receiver` 精确 cell type、CSV、`*` 和 `prefix_*`。`condition_split_var` / `condition_split_values` 用于把 syf、f5 等阶段拆开分别跑。07 默认使用 `COMMUNICATION_CELL_TYPE_COL=cell_subtype` 解析 sender/receiver；需要临时回退旧列时可显式设置该环境变量。NicheNet 三件套资源可用 `workflow/06tools/download_nichenet_resources.sh` 准备。
 
 主要输出：
 

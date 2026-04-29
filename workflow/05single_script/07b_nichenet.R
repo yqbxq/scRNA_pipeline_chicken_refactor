@@ -486,6 +486,7 @@ write_manifest_local(
     ligand_target_matrix_rds = cfg$nichenet_ligand_target_matrix_rds,
     weighted_networks_rds = cfg$nichenet_weighted_networks_rds,
     communication_pairs_sheet = cfg$communication_pairs_sheet,
+    communication_cell_type_col = cfg$communication_cell_type_col,
     module_05d = cfg$module_05d_manifest_path
   ),
   version = cfg$module_version,

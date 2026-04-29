@@ -365,7 +365,17 @@ communication_layer_status_07 <- function(cfg) {
 }
 
 resolve_cell_type_col_07 <- function(seu, layer_id, layer_role = "") {
-  candidates <- c()
+  configured <- Sys.getenv("COMMUNICATION_CELL_TYPE_COL", unset = "")
+  if (nzchar(configured) && configured != "cell_subtype" && configured != "auto") {
+    requested <- unique(split_csv_local(configured))
+    hit <- requested[requested %in% colnames(seu@meta.data)]
+    if (length(hit) == 0) {
+      return("")
+    }
+    return(hit[[1]])
+  }
+
+  candidates <- if (identical(configured, "auto")) c() else c("cell_subtype")
   if (!identical(layer_id, "panorama")) {
     candidates <- c(candidates, paste0(layer_id, "_cell_type"))
   }

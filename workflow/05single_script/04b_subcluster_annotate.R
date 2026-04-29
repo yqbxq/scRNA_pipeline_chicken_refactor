@@ -30,6 +30,7 @@ source_utf8(file.path(.script_dir, "helpers", "triage_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "layer_config_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "clustering_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "annotation_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "cell_subtype_backfill_utils.R"))
 
 load_required_packages(c("Seurat", "dplyr", "ggplot2", "tibble", "tidyr", "jsonlite"))
 
@@ -133,6 +134,7 @@ for (clustered_key in clustered_keys) {
   seu[[paste0(layer_id, "_cell_type")]] <- seu$annotation_label
   seu[[paste0(layer_id, "_cell_type_confidence")]] <- seu$annotation_confidence
   seu[[paste0(layer_id, "_annotation_relation")]] <- seu$annotation_evidence_relation
+  seu$cell_subtype <- seu$annotation_label
 
   annotated_rds <- file.path(checkpoint_dir, sprintf("%s_after_annotation.rds", layer_id))
   saveRDS(seu, annotated_rds)
@@ -211,9 +213,16 @@ triage_df <- if (length(triage_rows) > 0) dplyr::bind_rows(triage_rows) else emp
 triage_tsv <- file.path(cfg$subcluster_table_dir, "subcluster_annotation_triage.tsv")
 write_tsv_local(triage_df, triage_tsv)
 
+backfill_result <- backfill_panorama_cell_subtype_04(cfg, summary_df)
+
 output_entries$summary_tsv <- build_output_entry(summary_tsv, "tsv", module_name, "one row per annotated subcluster layer", base_dir = cfg$project_root, schema = infer_schema_from_df(summary_df))
 output_entries$subcluster_annotation_triage_tsv <- build_output_entry(triage_tsv, "tsv", module_name, "one row per subcluster annotation triage signal", base_dir = cfg$project_root, schema = infer_schema_from_df(triage_df))
 output_entries$layer_status_tsv <- build_output_entry(cfg$layer_status_file, "tsv", module_name, "one row per built/annotated object layer", base_dir = cfg$project_root)
+output_entries$panorama_cell_subtype_rds <- build_output_entry(backfill_result$panorama_rds, "rds", module_name, "panorama object with backfilled cell_subtype metadata", base_dir = cfg$project_root)
+output_entries$panorama_cell_subtype_backfill_tsv <- build_output_entry(backfill_result$summary_tsv, "tsv", module_name, "cell_subtype backfill summary by source layer", base_dir = cfg$project_root, schema = infer_schema_from_df(backfill_result$summary))
+if (nzchar(backfill_result$compat_rds)) {
+  output_entries$compatibility_panorama_cell_subtype_rds <- build_output_entry(backfill_result$compat_rds, "rds", module_name, "compatibility panorama object with backfilled cell_subtype metadata", base_dir = cfg$project_root)
+}
 
 if (file.exists(cfg$module_04b_manifest_path)) {
   unlink(cfg$module_04b_manifest_path)
@@ -225,11 +234,12 @@ write_manifest_local(
   base_dir = cfg$project_root,
   inputs = list(
     module_04a_manifest = cfg$module_04a_manifest_path,
+    module_03d_manifest = cfg$module_03d_manifest_path,
     marker_panel_dir = cfg$marker_panel_dir,
     layer_status_tsv = cfg$layer_status_file
   ),
   version = cfg$module_version,
-  depends_on = list(module_04a = cfg$module_04a_manifest_path)
+  depends_on = list(module_03d = cfg$module_03d_manifest_path, module_04a = cfg$module_04a_manifest_path)
 )
 
-message("04b 完成。annotated layers: ", length(summary_rows))
+message("04b 完成。annotated layers: ", length(summary_rows), "; panorama cell_subtype backfill: ", backfill_result$summary_tsv)

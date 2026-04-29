@@ -362,6 +362,7 @@ write_manifest_local(
     ortholog_csv = ortholog_csv,
     layer_status_tsv = cfg$layer_status_file,
     communication_pairs_sheet = cfg$communication_pairs_sheet,
+    communication_cell_type_col = cfg$communication_cell_type_col,
     module_03d = cfg$module_03d_manifest_path,
     module_04b = cfg$module_04b_manifest_path
   ),
