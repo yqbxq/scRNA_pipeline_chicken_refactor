@@ -2,7 +2,7 @@ question_id	question_zh	scope	sender_groups	receiver_groups	condition_split	cont
 A01_panorama_marker	panorama大类marker_GC_vs_TC	panorama	*	*	-	cluster_marker	deg+enrichment	P0	active		baseline_marker
 A02_GC_subtype_marker	GC四亚群marker_each_vs_others	GC_subcluster	*	*	-	cluster_marker	deg+enrichment	P0	active		GC_subtype_marker
 A03_TC_subtype_marker	TC亚群marker	TC_subcluster	*	*	-	cluster_marker	deg+enrichment	P0	planned		wait_TC_subcluster
-A04_ST_region_marker	ST_region_marker	ST_section	*	*	-	cluster_marker	deg+enrichment	P0	planned		ST_placeholder
+A04_ST_region_marker	ST_region_marker	ST_section	*	*	-	cluster_marker	deg+enrichment	P0	planned		wait_ST_section
 B01_GC_vs_TC	GC大类vsTC大类整体	panorama	[GC]	[TC]	-	directional_DEG	deg+enrichment	P0	active		cross_layer_DEG
 B02_GC_subtypes_pairwise	GC四亚群两两pairwise	GC_subcluster	[pGC,eGC,rgGC,lGC]	*	-	pairwise	deg+enrichment	P1	active		six_pairs
 B03_TC_subtypes_pairwise	TC亚群两两pairwise	TC_subcluster	[TC_*]	*	-	pairwise	deg+enrichment	P1	planned		wait_TC_subcluster
@@ -17,11 +17,11 @@ D02_TC_stage_DEG	TC大类syf_vs_f5	panorama	[TC]	-	group:syf,f5	contrast_only	de
 D03_GC_subtype_stage_DEG	每个GC亚群syf_vs_f5	GC_subcluster	*	-	group:syf,f5	contrast_only	deg+enrichment	P0	active		GC_subtype_stage_DEG
 D04_TC_subtype_stage_DEG	每个TC亚群syf_vs_f5	TC_subcluster	*	-	group:syf,f5	contrast_only	deg+enrichment	P1	planned		wait_TC_subcluster
 D05_panorama_global_stage	panorama整体syf_vs_f5不分celltype	panorama	all_cells	-	group:syf,f5	contrast_only	deg+enrichment	P2	active		global_stage_signature
-D06_ST_region_stage	每个ST_region_syf_vs_f5	ST_section	*	-	group:syf,f5	contrast_only	deg+enrichment	P1	planned		ST_placeholder
+D06_ST_region_stage	每个ST_region_syf_vs_f5	ST_section	*	-	group:syf,f5	contrast_only	deg+enrichment	P1	planned		wait_ST_section
 E01_GC_subtype_compo	GC四亚群比例syf_vs_f5	panorama	GC_subtypes	-	group:syf,f5	composition	composition_test	P0	active		GC_composition
 E02_TC_subtype_compo	TC亚群比例syf_vs_f5	panorama	TC_subtypes	-	group:syf,f5	composition	composition_test	P1	planned		wait_TC_subcluster
 E03_layer_compo	GC_vs_TC比例syf_vs_f5	panorama	[GC,TC]	-	group:syf,f5	composition	composition_test	P1	active		sampling_balance_control
-E04_ST_region_compo	ST_region比例syf_vs_f5	ST_section	regions	-	section:syf,f5	composition	composition_test	P1	planned		ST_placeholder
+E04_ST_region_compo	ST_region比例syf_vs_f5	ST_section	regions	-	section:syf,f5	composition	composition_test	P1	planned		wait_ST_section
 F01_TC_GC_bidir_baseline	TC和GC大类双向通讯baseline	panorama	[TC]	[GC]	-	bidirectional	cellchat+nichenet	P1	active		baseline_comm
 F02_TC_GC_bidir_split	TC和GC大类双向通讯syf_f5_split	panorama	[TC]	[GC]	group:syf,f5	bidirectional	cellchat+nichenet	P0	active		differential_comm_derived
 F03_TC_to_GC_each_baseline	TC到每个GC亚群baseline	panorama	[TC]	[pGC]|[eGC]|[rgGC]|[lGC]	-	directional	cellchat	P1	active		requires_cell_subtype
@@ -58,24 +58,24 @@ H02_GC_trajectory_split	GC_pseudotime_syf_f5_split	GC_subcluster	[pGC]	[lGC]	gro
 H03_TC_trajectory_baseline	TC轨迹baseline	TC_subcluster	auto	auto	-	lineage	trajectory+velocity	P2	planned		wait_TC_subcluster
 H04_TC_trajectory_split	TC轨迹syf_f5_split	TC_subcluster	auto	auto	group:syf,f5	lineage	trajectory+velocity	P3	planned		wait_TC_subcluster
 H05_GC_velocity	GC_RNA_velocity_vector_field	GC_subcluster	*	*	-	velocity	velocity	P0	active		independent_direction_check
-I01_ST_clustering	ST_spatial_clustering_to_region	ST_section	*	*	-	spatial_clustering	spatial_clustering	P0	planned		ST_placeholder
-I02_ST_region_marker	ST_region_marker_pairwise	ST_section	*	*	-	pairwise	deg+enrichment	P0	planned		ST_placeholder
-I03_ST_region_marker_syf	ST_region_pairwise_in_syf	ST_section	*	*	syf_only	pairwise	deg+enrichment	P1	planned		ST_placeholder
-I04_ST_region_marker_f5	ST_region_pairwise_in_f5	ST_section	*	*	f5_only	pairwise	deg+enrichment	P1	planned		ST_placeholder
-I05_ST_region_stage	每个ST_region_syf_vs_f5	ST_section	*	-	section:syf,f5	contrast_only	deg+enrichment	P0	planned		ST_placeholder
-I06_SVG	空间变异基因SVG	ST_section	all_spots	-	-	SVG	spark+spatialDE	P0	planned		ST_placeholder
-I07_SVG_by_stage	SVG_syf_vs_f5比较	ST_section	all_spots	-	section:syf,f5	SVG_diff	spark	P1	planned		ST_placeholder
-I08_deconv_panorama	panorama大类reference到ST去卷积	ST_section	panorama_ref	*	section:syf,f5	deconv_pair	rctd+cell2location	P0	planned		ST_placeholder
-I09_deconv_GC_subtype	GC四亚群reference到ST去卷积	ST_section	GC_sub_ref	*	section:syf,f5	deconv_pair	rctd	P0	planned		ST_placeholder
-I10_deconv_TC_subtype	TC亚群reference到ST去卷积	ST_section	TC_sub_ref	*	section:syf,f5	deconv_pair	rctd	P1	planned		ST_placeholder
-I11_deconv_validation	去卷积精度验证scDesign3	ST_section	synthetic	*	-	deconv_validation	scdesign3+rctd	P1	planned		ST_placeholder
-I12_ST_region_compo	ST_region比例syf_vs_f5	ST_section	regions	-	section:syf,f5	composition	composition_test	P1	planned		ST_placeholder
-I13_neighborhood	空间邻接生态位	ST_section	region	region	-	spatial_neighbor	squidpy	P0	planned		ST_placeholder
-I14_neighborhood_stage	邻接生态位syf_vs_f5比较	ST_section	region	region	section:syf,f5	spatial_neighbor	squidpy	P1	planned		ST_placeholder
-I15_ST_enrichment	空间DE或SVG富集	ST_section	[from_I05,I06]	-	-	enrichment_target	deg+enrichment	P1	planned	I05_ST_region_stage;I06_SVG	ST_placeholder
-I16_ST_decoupler	ST_decoupleR_TF_pathway_activity	ST_section	all_spots	-	-	regulation_per	decoupler	P1	planned		ST_placeholder
-I17_ST_decoupler_stage	ST_decoupleR_syf_vs_f5	ST_section	all_spots	-	section:syf,f5	regulation_stage	decoupler	P2	planned		ST_placeholder
-I18_traj_in_space	GC轨迹空间映射	ST_section	H01_results	*	section:syf,f5	spatial_overlay	rctd+stlearn	P0	planned	H01_GC_trajectory_baseline	ST_placeholder
-I19_comm_in_space_overlay	通讯空间叠图	ST_section	F02_results	*	section:syf,f5	spatial_overlay	rctd	P0	planned	F02_TC_GC_bidir_split	ST_placeholder
-I20_comm_neighborhood_check	通讯邻接一致性	ST_section	I19_results	I13_results	-	spatial_overlay	custom	P0	planned	I19_comm_in_space_overlay;I13_neighborhood	ST_placeholder
-I21_comm_final_figure	最终空间通讯图版	ST_section	I19+I20	*	-	spatial_overlay	visualization	P0	planned	I19_comm_in_space_overlay;I20_comm_neighborhood_check	ST_placeholder
+I01_ST_clustering	ST_spatial_clustering_to_region	ST_section	*	*	-	spatial_clustering	spatial_clustering	P0	planned		wait_ST_section
+I02_ST_region_marker	ST_region_marker_pairwise	ST_section	*	*	-	pairwise	deg+enrichment	P0	planned		wait_ST_section
+I03_ST_region_marker_syf	ST_region_pairwise_in_syf	ST_section	*	*	syf_only	pairwise	deg+enrichment	P1	planned		wait_ST_section
+I04_ST_region_marker_f5	ST_region_pairwise_in_f5	ST_section	*	*	f5_only	pairwise	deg+enrichment	P1	planned		wait_ST_section
+I05_ST_region_stage	每个ST_region_syf_vs_f5	ST_section	*	-	section:syf,f5	contrast_only	deg+enrichment	P0	planned		wait_ST_section
+I06_SVG	空间变异基因SVG	ST_section	all_spots	-	-	SVG	spark+spatialDE	P0	planned		requires_ST_SVG
+I07_SVG_by_stage	SVG_syf_vs_f5比较	ST_section	all_spots	-	section:syf,f5	SVG_diff	spark	P1	planned		requires_ST_SVG
+I08_deconv_panorama	panorama大类reference到ST去卷积	ST_section	panorama_ref	*	section:syf,f5	deconv_pair	rctd+cell2location	P0	planned		requires_deconv
+I09_deconv_GC_subtype	GC四亚群reference到ST去卷积	ST_section	GC_sub_ref	*	section:syf,f5	deconv_pair	rctd	P0	planned		requires_deconv
+I10_deconv_TC_subtype	TC亚群reference到ST去卷积	ST_section	TC_sub_ref	*	section:syf,f5	deconv_pair	rctd	P1	planned		wait_TC_subcluster_for_deconv
+I11_deconv_validation	去卷积精度验证scDesign3	ST_section	synthetic	*	-	deconv_validation	scdesign3+rctd	P1	planned		requires_deconv_validation
+I12_ST_region_compo	ST_region比例syf_vs_f5	ST_section	regions	-	section:syf,f5	composition	composition_test	P1	planned		wait_ST_section
+I13_neighborhood	空间邻接生态位	ST_section	region	region	-	spatial_neighbor	squidpy	P0	planned		requires_spatial_neighbors
+I14_neighborhood_stage	邻接生态位syf_vs_f5比较	ST_section	region	region	section:syf,f5	spatial_neighbor	squidpy	P1	planned		requires_spatial_neighbors
+I15_ST_enrichment	空间DE或SVG富集	ST_section	[from_I05,I06]	-	-	enrichment_target	deg+enrichment	P1	planned	I05_ST_region_stage;I06_SVG	depends_on_ST_DE_SVG
+I16_ST_decoupler	ST_decoupleR_TF_pathway_activity	ST_section	all_spots	-	-	regulation_per	decoupler	P1	planned		requires_ST_decoupler
+I17_ST_decoupler_stage	ST_decoupleR_syf_vs_f5	ST_section	all_spots	-	section:syf,f5	regulation_stage	decoupler	P2	planned		requires_ST_decoupler
+I18_traj_in_space	GC轨迹空间映射	ST_section	H01_results	*	section:syf,f5	spatial_overlay	rctd+stlearn	P0	planned	H01_GC_trajectory_baseline	requires_ST_scRNA_overlay
+I19_comm_in_space_overlay	通讯空间叠图	ST_section	F02_results	*	section:syf,f5	spatial_overlay	rctd	P0	planned	F02_TC_GC_bidir_split	requires_ST_comm_overlay
+I20_comm_neighborhood_check	通讯邻接一致性	ST_section	I19_results	I13_results	-	spatial_overlay	custom	P0	planned	I19_comm_in_space_overlay;I13_neighborhood	requires_ST_comm_overlay
+I21_comm_final_figure	最终空间通讯图版	ST_section	I19+I20	*	-	spatial_overlay	visualization	P0	planned	I19_comm_in_space_overlay;I20_comm_neighborhood_check	requires_final_ST_comm_figure

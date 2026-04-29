@@ -126,6 +126,25 @@ axis_targets <- c(
   enrichment_target = "enrichment_targets.tsv"
 )
 
+axis_tool_allow <- list(
+  cluster_marker = c("deg", "enrichment"),
+  directional_DEG = c("deg", "enrichment"),
+  pairwise = c("deg", "enrichment"),
+  contrast_only = c("deg", "enrichment"),
+  composition = c("composition_test"),
+  bidirectional = c("cellchat", "nichenet"),
+  directional = c("cellchat", "nichenet"),
+  sequential = c("cellchat", "nichenet"),
+  symmetric = c("cellchat", "nichenet"),
+  pairwise_comm = c("cellchat", "nichenet"),
+  regulation_per = c("scenic", "decoupler"),
+  regulation_pair = c("scenic", "decoupler"),
+  regulation_stage = c("scenic", "decoupler"),
+  lineage = c("trajectory", "velocity"),
+  velocity = c("velocity"),
+  enrichment_target = c("deg", "enrichment")
+)
+
 reserved_group_tokens <- c(
   "-", "*", "", "all_cells", "GC_subtypes", "TC_subtypes", "regions", "all_spots",
   "auto", "region", "synthetic", "panorama_ref", "GC_sub_ref", "TC_sub_ref",
@@ -148,6 +167,12 @@ valid_dsl <- function(x) {
   left_count <- if (identical(left_n, -1L)) 0L else length(left_n)
   right_count <- if (identical(right_n, -1L)) 0L else length(right_n)
   if (left_count != right_count) {
+    return(FALSE)
+  }
+  if (grepl("-->", x, fixed = TRUE)) {
+    return(FALSE)
+  }
+  if (grepl(">", gsub("->", "", x, fixed = TRUE), fixed = TRUE)) {
     return(FALSE)
   }
   grepl("^[A-Za-z0-9_*,+\\[\\]|>.-]+$", x, perl = TRUE)
@@ -179,6 +204,57 @@ parse_condition_split <- function(x) {
   }
   parts <- strsplit(x, ":", fixed = TRUE)[[1]]
   list(type = "column", column = parts[[1]], values = strsplit(parts[[2]], ",", fixed = TRUE)[[1]], ok = TRUE)
+}
+
+tools_for_axis_ok <- function(axis, tools_to_run) {
+  allow <- axis_tool_allow[[axis]]
+  if (is.null(allow)) {
+    return(TRUE)
+  }
+  tools <- tolower(split_list(tools_to_run, sep = "+"))
+  any(tools %in% allow)
+}
+
+find_dependency_cycle <- function(df) {
+  ids <- df$question_id
+  graph <- setNames(vector("list", length(ids)), ids)
+  for (idx in seq_len(nrow(df))) {
+    graph[[df$question_id[[idx]]]] <- intersect(split_list(df$depends_on[[idx]]), ids)
+  }
+
+  state <- setNames(rep(0L, length(ids)), ids)
+  stack <- character(0)
+  cycle <- character(0)
+
+  visit <- function(node) {
+    if (length(cycle) > 0) {
+      return(invisible(FALSE))
+    }
+    state[[node]] <<- 1L
+    stack <<- c(stack, node)
+    for (dep in graph[[node]]) {
+      if (state[[dep]] == 0L) {
+        visit(dep)
+      } else if (state[[dep]] == 1L) {
+        start <- match(dep, stack)
+        cycle <<- c(stack[start:length(stack)], dep)
+        return(invisible(FALSE))
+      }
+    }
+    stack <<- head(stack, -1L)
+    state[[node]] <<- 2L
+    invisible(TRUE)
+  }
+
+  for (id in ids) {
+    if (state[[id]] == 0L) {
+      visit(id)
+    }
+    if (length(cycle) > 0) {
+      break
+    }
+  }
+  cycle
 }
 
 scope_rds_candidates <- function(scope) {
@@ -313,6 +389,14 @@ if (nrow(questions) > 0 && length(missing_cols) == 0) {
     if (!grepl("^[A-Za-z0-9_.+-]+$", row$tools_to_run[[1]], perl = TRUE)) {
       fail("questions.tools_syntax", sprintf("invalid tools_to_run: %s", row$tools_to_run[[1]]), qid)
     }
+    if (identical(row$status[[1]], "active") && !tools_for_axis_ok(row$contrast_axis[[1]], row$tools_to_run[[1]])) {
+      fail(
+        "questions.axis_tools",
+        sprintf("tools_to_run=%s is inconsistent with contrast_axis=%s", row$tools_to_run[[1]], row$contrast_axis[[1]]),
+        qid,
+        sprintf("Use one of: %s", paste(axis_tool_allow[[row$contrast_axis[[1]]]], collapse = ", "))
+      )
+    }
   }
 
   st_rows <- questions[questions$scope == "ST_section", , drop = FALSE]
@@ -337,6 +421,13 @@ if (nrow(questions) > 0 && length(missing_cols) == 0) {
     fail("questions.depends_on", paste("unknown depends_on IDs:", paste(missing_dep_ids, collapse = ", ")))
   } else {
     pass("questions.depends_on", "depends_on references are valid or empty")
+  }
+
+  dep_cycle <- find_dependency_cycle(questions)
+  if (length(dep_cycle) > 0) {
+    fail("questions.depends_on_cycle", paste("depends_on cycle detected:", paste(dep_cycle, collapse = " -> ")))
+  } else {
+    pass("questions.depends_on_cycle", "depends_on graph is acyclic")
   }
 
   scope_meta <- load_scope_metadata(setdiff(unique(active_rows$scope), "ST_section"))
@@ -448,6 +539,7 @@ if (exists("questions") && nrow(questions) > 0 && length(missing_cols) == 0) {
     }
   } else if (nrow(nichenet_rows) > 0) {
     searchable <- paste(apply(comparisons, 1, paste, collapse = " "), collapse = "\n")
+    missing_nichenet_support <- 0L
     for (idx in seq_len(nrow(nichenet_rows))) {
       row <- nichenet_rows[idx, , drop = FALSE]
       receivers <- extract_group_tokens(row$receiver_groups[[1]])
@@ -456,6 +548,7 @@ if (exists("questions") && nrow(questions) > 0 && length(missing_cols) == 0) {
       }
       hits <- vapply(receivers, function(token) grepl(token, searchable, fixed = TRUE), logical(1))
       if (!any(hits)) {
+        missing_nichenet_support <- missing_nichenet_support + 1L
         fail(
           "semantic.nichenet_deg_consistency",
           sprintf("no comparison row appears to support NicheNet receiver(s): %s", paste(receivers, collapse = ", ")),
@@ -463,6 +556,9 @@ if (exists("questions") && nrow(questions) > 0 && length(missing_cols) == 0) {
           "Ensure M3 fan-out creates matching receiver DEG comparisons."
         )
       }
+    }
+    if (missing_nichenet_support == 0L) {
+      pass("semantic.nichenet_deg_consistency", sprintf("%s active NicheNet rows have generated comparison support", nrow(nichenet_rows)))
     }
   }
 }
