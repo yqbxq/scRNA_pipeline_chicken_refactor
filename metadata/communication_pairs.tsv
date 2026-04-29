@@ -1,0 +1,2 @@
+# AUTO-GENERATED. Edit metadata/analysis_questions.tsv instead.
+pair_id	source_question_id	layer_scope	sender	receiver	subset_column	subset_value	condition_split_var	condition_split_values	tool	enabled	notes

@@ -9,6 +9,16 @@
 - 固定部分和可变部分分开
 - 环境拆开，避免主流程、velocity、SCENIC 互相污染
 
+## all-repo 分支说明
+
+`all-repo` 是当前单 repo 内部布局整合分支。旧的 `v00`-`v07`
+里程碑提交保留在本分支祖先历史中，当前本地 `v08` 调控模块 WIP 已作为单独提交导入。
+
+布局和迁移索引见：
+
+- `docs/monorepo_layout.md`
+- `docs/legacy_branch_migration.md`
+
 ## 0. 当前规范入口
 
 从这一版开始，workflow 的规范执行顺序已经重构为：
