@@ -1,20 +1,20 @@
 # AUTO-GENERATED. Edit metadata/analysis_questions.tsv instead.
 target_id	source_question_id	layer_scope	cell_subset	contrast_axis	condition_split_var	condition_split_values	method	enabled	notes
-G01_panorama_TF__GC	G01_panorama_TF	panorama	GC	regulation_per			both	yes	-
-G01_panorama_TF__TC	G01_panorama_TF	panorama	TC	regulation_per			both	yes	-
-G02_GC_subtype_TF__pGC	G02_GC_subtype_TF	GC_subcluster	pGC	regulation_per			both	yes	-
-G02_GC_subtype_TF__eGC	G02_GC_subtype_TF	GC_subcluster	eGC	regulation_per			both	yes	-
-G02_GC_subtype_TF__rgGC	G02_GC_subtype_TF	GC_subcluster	rgGC	regulation_per			both	yes	-
-G02_GC_subtype_TF__lGC	G02_GC_subtype_TF	GC_subcluster	lGC	regulation_per			both	yes	-
+G01_panorama_TF__GC	G01_panorama_TF	panorama	GC	regulation_per			both	yes	
+G01_panorama_TF__TC	G01_panorama_TF	panorama	TC	regulation_per			both	yes	
+G02_GC_subtype_TF__pGC	G02_GC_subtype_TF	GC_subcluster	pGC	regulation_per			both	yes	
+G02_GC_subtype_TF__eGC	G02_GC_subtype_TF	GC_subcluster	eGC	regulation_per			both	yes	
+G02_GC_subtype_TF__rgGC	G02_GC_subtype_TF	GC_subcluster	rgGC	regulation_per			both	yes	
+G02_GC_subtype_TF__lGC	G02_GC_subtype_TF	GC_subcluster	lGC	regulation_per			both	yes	
 G04_GC_subtype_TF_pairwise__pGC_vs_eGC	G04_GC_subtype_TF_pairwise	GC_subcluster	pGC,eGC	regulation_pair			decoupler	yes	pGC_vs_eGC
 G04_GC_subtype_TF_pairwise__pGC_vs_rgGC	G04_GC_subtype_TF_pairwise	GC_subcluster	pGC,rgGC	regulation_pair			decoupler	yes	pGC_vs_rgGC
 G04_GC_subtype_TF_pairwise__pGC_vs_lGC	G04_GC_subtype_TF_pairwise	GC_subcluster	pGC,lGC	regulation_pair			decoupler	yes	pGC_vs_lGC
 G04_GC_subtype_TF_pairwise__eGC_vs_rgGC	G04_GC_subtype_TF_pairwise	GC_subcluster	eGC,rgGC	regulation_pair			decoupler	yes	eGC_vs_rgGC
 G04_GC_subtype_TF_pairwise__eGC_vs_lGC	G04_GC_subtype_TF_pairwise	GC_subcluster	eGC,lGC	regulation_pair			decoupler	yes	eGC_vs_lGC
 G04_GC_subtype_TF_pairwise__rgGC_vs_lGC	G04_GC_subtype_TF_pairwise	GC_subcluster	rgGC,lGC	regulation_pair			decoupler	yes	rgGC_vs_lGC
-G06_GC_stage_TF__GC_stage	G06_GC_stage_TF	panorama	GC	regulation_stage	group_id	syf,f5	decoupler	yes	-
-G07_TC_stage_TF__TC_stage	G07_TC_stage_TF	panorama	TC	regulation_stage	group_id	syf,f5	decoupler	yes	-
-G08_GC_subtype_stage_TF__pGC_stage	G08_GC_subtype_stage_TF	GC_subcluster	pGC	regulation_stage	group_id	syf,f5	decoupler	yes	-
-G08_GC_subtype_stage_TF__eGC_stage	G08_GC_subtype_stage_TF	GC_subcluster	eGC	regulation_stage	group_id	syf,f5	decoupler	yes	-
-G08_GC_subtype_stage_TF__rgGC_stage	G08_GC_subtype_stage_TF	GC_subcluster	rgGC	regulation_stage	group_id	syf,f5	decoupler	yes	-
-G08_GC_subtype_stage_TF__lGC_stage	G08_GC_subtype_stage_TF	GC_subcluster	lGC	regulation_stage	group_id	syf,f5	decoupler	yes	-
+G06_GC_stage_TF__GC_stage	G06_GC_stage_TF	panorama	GC	regulation_stage	group_id	syf,f5	decoupler	yes	
+G07_TC_stage_TF__TC_stage	G07_TC_stage_TF	panorama	TC	regulation_stage	group_id	syf,f5	decoupler	yes	
+G08_GC_subtype_stage_TF__pGC_stage	G08_GC_subtype_stage_TF	GC_subcluster	pGC	regulation_stage	group_id	syf,f5	decoupler	yes	
+G08_GC_subtype_stage_TF__eGC_stage	G08_GC_subtype_stage_TF	GC_subcluster	eGC	regulation_stage	group_id	syf,f5	decoupler	yes	
+G08_GC_subtype_stage_TF__rgGC_stage	G08_GC_subtype_stage_TF	GC_subcluster	rgGC	regulation_stage	group_id	syf,f5	decoupler	yes	
+G08_GC_subtype_stage_TF__lGC_stage	G08_GC_subtype_stage_TF	GC_subcluster	lGC	regulation_stage	group_id	syf,f5	decoupler	yes	

@@ -123,20 +123,22 @@ Current generated columns:
 
 | File | Columns |
 |---|---|
-| `comparisons.tsv` | `comparison_id`, `source_question_id`, `layer_scope`, `contrast_axis`, `ident_1`, `ident_2`, `subset_column`, `subset_value`, `group_var`, `batch_var`, `enabled`, `min_biological_replicates`, `force_exploratory`, `min_cells_per_group`, `logfc_threshold`, `notes` |
-| `communication_pairs.tsv` | `pair_id`, `source_question_id`, `layer_scope`, `sender`, `receiver`, `subset_column`, `subset_value`, `condition_split_var`, `condition_split_values`, `tool`, `enabled`, `notes` |
+| `comparisons.tsv` | `comparison_id`, `source_question_id`, `layer_scope`, `contrast_axis`, `analysis_mode`, `analysis_unit`, `stat_level`, `group_var`, `ident_1`, `ident_2`, `subset_column`, `subset_value`, `aggregation_group_var`, `composition_group_var`, `batch_var`, `enabled`, `min_biological_replicates`, `force_exploratory`, `min_cells_per_group`, `logfc_threshold`, `produces_gene_program`, `gene_program_role`, `notes` |
+| `communication_pairs.tsv` | `pair_id`, `source_question_id`, `layer_scope`, `sender`, `receiver`, `condition_split_var`, `condition_split_values`, `tool`, `communication_mode`, `receiver_gene_program_source`, `baseline_marker_comparison_id`, `receiver_deg_comparison_id`, `direction_filter`, `requires_cell_subtype`, `enabled`, `notes` |
 | `trajectory_pairs.tsv` | `trajectory_id`, `source_question_id`, `layer_scope`, `root_group`, `terminal_group`, `condition_split_var`, `condition_split_values`, `method`, `enabled`, `notes` |
 | `scenic_targets.tsv` | `target_id`, `source_question_id`, `layer_scope`, `cell_subset`, `contrast_axis`, `condition_split_var`, `condition_split_values`, `method`, `enabled`, `notes` |
-| `enrichment_targets.tsv` | `target_id`, `source_question_id`, `comparison_id`, `layer_scope`, `organism`, `database`, `min_genes`, `enabled`, `notes` |
+| `enrichment_targets.tsv` | `target_id`, `source_question_id`, `comparison_id`, `layer_scope`, `analysis_mode`, `gene_program_role`, `organism`, `database`, `min_genes`, `enabled`, `notes` |
+| `gene_program_targets.tsv` | `comparison_id`, `source_question_id`, `layer_scope`, `analysis_mode`, `gene_program_role`, `preferred_for_downstream`, `expected_result_level`, `formal_preferred`, `nichenet_eligible`, `enrichment_eligible`, `notes` |
 | `deconv_pairs.tsv` | `deconv_id`, `source_question_id`, `st_scope`, `reference_scope`, `section_filter`, `condition_split_var`, `condition_split_values`, `tool`, `enabled`, `notes` |
 | `spatial_pairs.tsv` | `spatial_pair_id`, `source_question_id`, `st_scope`, `sender`, `receiver`, `contrast_axis`, `condition_split_var`, `condition_split_values`, `tool`, `enabled`, `notes` |
 
 ## M3 Fan-Out Contract
 
-M3 reads all 80 materialized rows but processes only `status=active`. Current
-counts are 38 active and 42 planned rows. The 24 ST rows are all planned, so M3
-must write empty `deconv_pairs.tsv` and `spatial_pairs.tsv` with valid headers
-until ST-H activates and implements ST fan-out.
+M3 reads all 80 materialized rows and processes active rows for executable
+scRNA modules. A small set of planned communication rows is emitted with
+`enabled=no` so the final communication schema stays stable. The 24 ST rows are
+all planned, so M3 must write empty `deconv_pairs.tsv` and `spatial_pairs.tsv`
+with valid headers until ST-H activates and implements ST fan-out.
 
 `contrast_axis` is the dispatch key:
 
@@ -145,6 +147,7 @@ until ST-H activates and implements ST fan-out.
 - `scenic_targets.tsv`: `regulation_per`, `regulation_pair`, `regulation_stage`
 - `trajectory_pairs.tsv`: `lineage`, `velocity`
 - `enrichment_targets.tsv`: derived from generated comparisons whose source question has `tools_to_run` containing `enrichment`
+- `gene_program_targets.tsv`: derived from generated comparisons where `produces_gene_program=yes`
 - `deconv_pairs.tsv` / `spatial_pairs.tsv`: ST-H only; current implementation is schema-only
 
 Reserved tokens such as `all_cells`, `GC_subtypes`, `TC_subtypes`, `regions`,

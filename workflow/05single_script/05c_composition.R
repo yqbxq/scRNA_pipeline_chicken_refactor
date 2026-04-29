@@ -57,13 +57,13 @@ run_formal_propeller_05 <- function(seu, vars) {
   require_formal_pkg_05c(c("speckle", "limma"), "formal composition")
 
   meta_df <- standardize_design_metadata_df_05(seu@meta.data)
-  meta_df$cluster_id <- as.character(seu$cluster_id)
+  meta_df$deg_composition_group <- as.character(seu$deg_composition_group)
   meta_df$group_id <- trimws(as.character(meta_df[[vars$group_var]]))
   meta_df$batch <- if (vars$batch_var %in% colnames(meta_df)) trimws(as.character(meta_df[[vars$batch_var]])) else "default"
   meta_df$batch[!nzchar(meta_df$batch)] <- "default"
 
   props <- speckle::getTransformedProps(
-    clusters = meta_df$cluster_id,
+    clusters = meta_df$deg_composition_group,
     sample = meta_df$sample_id,
     transform = "logit"
   )
@@ -131,12 +131,44 @@ for (idx in seq_len(nrow(layer_status_df))) {
     cmp_paths <- composition_paths_05(cfg, layer_id, vars$comparison_id)
     subset_result <- subset_cells_for_comparison(obj, vars)
 
+    if (!identical(vars$analysis_mode, "composition")) {
+      write_tsv_local(empty_gate_summary_05(), cmp_paths$gate_summary_tsv)
+      write_tsv_local(
+        data.frame(
+          comparison_id = vars$comparison_id,
+          layer_id = layer_id,
+          analysis_mode = vars$analysis_mode,
+          composition_group_var = vars$composition_group_var,
+          inference_status = "skipped_non_composition",
+          reason = "05c composition is only run for composition rows",
+          warning_banner = "",
+          stringsAsFactors = FALSE
+        ),
+        cmp_paths$status_tsv
+      )
+      manifest_rows[[length(manifest_rows) + 1]] <- data.frame(
+        layer_id = layer_id,
+        comparison_id = vars$comparison_id,
+        analysis_mode = vars$analysis_mode,
+        composition_group_var = vars$composition_group_var,
+        inference_status = "skipped_non_composition",
+        proportion_tsv = "",
+        formal_results_tsv = "",
+        gate_summary_tsv = normalizePath(cmp_paths$gate_summary_tsv, winslash = "/", mustWork = FALSE),
+        status_tsv = normalizePath(cmp_paths$status_tsv, winslash = "/", mustWork = FALSE),
+        stringsAsFactors = FALSE
+      )
+      next
+    }
+
     if (!identical(subset_result$status, "ok")) {
       write_tsv_local(empty_gate_summary_05(), cmp_paths$gate_summary_tsv)
       write_tsv_local(
         data.frame(
           comparison_id = vars$comparison_id,
           layer_id = layer_id,
+          analysis_mode = vars$analysis_mode,
+          composition_group_var = vars$composition_group_var,
           inference_status = "skipped",
           reason = subset_result$reason,
           warning_banner = "",
@@ -147,8 +179,10 @@ for (idx in seq_len(nrow(layer_status_df))) {
       manifest_rows[[length(manifest_rows) + 1]] <- data.frame(
         layer_id = layer_id,
         comparison_id = vars$comparison_id,
+        analysis_mode = vars$analysis_mode,
+        composition_group_var = vars$composition_group_var,
         inference_status = "skipped",
-        proportion_tsv = normalizePath(layer_paths$proportion_tsv, winslash = "/", mustWork = FALSE),
+        proportion_tsv = "",
         formal_results_tsv = "",
         gate_summary_tsv = normalizePath(cmp_paths$gate_summary_tsv, winslash = "/", mustWork = FALSE),
         status_tsv = normalizePath(cmp_paths$status_tsv, winslash = "/", mustWork = FALSE),
@@ -158,7 +192,48 @@ for (idx in seq_len(nrow(layer_status_df))) {
       next
     }
 
-    obj_sub <- subset_result$object
+    composition_result <- resolve_composition_group_var_05(subset_result$object, vars)
+    if (!identical(composition_result$status, "ok")) {
+      write_tsv_local(empty_gate_summary_05(), cmp_paths$gate_summary_tsv)
+      write_tsv_local(
+        data.frame(
+          comparison_id = vars$comparison_id,
+          layer_id = layer_id,
+          analysis_mode = vars$analysis_mode,
+          composition_group_var = vars$composition_group_var,
+          inference_status = "skipped",
+          reason = composition_result$reason,
+          warning_banner = "",
+          stringsAsFactors = FALSE
+        ),
+        cmp_paths$status_tsv
+      )
+      manifest_rows[[length(manifest_rows) + 1]] <- data.frame(
+        layer_id = layer_id,
+        comparison_id = vars$comparison_id,
+        analysis_mode = vars$analysis_mode,
+        composition_group_var = vars$composition_group_var,
+        inference_status = "skipped",
+        proportion_tsv = "",
+        formal_results_tsv = "",
+        gate_summary_tsv = normalizePath(cmp_paths$gate_summary_tsv, winslash = "/", mustWork = FALSE),
+        status_tsv = normalizePath(cmp_paths$status_tsv, winslash = "/", mustWork = FALSE),
+        stringsAsFactors = FALSE
+      )
+      report_lines <- c(report_lines, sprintf("### `%s`", vars$comparison_id), sprintf("- status: skipped; reason: %s", composition_result$reason))
+      next
+    }
+
+    obj_sub <- composition_result$object
+    obj_sub$deg_composition_group <- as.character(obj_sub@meta.data[[composition_result$group_var]])
+    cmp_proportion_df <- sample_level_proportion_summary_05(
+      obj_sub,
+      cluster_var = "deg_composition_group",
+      sample_var = "sample_id",
+      group_var = vars$group_var
+    )
+    write_tsv_local(cmp_proportion_df, cmp_paths$proportion_tsv)
+
     gate <- replicate_gate_summary_05(obj_sub@meta.data, vars)
     write_tsv_local(gate$summary, cmp_paths$gate_summary_tsv)
 
@@ -169,6 +244,8 @@ for (idx in seq_len(nrow(layer_status_df))) {
         data.frame(
           comparison_id = vars$comparison_id,
           layer_id = layer_id,
+          analysis_mode = vars$analysis_mode,
+          composition_group_var = vars$composition_group_var,
           inference_status = status,
           reason = gate$reason,
           warning_banner = warning_banner,
@@ -179,8 +256,10 @@ for (idx in seq_len(nrow(layer_status_df))) {
       manifest_rows[[length(manifest_rows) + 1]] <- data.frame(
         layer_id = layer_id,
         comparison_id = vars$comparison_id,
+        analysis_mode = vars$analysis_mode,
+        composition_group_var = vars$composition_group_var,
         inference_status = status,
-        proportion_tsv = normalizePath(layer_paths$proportion_tsv, winslash = "/", mustWork = FALSE),
+        proportion_tsv = normalizePath(cmp_paths$proportion_tsv, winslash = "/", mustWork = FALSE),
         formal_results_tsv = "",
         gate_summary_tsv = normalizePath(cmp_paths$gate_summary_tsv, winslash = "/", mustWork = FALSE),
         status_tsv = normalizePath(cmp_paths$status_tsv, winslash = "/", mustWork = FALSE),
@@ -196,6 +275,8 @@ for (idx in seq_len(nrow(layer_status_df))) {
       data.frame(
         comparison_id = vars$comparison_id,
         layer_id = layer_id,
+        analysis_mode = vars$analysis_mode,
+        composition_group_var = vars$composition_group_var,
         inference_status = "formal",
         reason = gate$reason,
         warning_banner = "",
@@ -206,8 +287,10 @@ for (idx in seq_len(nrow(layer_status_df))) {
     manifest_rows[[length(manifest_rows) + 1]] <- data.frame(
       layer_id = layer_id,
       comparison_id = vars$comparison_id,
+      analysis_mode = vars$analysis_mode,
+      composition_group_var = vars$composition_group_var,
       inference_status = "formal",
-      proportion_tsv = normalizePath(layer_paths$proportion_tsv, winslash = "/", mustWork = FALSE),
+      proportion_tsv = normalizePath(cmp_paths$proportion_tsv, winslash = "/", mustWork = FALSE),
       formal_results_tsv = normalizePath(cmp_paths$formal_results_tsv, winslash = "/", mustWork = FALSE),
       gate_summary_tsv = normalizePath(cmp_paths$gate_summary_tsv, winslash = "/", mustWork = FALSE),
       status_tsv = normalizePath(cmp_paths$status_tsv, winslash = "/", mustWork = FALSE),
@@ -218,7 +301,8 @@ for (idx in seq_len(nrow(layer_status_df))) {
 }
 
 manifest_df <- if (length(manifest_rows) > 0) dplyr::bind_rows(manifest_rows) else empty_df_05(c(
-  "layer_id", "comparison_id", "inference_status", "proportion_tsv",
+  "layer_id", "comparison_id", "analysis_mode", "composition_group_var",
+  "inference_status", "proportion_tsv",
   "formal_results_tsv", "gate_summary_tsv", "status_tsv"
 ))
 manifest_tsv <- file.path(cfg$composition_table_dir, "composition_manifest.tsv")

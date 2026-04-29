@@ -51,9 +51,6 @@ m3_write_generated_tsv <- function(df, path, cols) {
     }
   }
   df <- df[, cols, drop = FALSE]
-  if ("notes" %in% colnames(df) && nrow(df) > 0) {
-    df$notes[!nzchar(df$notes)] <- "-"
-  }
   con <- file(path, open = "w", encoding = "UTF-8")
   on.exit(close(con), add = TRUE)
   writeLines("# AUTO-GENERATED. Edit metadata/analysis_questions.tsv instead.", con, useBytes = TRUE)
@@ -148,7 +145,7 @@ m3_parse_condition_split <- function(x) {
     return(list(type = "none", column = "", values = character(0)))
   }
   if (x %in% c("syf_only", "f5_only")) {
-    return(list(type = "subset", column = "group", values = sub("_only$", "", x)))
+    return(list(type = "subset", column = "group_id", values = sub("_only$", "", x)))
   }
   parts <- strsplit(x, ":", fixed = TRUE)[[1]]
   if (length(parts) == 2) {

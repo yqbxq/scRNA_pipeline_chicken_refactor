@@ -1,31 +1,134 @@
 m3_communication_cols <- c(
   "pair_id", "source_question_id", "layer_scope", "sender", "receiver",
-  "subset_column", "subset_value", "condition_split_var",
-  "condition_split_values", "tool", "enabled", "notes"
+  "condition_split_var", "condition_split_values", "tool", "communication_mode",
+  "receiver_gene_program_source", "baseline_marker_comparison_id",
+  "receiver_deg_comparison_id", "direction_filter", "requires_cell_subtype",
+  "enabled", "notes"
 )
 
-m3_communication_row <- function(q, suffix, sender, receiver, tool, notes = "", pair_id = "") {
-  subset <- m3_condition_subset(q$condition_split)
-  split <- m3_condition_fields(q$condition_split)
-  list(
-    pair_id = if (nzchar(pair_id)) pair_id else paste(q$question_id, m3_safe_id(suffix), sep = "__"),
-    source_question_id = q$question_id,
-    layer_scope = q$scope,
-    sender = sender,
-    receiver = receiver,
-    subset_column = subset$subset_column,
-    subset_value = subset$subset_value,
-    condition_split_var = split$var,
-    condition_split_values = split$values,
-    tool = tool,
-    enabled = "yes",
-    notes = notes
-  )
-}
+m3_gc_subtypes <- c("pGC", "eGC", "rgGC", "lGC")
 
 m3_comm_tool <- function(q) {
   mode <- m3_tool_mode(q$tools_to_run, c("cellchat", "nichenet"), both_label = "both")
   if (nzchar(mode)) mode else "cellchat"
+}
+
+m3_comm_enabled <- function(q) {
+  if (identical(q$status[[1]], "active")) "yes" else "no"
+}
+
+m3_comm_mode <- function(q, tool = "") {
+  if (identical(tool, "differential")) {
+    return("differential_summary")
+  }
+  split <- m3_condition_fields(q$condition_split)
+  if (nzchar(split$var)) "condition_split" else "baseline"
+}
+
+m3_comm_requires_cell_subtype <- function(q, sender, receiver) {
+  if (q$question_id[[1]] %in% c("F14_panorama_screen_baseline", "F15_panorama_screen_split", "F18_TC_screen_baseline", "F19_TC_screen_split")) {
+    return("no")
+  }
+  if (q$scope[[1]] %in% c("GC_subcluster")) {
+    return("yes")
+  }
+  tokens <- unlist(strsplit(paste(sender, receiver, sep = ","), ",", fixed = TRUE), use.names = FALSE)
+  if (any(tokens %in% c(m3_gc_subtypes, "TC_*"))) "yes" else "no"
+}
+
+m3_comm_direction_filter <- function(q, tool, pair_id = "") {
+  if (tool %in% c("differential")) {
+    return(ifelse(pair_id %in% c("F26_panorama_screen_diff"), "no", "yes"))
+  }
+  if (q$question_id[[1]] %in% c(
+    "F09_GC_dev_skip", "F10_GC_feedback", "F13_GC_subtype_pairwise",
+    "F14_panorama_screen_baseline", "F15_panorama_screen_split",
+    "F16_GC_screen_baseline", "F17_GC_screen_split",
+    "F18_TC_screen_baseline", "F19_TC_screen_split"
+  )) {
+    return("no")
+  }
+  "yes"
+}
+
+m3_marker_for_receiver <- function(receiver) {
+  receiver <- m3_trim(receiver)
+  if (!nzchar(receiver) || receiver %in% c("*", "TC_*")) {
+    return("")
+  }
+  tokens <- unlist(strsplit(receiver, ",", fixed = TRUE), use.names = FALSE)
+  tokens <- m3_trim(tokens)
+  tokens <- tokens[nzchar(tokens)]
+  if (length(tokens) == 1L && tokens %in% m3_gc_subtypes) {
+    return(sprintf("A02_GC_subtype_marker__%s_vs_rest", tokens))
+  }
+  if (length(tokens) > 1L && all(tokens %in% m3_gc_subtypes)) {
+    return(paste(sprintf("A02_GC_subtype_marker__%s_vs_rest", tokens), collapse = ","))
+  }
+  if (identical(receiver, "TC")) {
+    return("A01_panorama_marker__TC_vs_rest")
+  }
+  if (identical(receiver, "GC") || all(tokens %in% m3_gc_subtypes)) {
+    return("A01_panorama_marker__GC_vs_rest")
+  }
+  ""
+}
+
+m3_condition_deg_for_receiver <- function(receiver) {
+  receiver <- m3_trim(receiver)
+  tokens <- unlist(strsplit(receiver, ",", fixed = TRUE), use.names = FALSE)
+  tokens <- m3_trim(tokens)
+  tokens <- tokens[nzchar(tokens)]
+  if (length(tokens) == 1L && tokens %in% m3_gc_subtypes) {
+    return(sprintf("D03_GC_subtype_stage_DEG__%s_syf_vs_f5", tokens))
+  }
+  if (length(tokens) > 1L && all(tokens %in% m3_gc_subtypes)) {
+    return(paste(sprintf("D03_GC_subtype_stage_DEG__%s_syf_vs_f5", tokens), collapse = ","))
+  }
+  if (identical(receiver, "TC")) {
+    return("D02_TC_stage_DEG__TC_syf_vs_f5")
+  }
+  if (identical(receiver, "GC") || all(tokens %in% m3_gc_subtypes)) {
+    return("D01_GC_stage_DEG__GC_syf_vs_f5")
+  }
+  ""
+}
+
+m3_comm_row <- function(q, pair_id, sender, receiver, tool, notes = "",
+                        baseline_marker_comparison_id = NULL,
+                        receiver_deg_comparison_id = NULL,
+                        receiver_gene_program_source = NULL,
+                        direction_filter = NULL,
+                        requires_cell_subtype = NULL) {
+  split <- m3_condition_fields(q$condition_split)
+  mode <- m3_comm_mode(q, tool)
+  baseline <- baseline_marker_comparison_id %||% m3_marker_for_receiver(receiver)
+  deg <- receiver_deg_comparison_id %||% if (identical(mode, "condition_split")) m3_condition_deg_for_receiver(receiver) else ""
+  source <- receiver_gene_program_source %||% if (identical(mode, "condition_split") && nzchar(deg)) {
+    "condition_deg"
+  } else if (nzchar(baseline)) {
+    "receiver_marker"
+  } else {
+    "none"
+  }
+  list(
+    pair_id = pair_id,
+    source_question_id = q$question_id,
+    layer_scope = q$scope,
+    sender = sender,
+    receiver = receiver,
+    condition_split_var = split$var,
+    condition_split_values = split$values,
+    tool = tool,
+    communication_mode = mode,
+    receiver_gene_program_source = source,
+    baseline_marker_comparison_id = baseline,
+    receiver_deg_comparison_id = deg,
+    direction_filter = direction_filter %||% m3_comm_direction_filter(q, tool, pair_id),
+    requires_cell_subtype = requires_cell_subtype %||% m3_comm_requires_cell_subtype(q, sender, receiver),
+    enabled = m3_comm_enabled(q),
+    notes = notes
+  )
 }
 
 m3_add_differential_comm <- function(rows, q) {
@@ -33,69 +136,73 @@ m3_add_differential_comm <- function(rows, q) {
   if (!nzchar(split$var)) {
     return(rows)
   }
-  sender <- m3_collapse(m3_flat_groups(q$sender_groups, q$scope))
-  receiver <- m3_collapse(m3_flat_groups(q$receiver_groups, q$scope))
-  derived_id <- switch(
-    q$question_id,
-    F02_TC_GC_bidir_split = "F23_TC_GC_diff_overall",
-    F04_TC_to_GC_each_split = "F24_TC_GC_diff_subtype_TC_to_GC",
-    F06_GC_each_to_TC_split = "F24_TC_GC_diff_subtype_GC_to_TC",
-    F08_GC_dev_seq_split = "F25_GC_internal_diff",
-    F15_panorama_screen_split = "F26_panorama_screen_diff",
-    ""
+  derived <- switch(
+    q$question_id[[1]],
+    F02_TC_GC_bidir_split = list(id = "F23_TC_GC_diff_overall", sender = "TC", receiver = m3_collapse(m3_gc_subtypes), notes = "derived F23; compare TC-GC communication between syf and f5", direction = "yes"),
+    F04_TC_to_GC_each_split = list(id = "F24_TC_to_GC_subtype_diff", sender = "TC", receiver = m3_collapse(m3_gc_subtypes), notes = "derived F24; compare TC-to-GC-subtype communication between syf and f5", direction = "yes"),
+    F08_GC_dev_seq_split = list(id = "F25_GC_internal_diff", sender = m3_collapse(m3_gc_subtypes), receiver = m3_collapse(m3_gc_subtypes), notes = "derived F25; compare GC internal developmental communication between syf and f5", direction = "yes"),
+    F15_panorama_screen_split = list(id = "F26_panorama_screen_diff", sender = "TC,pGC,eGC,rgGC,lGC", receiver = "TC,pGC,eGC,rgGC,lGC", notes = "derived F26; compare full panorama communication network between syf and f5", direction = "no"),
+    NULL
   )
-  rows[[length(rows) + 1L]] <- m3_communication_row(
-    q, "diff_summary", sender, receiver, "differential",
-    notes = "derived_differential_communication",
-    pair_id = derived_id
+  if (is.null(derived)) {
+    return(rows)
+  }
+  rows[[length(rows) + 1L]] <- m3_comm_row(
+    q, derived$id, derived$sender, derived$receiver, "differential",
+    notes = derived$notes,
+    baseline_marker_comparison_id = "",
+    receiver_deg_comparison_id = "",
+    receiver_gene_program_source = "none",
+    direction_filter = derived$direction,
+    requires_cell_subtype = "yes"
   )
   rows
 }
 
 m3_fanout_communication <- function(q) {
-  axis <- q$contrast_axis
+  qid <- q$question_id[[1]]
   tool <- m3_comm_tool(q)
   rows <- list()
 
-  if (axis == "bidirectional") {
-    senders <- m3_flat_groups(q$sender_groups, q$scope)
-    receivers <- m3_flat_groups(q$receiver_groups, q$scope)
-    for (sender in senders) {
-      for (receiver in receivers) {
-        rows[[length(rows) + 1L]] <- m3_communication_row(q, paste(sender, "to", receiver, sep = "_"), sender, receiver, tool)
-        rows[[length(rows) + 1L]] <- m3_communication_row(q, paste(receiver, "to", sender, sep = "_"), receiver, sender, tool)
-      }
+  if (qid %in% c("F01_TC_GC_bidir_baseline", "F02_TC_GC_bidir_split")) {
+    rows[[length(rows) + 1L]] <- m3_comm_row(q, paste(qid, "TC_to_GC", sep = "__"), "TC", m3_collapse(m3_gc_subtypes), tool, notes = ifelse(grepl("split", qid), "TC->GC split; GC represented by GC subtypes via M5", "TC->GC baseline; GC represented by GC subtypes via M5"), baseline_marker_comparison_id = "A01_panorama_marker__GC_vs_rest", receiver_deg_comparison_id = ifelse(grepl("split", qid), "D01_GC_stage_DEG__GC_syf_vs_f5", ""))
+    rows[[length(rows) + 1L]] <- m3_comm_row(q, paste(qid, "GC_to_TC", sep = "__"), m3_collapse(m3_gc_subtypes), "TC", tool, notes = ifelse(grepl("split", qid), "GC->TC split; GC represented by GC subtypes via M5", "GC->TC baseline; GC represented by GC subtypes via M5"), baseline_marker_comparison_id = "A01_panorama_marker__TC_vs_rest")
+  } else if (qid %in% c("F03_TC_to_GC_each_baseline", "F04_TC_to_GC_each_split")) {
+    for (receiver in m3_gc_subtypes) {
+      rows[[length(rows) + 1L]] <- m3_comm_row(q, paste(qid, paste("TC", "to", receiver, sep = "_"), sep = "__"), "TC", receiver, tool, notes = ifelse(receiver == "pGC" && qid == "F04_TC_to_GC_each_split", "核心", ""))
     }
-  } else if (axis == "directional") {
+  } else if (qid %in% c("F05_GC_each_to_TC_baseline", "F06_GC_each_to_TC_split")) {
+    for (sender in m3_gc_subtypes) {
+      rows[[length(rows) + 1L]] <- m3_comm_row(q, paste(qid, paste(sender, "to", "TC", sep = "_"), sep = "__"), sender, "TC", tool, notes = ifelse(sender == "pGC" && qid == "F05_GC_each_to_TC_baseline", "反向", ""))
+    }
+  } else if (qid %in% c("F07_GC_dev_seq_baseline", "F08_GC_dev_seq_split")) {
+    for (idx in seq_len(length(m3_gc_subtypes) - 1L)) {
+      sender <- m3_gc_subtypes[[idx]]
+      receiver <- m3_gc_subtypes[[idx + 1L]]
+      rows[[length(rows) + 1L]] <- m3_comm_row(q, paste(qid, paste(sender, "to", receiver, sep = "_"), sep = "__"), sender, receiver, tool, notes = ifelse(qid == "F07_GC_dev_seq_baseline", sprintf("发育流seg%s", idx), ""))
+    }
+  } else if (qid %in% c("F09_GC_dev_skip", "F10_GC_feedback")) {
     sender_sets <- m3_group_sets(q$sender_groups, q$scope)
     receiver_sets <- m3_group_sets(q$receiver_groups, q$scope)
     for (sender_set in sender_sets) {
       for (receiver_set in receiver_sets) {
         sender <- m3_collapse(sender_set)
         receiver <- m3_collapse(receiver_set)
-        rows[[length(rows) + 1L]] <- m3_communication_row(q, paste(sender, "to", receiver, sep = "_"), sender, receiver, tool)
+        rows[[length(rows) + 1L]] <- m3_comm_row(q, paste(qid, paste(sender, "to", receiver, sep = "_"), sep = "__"), sender, receiver, tool, notes = ifelse(qid == "F09_GC_dev_skip", "跨段", "反馈"))
       }
     }
-  } else if (axis == "sequential") {
-    seq_groups <- m3_group_sequence(q$sender_groups, q$scope)
-    if (length(seq_groups) >= 2) {
-      for (idx in seq_len(length(seq_groups) - 1L)) {
-        sender <- seq_groups[[idx]]
-        receiver <- seq_groups[[idx + 1L]]
-        rows[[length(rows) + 1L]] <- m3_communication_row(q, paste(sender, "to", receiver, sep = "_"), sender, receiver, tool)
-      }
-    }
-  } else if (axis == "symmetric") {
-    rows[[length(rows) + 1L]] <- m3_communication_row(q, "all_by_all", "*", "*", tool)
-  } else if (axis == "pairwise_comm") {
-    groups <- m3_flat_groups(q$sender_groups, q$scope)
-    for (sender in groups) {
-      for (receiver in groups) {
-        if (!identical(sender, receiver)) {
-          rows[[length(rows) + 1L]] <- m3_communication_row(q, paste(sender, "to", receiver, sep = "_"), sender, receiver, tool)
-        }
-      }
-    }
+  } else if (qid == "F13_GC_subtype_pairwise") {
+    rows[[length(rows) + 1L]] <- m3_comm_row(q, "F13_GC_subtype_pairwise__GC_pairwise", m3_collapse(m3_gc_subtypes), "*", tool, notes = "12对", baseline_marker_comparison_id = "", receiver_deg_comparison_id = "", receiver_gene_program_source = "none", direction_filter = "no")
+  } else if (qid %in% c("F14_panorama_screen_baseline", "F15_panorama_screen_split")) {
+    rows[[length(rows) + 1L]] <- m3_comm_row(q, paste(qid, "panorama_full", sep = "__"), "*", "*", tool, notes = ifelse(qid == "F14_panorama_screen_baseline", "无偏筛查", "重连图谱"), baseline_marker_comparison_id = "", receiver_deg_comparison_id = "", receiver_gene_program_source = "none", direction_filter = "no", requires_cell_subtype = "no")
+  } else if (qid %in% c("F16_GC_screen_baseline", "F17_GC_screen_split")) {
+    rows[[length(rows) + 1L]] <- m3_comm_row(q, paste(qid, "GC_full", sep = "__"), "*", "*", tool, notes = ifelse(qid == "F17_GC_screen_split", "细胞数风险", ""), baseline_marker_comparison_id = "", receiver_deg_comparison_id = "", receiver_gene_program_source = "none", direction_filter = "no", requires_cell_subtype = "yes")
+  } else if (qid %in% c("F18_TC_screen_baseline", "F19_TC_screen_split")) {
+    rows[[length(rows) + 1L]] <- m3_comm_row(q, paste(qid, "TC_full", sep = "__"), "*", "*", tool, notes = "等TC", baseline_marker_comparison_id = "", receiver_deg_comparison_id = "", receiver_gene_program_source = "none", direction_filter = "no", requires_cell_subtype = "no")
+  } else if (qid == "F20_TC_sub_to_GC_baseline") {
+    rows[[length(rows) + 1L]] <- m3_comm_row(q, "F20_TC_sub_to_GC_baseline__TCsub_to_GC", "TC_*", m3_collapse(m3_gc_subtypes), tool, notes = "等TC")
+  } else if (qid == "F21_TC_sub_to_GC_split") {
+    rows[[length(rows) + 1L]] <- m3_comm_row(q, "F21_TC_sub_to_GC_split__TCsub_to_GC", "TC_*", m3_collapse(m3_gc_subtypes), tool, notes = "等TC")
   }
 
   rows <- m3_add_differential_comm(rows, q)

@@ -1,54 +1,45 @@
 # AUTO-GENERATED. Edit metadata/analysis_questions.tsv instead.
-pair_id	source_question_id	layer_scope	sender	receiver	subset_column	subset_value	condition_split_var	condition_split_values	tool	enabled	notes
-F01_TC_GC_bidir_baseline__TC_to_GC	F01_TC_GC_bidir_baseline	panorama	TC	GC					both	yes	-
-F01_TC_GC_bidir_baseline__GC_to_TC	F01_TC_GC_bidir_baseline	panorama	GC	TC					both	yes	-
-F02_TC_GC_bidir_split__TC_to_GC	F02_TC_GC_bidir_split	panorama	TC	GC			group_id	syf,f5	both	yes	-
-F02_TC_GC_bidir_split__GC_to_TC	F02_TC_GC_bidir_split	panorama	GC	TC			group_id	syf,f5	both	yes	-
-F23_TC_GC_diff_overall	F02_TC_GC_bidir_split	panorama	TC	GC			group_id	syf,f5	differential	yes	derived_differential_communication
-F03_TC_to_GC_each_baseline__TC_to_pGC	F03_TC_to_GC_each_baseline	panorama	TC	pGC					cellchat	yes	-
-F03_TC_to_GC_each_baseline__TC_to_eGC	F03_TC_to_GC_each_baseline	panorama	TC	eGC					cellchat	yes	-
-F03_TC_to_GC_each_baseline__TC_to_rgGC	F03_TC_to_GC_each_baseline	panorama	TC	rgGC					cellchat	yes	-
-F03_TC_to_GC_each_baseline__TC_to_lGC	F03_TC_to_GC_each_baseline	panorama	TC	lGC					cellchat	yes	-
-F04_TC_to_GC_each_split__TC_to_pGC	F04_TC_to_GC_each_split	panorama	TC	pGC			group_id	syf,f5	both	yes	-
-F04_TC_to_GC_each_split__TC_to_eGC	F04_TC_to_GC_each_split	panorama	TC	eGC			group_id	syf,f5	both	yes	-
-F04_TC_to_GC_each_split__TC_to_rgGC	F04_TC_to_GC_each_split	panorama	TC	rgGC			group_id	syf,f5	both	yes	-
-F04_TC_to_GC_each_split__TC_to_lGC	F04_TC_to_GC_each_split	panorama	TC	lGC			group_id	syf,f5	both	yes	-
-F24_TC_GC_diff_subtype_TC_to_GC	F04_TC_to_GC_each_split	panorama	TC	pGC,eGC,rgGC,lGC			group_id	syf,f5	differential	yes	derived_differential_communication
-F05_GC_each_to_TC_baseline__pGC_to_TC	F05_GC_each_to_TC_baseline	panorama	pGC	TC					cellchat	yes	-
-F05_GC_each_to_TC_baseline__eGC_to_TC	F05_GC_each_to_TC_baseline	panorama	eGC	TC					cellchat	yes	-
-F05_GC_each_to_TC_baseline__rgGC_to_TC	F05_GC_each_to_TC_baseline	panorama	rgGC	TC					cellchat	yes	-
-F05_GC_each_to_TC_baseline__lGC_to_TC	F05_GC_each_to_TC_baseline	panorama	lGC	TC					cellchat	yes	-
-F06_GC_each_to_TC_split__pGC_to_TC	F06_GC_each_to_TC_split	panorama	pGC	TC			group_id	syf,f5	both	yes	-
-F06_GC_each_to_TC_split__eGC_to_TC	F06_GC_each_to_TC_split	panorama	eGC	TC			group_id	syf,f5	both	yes	-
-F06_GC_each_to_TC_split__rgGC_to_TC	F06_GC_each_to_TC_split	panorama	rgGC	TC			group_id	syf,f5	both	yes	-
-F06_GC_each_to_TC_split__lGC_to_TC	F06_GC_each_to_TC_split	panorama	lGC	TC			group_id	syf,f5	both	yes	-
-F24_TC_GC_diff_subtype_GC_to_TC	F06_GC_each_to_TC_split	panorama	pGC,eGC,rgGC,lGC	TC			group_id	syf,f5	differential	yes	derived_differential_communication
-F07_GC_dev_seq_baseline__pGC_to_eGC	F07_GC_dev_seq_baseline	GC_subcluster	pGC	eGC					both	yes	-
-F07_GC_dev_seq_baseline__eGC_to_rgGC	F07_GC_dev_seq_baseline	GC_subcluster	eGC	rgGC					both	yes	-
-F07_GC_dev_seq_baseline__rgGC_to_lGC	F07_GC_dev_seq_baseline	GC_subcluster	rgGC	lGC					both	yes	-
-F08_GC_dev_seq_split__pGC_to_eGC	F08_GC_dev_seq_split	GC_subcluster	pGC	eGC			group_id	syf,f5	both	yes	-
-F08_GC_dev_seq_split__eGC_to_rgGC	F08_GC_dev_seq_split	GC_subcluster	eGC	rgGC			group_id	syf,f5	both	yes	-
-F08_GC_dev_seq_split__rgGC_to_lGC	F08_GC_dev_seq_split	GC_subcluster	rgGC	lGC			group_id	syf,f5	both	yes	-
-F25_GC_internal_diff	F08_GC_dev_seq_split	GC_subcluster	pGC,eGC,rgGC,lGC				group_id	syf,f5	differential	yes	derived_differential_communication
-F09_GC_dev_skip__pGC_to_rgGC	F09_GC_dev_skip	GC_subcluster	pGC	rgGC					nichenet	yes	-
-F09_GC_dev_skip__pGC_to_lGC	F09_GC_dev_skip	GC_subcluster	pGC	lGC					nichenet	yes	-
-F10_GC_feedback__lGC_to_pGC	F10_GC_feedback	GC_subcluster	lGC	pGC					nichenet	yes	-
-F10_GC_feedback__lGC_to_rgGC	F10_GC_feedback	GC_subcluster	lGC	rgGC					nichenet	yes	-
-F13_GC_subtype_pairwise__pGC_to_eGC	F13_GC_subtype_pairwise	GC_subcluster	pGC	eGC					cellchat	yes	-
-F13_GC_subtype_pairwise__pGC_to_rgGC	F13_GC_subtype_pairwise	GC_subcluster	pGC	rgGC					cellchat	yes	-
-F13_GC_subtype_pairwise__pGC_to_lGC	F13_GC_subtype_pairwise	GC_subcluster	pGC	lGC					cellchat	yes	-
-F13_GC_subtype_pairwise__eGC_to_pGC	F13_GC_subtype_pairwise	GC_subcluster	eGC	pGC					cellchat	yes	-
-F13_GC_subtype_pairwise__eGC_to_rgGC	F13_GC_subtype_pairwise	GC_subcluster	eGC	rgGC					cellchat	yes	-
-F13_GC_subtype_pairwise__eGC_to_lGC	F13_GC_subtype_pairwise	GC_subcluster	eGC	lGC					cellchat	yes	-
-F13_GC_subtype_pairwise__rgGC_to_pGC	F13_GC_subtype_pairwise	GC_subcluster	rgGC	pGC					cellchat	yes	-
-F13_GC_subtype_pairwise__rgGC_to_eGC	F13_GC_subtype_pairwise	GC_subcluster	rgGC	eGC					cellchat	yes	-
-F13_GC_subtype_pairwise__rgGC_to_lGC	F13_GC_subtype_pairwise	GC_subcluster	rgGC	lGC					cellchat	yes	-
-F13_GC_subtype_pairwise__lGC_to_pGC	F13_GC_subtype_pairwise	GC_subcluster	lGC	pGC					cellchat	yes	-
-F13_GC_subtype_pairwise__lGC_to_eGC	F13_GC_subtype_pairwise	GC_subcluster	lGC	eGC					cellchat	yes	-
-F13_GC_subtype_pairwise__lGC_to_rgGC	F13_GC_subtype_pairwise	GC_subcluster	lGC	rgGC					cellchat	yes	-
-F14_panorama_screen_baseline__all_by_all	F14_panorama_screen_baseline	panorama	*	*					cellchat	yes	-
-F15_panorama_screen_split__all_by_all	F15_panorama_screen_split	panorama	*	*			group_id	syf,f5	cellchat	yes	-
-F26_panorama_screen_diff	F15_panorama_screen_split	panorama	GC,TC	GC,TC			group_id	syf,f5	differential	yes	derived_differential_communication
-F16_GC_screen_baseline__all_by_all	F16_GC_screen_baseline	GC_subcluster	*	*					cellchat	yes	-
-F17_GC_screen_split__all_by_all	F17_GC_screen_split	GC_subcluster	*	*			group_id	syf,f5	cellchat	yes	-
-F17_GC_screen_split__diff_summary	F17_GC_screen_split	GC_subcluster	pGC,eGC,rgGC,lGC	pGC,eGC,rgGC,lGC			group_id	syf,f5	differential	yes	derived_differential_communication
+pair_id	source_question_id	layer_scope	sender	receiver	condition_split_var	condition_split_values	tool	communication_mode	receiver_gene_program_source	baseline_marker_comparison_id	receiver_deg_comparison_id	direction_filter	requires_cell_subtype	enabled	notes
+F01_TC_GC_bidir_baseline__TC_to_GC	F01_TC_GC_bidir_baseline	panorama	TC	pGC,eGC,rgGC,lGC			both	baseline	receiver_marker	A01_panorama_marker__GC_vs_rest		yes	yes	yes	TC->GC baseline; GC represented by GC subtypes via M5
+F01_TC_GC_bidir_baseline__GC_to_TC	F01_TC_GC_bidir_baseline	panorama	pGC,eGC,rgGC,lGC	TC			both	baseline	receiver_marker	A01_panorama_marker__TC_vs_rest		yes	yes	yes	GC->TC baseline; GC represented by GC subtypes via M5
+F02_TC_GC_bidir_split__TC_to_GC	F02_TC_GC_bidir_split	panorama	TC	pGC,eGC,rgGC,lGC	group_id	syf,f5	both	condition_split	condition_deg	A01_panorama_marker__GC_vs_rest	D01_GC_stage_DEG__GC_syf_vs_f5	yes	yes	yes	TC->GC split; GC represented by GC subtypes via M5
+F02_TC_GC_bidir_split__GC_to_TC	F02_TC_GC_bidir_split	panorama	pGC,eGC,rgGC,lGC	TC	group_id	syf,f5	both	condition_split	condition_deg	A01_panorama_marker__TC_vs_rest	D02_TC_stage_DEG__TC_syf_vs_f5	yes	yes	yes	GC->TC split; GC represented by GC subtypes via M5
+F03_TC_to_GC_each_baseline__TC_to_pGC	F03_TC_to_GC_each_baseline	panorama	TC	pGC			cellchat	baseline	receiver_marker	A02_GC_subtype_marker__pGC_vs_rest		yes	yes	yes	
+F03_TC_to_GC_each_baseline__TC_to_eGC	F03_TC_to_GC_each_baseline	panorama	TC	eGC			cellchat	baseline	receiver_marker	A02_GC_subtype_marker__eGC_vs_rest		yes	yes	yes	
+F03_TC_to_GC_each_baseline__TC_to_rgGC	F03_TC_to_GC_each_baseline	panorama	TC	rgGC			cellchat	baseline	receiver_marker	A02_GC_subtype_marker__rgGC_vs_rest		yes	yes	yes	
+F03_TC_to_GC_each_baseline__TC_to_lGC	F03_TC_to_GC_each_baseline	panorama	TC	lGC			cellchat	baseline	receiver_marker	A02_GC_subtype_marker__lGC_vs_rest		yes	yes	yes	
+F04_TC_to_GC_each_split__TC_to_pGC	F04_TC_to_GC_each_split	panorama	TC	pGC	group_id	syf,f5	both	condition_split	condition_deg	A02_GC_subtype_marker__pGC_vs_rest	D03_GC_subtype_stage_DEG__pGC_syf_vs_f5	yes	yes	yes	核心
+F04_TC_to_GC_each_split__TC_to_eGC	F04_TC_to_GC_each_split	panorama	TC	eGC	group_id	syf,f5	both	condition_split	condition_deg	A02_GC_subtype_marker__eGC_vs_rest	D03_GC_subtype_stage_DEG__eGC_syf_vs_f5	yes	yes	yes	
+F04_TC_to_GC_each_split__TC_to_rgGC	F04_TC_to_GC_each_split	panorama	TC	rgGC	group_id	syf,f5	both	condition_split	condition_deg	A02_GC_subtype_marker__rgGC_vs_rest	D03_GC_subtype_stage_DEG__rgGC_syf_vs_f5	yes	yes	yes	
+F04_TC_to_GC_each_split__TC_to_lGC	F04_TC_to_GC_each_split	panorama	TC	lGC	group_id	syf,f5	both	condition_split	condition_deg	A02_GC_subtype_marker__lGC_vs_rest	D03_GC_subtype_stage_DEG__lGC_syf_vs_f5	yes	yes	yes	
+F05_GC_each_to_TC_baseline__pGC_to_TC	F05_GC_each_to_TC_baseline	panorama	pGC	TC			cellchat	baseline	receiver_marker	A01_panorama_marker__TC_vs_rest		yes	yes	yes	反向
+F05_GC_each_to_TC_baseline__eGC_to_TC	F05_GC_each_to_TC_baseline	panorama	eGC	TC			cellchat	baseline	receiver_marker	A01_panorama_marker__TC_vs_rest		yes	yes	yes	
+F05_GC_each_to_TC_baseline__rgGC_to_TC	F05_GC_each_to_TC_baseline	panorama	rgGC	TC			cellchat	baseline	receiver_marker	A01_panorama_marker__TC_vs_rest		yes	yes	yes	
+F05_GC_each_to_TC_baseline__lGC_to_TC	F05_GC_each_to_TC_baseline	panorama	lGC	TC			cellchat	baseline	receiver_marker	A01_panorama_marker__TC_vs_rest		yes	yes	yes	
+F06_GC_each_to_TC_split__pGC_to_TC	F06_GC_each_to_TC_split	panorama	pGC	TC	group_id	syf,f5	both	condition_split	condition_deg	A01_panorama_marker__TC_vs_rest	D02_TC_stage_DEG__TC_syf_vs_f5	yes	yes	yes	
+F06_GC_each_to_TC_split__eGC_to_TC	F06_GC_each_to_TC_split	panorama	eGC	TC	group_id	syf,f5	both	condition_split	condition_deg	A01_panorama_marker__TC_vs_rest	D02_TC_stage_DEG__TC_syf_vs_f5	yes	yes	yes	
+F06_GC_each_to_TC_split__rgGC_to_TC	F06_GC_each_to_TC_split	panorama	rgGC	TC	group_id	syf,f5	both	condition_split	condition_deg	A01_panorama_marker__TC_vs_rest	D02_TC_stage_DEG__TC_syf_vs_f5	yes	yes	yes	
+F06_GC_each_to_TC_split__lGC_to_TC	F06_GC_each_to_TC_split	panorama	lGC	TC	group_id	syf,f5	both	condition_split	condition_deg	A01_panorama_marker__TC_vs_rest	D02_TC_stage_DEG__TC_syf_vs_f5	yes	yes	yes	
+F07_GC_dev_seq_baseline__pGC_to_eGC	F07_GC_dev_seq_baseline	GC_subcluster	pGC	eGC			both	baseline	receiver_marker	A02_GC_subtype_marker__eGC_vs_rest		yes	yes	yes	发育流seg1
+F07_GC_dev_seq_baseline__eGC_to_rgGC	F07_GC_dev_seq_baseline	GC_subcluster	eGC	rgGC			both	baseline	receiver_marker	A02_GC_subtype_marker__rgGC_vs_rest		yes	yes	yes	发育流seg2
+F07_GC_dev_seq_baseline__rgGC_to_lGC	F07_GC_dev_seq_baseline	GC_subcluster	rgGC	lGC			both	baseline	receiver_marker	A02_GC_subtype_marker__lGC_vs_rest		yes	yes	yes	发育流seg3
+F08_GC_dev_seq_split__pGC_to_eGC	F08_GC_dev_seq_split	GC_subcluster	pGC	eGC	group_id	syf,f5	both	condition_split	condition_deg	A02_GC_subtype_marker__eGC_vs_rest	D03_GC_subtype_stage_DEG__eGC_syf_vs_f5	yes	yes	yes	
+F08_GC_dev_seq_split__eGC_to_rgGC	F08_GC_dev_seq_split	GC_subcluster	eGC	rgGC	group_id	syf,f5	both	condition_split	condition_deg	A02_GC_subtype_marker__rgGC_vs_rest	D03_GC_subtype_stage_DEG__rgGC_syf_vs_f5	yes	yes	yes	
+F08_GC_dev_seq_split__rgGC_to_lGC	F08_GC_dev_seq_split	GC_subcluster	rgGC	lGC	group_id	syf,f5	both	condition_split	condition_deg	A02_GC_subtype_marker__lGC_vs_rest	D03_GC_subtype_stage_DEG__lGC_syf_vs_f5	yes	yes	yes	
+F09_GC_dev_skip__pGC_to_rgGC	F09_GC_dev_skip	GC_subcluster	pGC	rgGC			nichenet	baseline	receiver_marker	A02_GC_subtype_marker__rgGC_vs_rest		no	yes	yes	跨段
+F09_GC_dev_skip__pGC_to_lGC	F09_GC_dev_skip	GC_subcluster	pGC	lGC			nichenet	baseline	receiver_marker	A02_GC_subtype_marker__lGC_vs_rest		no	yes	yes	跨段
+F10_GC_feedback__lGC_to_pGC	F10_GC_feedback	GC_subcluster	lGC	pGC			nichenet	baseline	receiver_marker	A02_GC_subtype_marker__pGC_vs_rest		no	yes	yes	反馈
+F10_GC_feedback__lGC_to_rgGC	F10_GC_feedback	GC_subcluster	lGC	rgGC			nichenet	baseline	receiver_marker	A02_GC_subtype_marker__rgGC_vs_rest		no	yes	yes	反馈
+F13_GC_subtype_pairwise__GC_pairwise	F13_GC_subtype_pairwise	GC_subcluster	pGC,eGC,rgGC,lGC	*			cellchat	baseline	none			no	yes	yes	12对
+F14_panorama_screen_baseline__panorama_full	F14_panorama_screen_baseline	panorama	*	*			cellchat	baseline	none			no	no	yes	无偏筛查
+F15_panorama_screen_split__panorama_full	F15_panorama_screen_split	panorama	*	*	group_id	syf,f5	cellchat	condition_split	none			no	no	yes	重连图谱
+F16_GC_screen_baseline__GC_full	F16_GC_screen_baseline	GC_subcluster	*	*			cellchat	baseline	none			no	yes	yes	
+F17_GC_screen_split__GC_full	F17_GC_screen_split	GC_subcluster	*	*	group_id	syf,f5	cellchat	condition_split	none			no	yes	yes	细胞数风险
+F18_TC_screen_baseline__TC_full	F18_TC_screen_baseline	TC_subcluster	*	*			cellchat	baseline	none			no	no	no	等TC
+F19_TC_screen_split__TC_full	F19_TC_screen_split	TC_subcluster	*	*	group_id	syf,f5	cellchat	condition_split	none			no	no	no	等TC
+F20_TC_sub_to_GC_baseline__TCsub_to_GC	F20_TC_sub_to_GC_baseline	panorama	TC_*	pGC,eGC,rgGC,lGC			both	baseline	receiver_marker	A02_GC_subtype_marker__pGC_vs_rest,A02_GC_subtype_marker__eGC_vs_rest,A02_GC_subtype_marker__rgGC_vs_rest,A02_GC_subtype_marker__lGC_vs_rest		yes	yes	no	等TC
+F21_TC_sub_to_GC_split__TCsub_to_GC	F21_TC_sub_to_GC_split	panorama	TC_*	pGC,eGC,rgGC,lGC	group_id	syf,f5	both	condition_split	condition_deg	A02_GC_subtype_marker__pGC_vs_rest,A02_GC_subtype_marker__eGC_vs_rest,A02_GC_subtype_marker__rgGC_vs_rest,A02_GC_subtype_marker__lGC_vs_rest	D03_GC_subtype_stage_DEG__pGC_syf_vs_f5,D03_GC_subtype_stage_DEG__eGC_syf_vs_f5,D03_GC_subtype_stage_DEG__rgGC_syf_vs_f5,D03_GC_subtype_stage_DEG__lGC_syf_vs_f5	yes	yes	no	等TC
+F23_TC_GC_diff_overall	F02_TC_GC_bidir_split	panorama	TC	pGC,eGC,rgGC,lGC	group_id	syf,f5	differential	differential_summary	none			yes	yes	yes	derived F23; compare TC-GC communication between syf and f5
+F24_TC_to_GC_subtype_diff	F04_TC_to_GC_each_split	panorama	TC	pGC,eGC,rgGC,lGC	group_id	syf,f5	differential	differential_summary	none			yes	yes	yes	derived F24; compare TC-to-GC-subtype communication between syf and f5
+F25_GC_internal_diff	F08_GC_dev_seq_split	GC_subcluster	pGC,eGC,rgGC,lGC	pGC,eGC,rgGC,lGC	group_id	syf,f5	differential	differential_summary	none			yes	yes	yes	derived F25; compare GC internal developmental communication between syf and f5
+F26_panorama_screen_diff	F15_panorama_screen_split	panorama	TC,pGC,eGC,rgGC,lGC	TC,pGC,eGC,rgGC,lGC	group_id	syf,f5	differential	differential_summary	none			no	yes	yes	derived F26; compare full panorama communication network between syf and f5

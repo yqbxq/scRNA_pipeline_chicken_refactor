@@ -6,6 +6,7 @@ empty_df_05 <- function(cols = character()) {
 empty_marker_result_05 <- function() {
   empty_df_05(c(
     "gene", "comparison_id", "layer_id", "cluster_id", "annotation_label",
+    "analysis_mode", "analysis_unit", "gene_program_role",
     "inference_scope", "inference_status", "subset_column", "subset_value"
   ))
 }
@@ -13,6 +14,7 @@ empty_marker_result_05 <- function() {
 empty_marker_summary_05 <- function() {
   empty_df_05(c(
     "comparison_id", "layer_id", "cluster_id", "annotation_label",
+    "analysis_mode", "analysis_unit",
     "ident_1_n", "ident_2_n", "min_cells_per_group",
     "result_available", "status", "reason"
   ))
@@ -74,8 +76,11 @@ standardize_design_metadata_05 <- function(seu) {
 
 read_deg_comparison_sheet <- function(cfg) {
   expected_cols <- c(
-    "comparison_id", "ident_1", "ident_2", "enabled", "group_var", "batch_var",
-    "layer_scope", "min_biological_replicates", "subset_column", "subset_value",
+    "comparison_id", "source_question_id", "contrast_axis", "ident_1", "ident_2",
+    "enabled", "group_var", "batch_var", "layer_scope",
+    "min_biological_replicates", "subset_column", "subset_value",
+    "analysis_mode", "analysis_unit", "stat_level", "aggregation_group_var",
+    "composition_group_var", "produces_gene_program", "gene_program_role",
     "force_exploratory", "min_cells_per_group", "logfc_threshold"
   )
 
@@ -83,6 +88,8 @@ read_deg_comparison_sheet <- function(cfg) {
   if (nrow(df) == 0 && nzchar(cfg$deg_ident_1 %||% "") && nzchar(cfg$deg_ident_2 %||% "")) {
     df <- data.frame(
       comparison_id = sprintf("%s_vs_%s", cfg$deg_ident_1, cfg$deg_ident_2),
+      source_question_id = "",
+      contrast_axis = "contrast_only",
       ident_1 = cfg$deg_ident_1,
       ident_2 = cfg$deg_ident_2,
       enabled = "yes",
@@ -92,6 +99,13 @@ read_deg_comparison_sheet <- function(cfg) {
       min_biological_replicates = cfg$min_biological_replicates,
       subset_column = "",
       subset_value = "",
+      analysis_mode = "condition_within_type",
+      analysis_unit = "whole_layer",
+      stat_level = "pseudobulk_formal_if_replicates",
+      aggregation_group_var = "all_cells",
+      composition_group_var = "",
+      produces_gene_program = "yes",
+      gene_program_role = "condition_deg",
       force_exploratory = "no",
       min_cells_per_group = cfg$deg_default_min_cells_per_group,
       logfc_threshold = cfg$deg_default_logfc_threshold,
@@ -104,12 +118,21 @@ read_deg_comparison_sheet <- function(cfg) {
 
   defaults <- list(
     enabled = "yes",
+    source_question_id = "",
+    contrast_axis = "",
     group_var = "group_id",
     batch_var = "batch",
     layer_scope = "*",
     min_biological_replicates = cfg$min_biological_replicates,
     subset_column = "",
     subset_value = "",
+    analysis_mode = "",
+    analysis_unit = "",
+    stat_level = "",
+    aggregation_group_var = "",
+    composition_group_var = "",
+    produces_gene_program = "yes",
+    gene_program_role = "",
     force_exploratory = "no",
     min_cells_per_group = cfg$deg_default_min_cells_per_group,
     logfc_threshold = cfg$deg_default_logfc_threshold
@@ -127,6 +150,17 @@ read_deg_comparison_sheet <- function(cfg) {
   df$group_var[!nzchar(df$group_var)] <- "group_id"
   df$batch_var[!nzchar(df$batch_var)] <- "batch"
   df$layer_scope[!nzchar(df$layer_scope)] <- "*"
+  df$analysis_mode[!nzchar(df$analysis_mode)] <- ifelse(df$contrast_axis %in% "composition", "composition", "subtype_pairwise")
+  df$analysis_unit[!nzchar(df$analysis_unit)] <- ifelse(df$analysis_mode == "composition", "sample_level", "whole_layer")
+  df$stat_level[!nzchar(df$stat_level)] <- ifelse(
+    df$analysis_mode == "condition_within_type",
+    "pseudobulk_formal_if_replicates",
+    ifelse(df$analysis_mode == "composition", "composition_formal_if_replicates", "cell_level_exploratory")
+  )
+  df$aggregation_group_var[is.na(df$aggregation_group_var)] <- ""
+  df$composition_group_var[is.na(df$composition_group_var)] <- ""
+  df$produces_gene_program <- normalize_flag(df$produces_gene_program, "yes")
+  df$gene_program_role[!nzchar(df$gene_program_role)] <- ifelse(df$analysis_mode == "composition", "none", "subtype_pairwise_deg")
   df$force_exploratory <- normalize_flag(df$force_exploratory, "no")
   df$min_biological_replicates <- suppressWarnings(as.integer(df$min_biological_replicates))
   df$min_biological_replicates[is.na(df$min_biological_replicates)] <- cfg$min_biological_replicates
@@ -204,11 +238,7 @@ load_layer_for_deg <- function(cfg, layer_row) {
 }
 
 resolve_comparison_vars_05 <- function(seu, comparison_row) {
-  meta_cols <- colnames(seu@meta.data)
   group_var <- normalize_scalar_value(comparison_row$group_var[[1]], "group_id")
-  if (!group_var %in% meta_cols && "group_id" %in% meta_cols) {
-    group_var <- "group_id"
-  }
   batch_var <- normalize_scalar_value(comparison_row$batch_var[[1]], "batch")
   subset_column <- normalize_scalar_value(comparison_row$subset_column[[1]])
   subset_value <- normalize_scalar_value(comparison_row$subset_value[[1]])
@@ -221,6 +251,13 @@ resolve_comparison_vars_05 <- function(seu, comparison_row) {
     subset_column = subset_column,
     subset_value = subset_value,
     subset_values = split_csv_local(subset_value),
+    analysis_mode = normalize_scalar_value(comparison_row$analysis_mode[[1]], "subtype_pairwise"),
+    analysis_unit = normalize_scalar_value(comparison_row$analysis_unit[[1]], "whole_layer"),
+    stat_level = normalize_scalar_value(comparison_row$stat_level[[1]], "cell_level_exploratory"),
+    aggregation_group_var = normalize_scalar_value(comparison_row$aggregation_group_var[[1]]),
+    composition_group_var = normalize_scalar_value(comparison_row$composition_group_var[[1]]),
+    produces_gene_program = normalize_flag(comparison_row$produces_gene_program[[1]], "yes"),
+    gene_program_role = normalize_scalar_value(comparison_row$gene_program_role[[1]], "subtype_pairwise_deg"),
     force_exploratory = normalize_flag(comparison_row$force_exploratory[[1]], "no") %in% c("yes", "true", "1", "on"),
     min_biological_replicates = as.integer(comparison_row$min_biological_replicates[[1]]),
     min_cells_per_group = as.integer(comparison_row$min_cells_per_group[[1]]),
@@ -247,13 +284,62 @@ subset_cells_for_comparison <- function(seu, vars) {
     return(list(object = NULL, status = "missing_group_var", reason = sprintf("group_var missing: %s", vars$group_var), subset_n = sum(keep)))
   }
 
-  keep <- keep & as.character(meta[[vars$group_var]]) %in% c(vars$ident_1, vars$ident_2)
+  if (identical(vars$ident_2, "__rest__")) {
+    keep <- keep & nzchar(as.character(meta[[vars$group_var]]))
+  } else {
+    keep <- keep & as.character(meta[[vars$group_var]]) %in% c(vars$ident_1, vars$ident_2)
+  }
   if (!any(keep)) {
     return(list(object = NULL, status = "empty_subset", reason = "comparison matched 0 cells", subset_n = 0L))
   }
   obj <- subset(seu, cells = names(keep)[keep])
   obj <- maybe_join_layers(obj)
   list(object = obj, status = "ok", reason = "", subset_n = ncol(obj))
+}
+
+prepare_comparison_group_05 <- function(seu, vars) {
+  group_var <- vars$group_var
+  if (!identical(vars$ident_2, "__rest__")) {
+    return(list(object = seu, group_var = group_var))
+  }
+  meta <- seu@meta.data
+  rest_col <- ".deg_comparison_group"
+  values <- ifelse(as.character(meta[[group_var]]) == vars$ident_1, vars$ident_1, "__rest__")
+  seu[[rest_col]] <- values
+  list(object = seu, group_var = rest_col)
+}
+
+resolve_aggregation_group_var_05 <- function(seu, vars) {
+  aggregation_group_var <- normalize_scalar_value(vars$aggregation_group_var)
+  if (!nzchar(aggregation_group_var) || identical(aggregation_group_var, "all_cells")) {
+    seu$deg_aggregation_group <- "all_cells"
+    return(list(object = seu, group_var = "deg_aggregation_group", status = "ok", reason = ""))
+  }
+  if (!aggregation_group_var %in% colnames(seu@meta.data)) {
+    return(list(object = NULL, group_var = "", status = "missing_aggregation_group_var", reason = sprintf("aggregation_group_var missing: %s", aggregation_group_var)))
+  }
+  seu$deg_aggregation_group <- as.character(seu@meta.data[[aggregation_group_var]])
+  list(object = seu, group_var = "deg_aggregation_group", status = "ok", reason = "")
+}
+
+resolve_composition_group_var_05 <- function(seu, vars) {
+  composition_group_var <- normalize_scalar_value(vars$composition_group_var, "cluster_id")
+  if (identical(composition_group_var, "cell_class_for_composition")) {
+    source_col <- if ("cell_subtype" %in% colnames(seu@meta.data)) "cell_subtype" else if ("cell_type" %in% colnames(seu@meta.data)) "cell_type" else ""
+    if (!nzchar(source_col)) {
+      return(list(object = NULL, group_var = "", status = "missing_composition_group_var", reason = "cell_class_for_composition requires cell_subtype or cell_type"))
+    }
+    values <- as.character(seu@meta.data[[source_col]])
+    gc_tokens <- c("GC", "pGC", "eGC", "rgGC", "lGC")
+    values[values %in% gc_tokens] <- "GC"
+    values[values == "TC"] <- "TC"
+    seu$cell_class_for_composition <- values
+    return(list(object = seu, group_var = "cell_class_for_composition", status = "ok", reason = ""))
+  }
+  if (!composition_group_var %in% colnames(seu@meta.data)) {
+    return(list(object = NULL, group_var = "", status = "missing_composition_group_var", reason = sprintf("composition_group_var missing: %s", composition_group_var)))
+  }
+  list(object = seu, group_var = composition_group_var, status = "ok", reason = "")
 }
 
 replicate_gate_summary_05 <- function(meta_df, vars, replicate_var = "biological_replicate", sample_var = "sample_id") {

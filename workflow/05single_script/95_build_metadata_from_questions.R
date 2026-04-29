@@ -92,11 +92,32 @@ for (idx in seq_len(nrow(active))) {
   }
 }
 
+planned_communication_ids <- c(
+  "F18_TC_screen_baseline", "F19_TC_screen_split",
+  "F20_TC_sub_to_GC_baseline", "F21_TC_sub_to_GC_split"
+)
+planned_communication <- questions[questions$question_id %in% planned_communication_ids, , drop = FALSE]
+for (idx in seq_len(nrow(planned_communication))) {
+  communication_items <- append_df(communication_items, m3_fanout_communication(planned_communication[idx, , drop = FALSE]))
+}
+
 comparisons <- bind_or_empty(comparison_items, m3_comparison_cols)
 communication_pairs <- bind_or_empty(communication_items, m3_communication_cols)
+if (nrow(communication_pairs) > 0) {
+  derived_comm <- communication_pairs$pair_id %in% c(
+    "F23_TC_GC_diff_overall", "F24_TC_to_GC_subtype_diff",
+    "F25_GC_internal_diff", "F26_panorama_screen_diff"
+  )
+  communication_pairs <- rbind(
+    communication_pairs[!derived_comm, , drop = FALSE],
+    communication_pairs[derived_comm, , drop = FALSE]
+  )
+  rownames(communication_pairs) <- NULL
+}
 trajectory_pairs <- bind_or_empty(trajectory_items, m3_trajectory_cols)
 scenic_targets <- bind_or_empty(scenic_items, m3_scenic_cols)
 enrichment_targets <- m3_fanout_enrichment(questions, comparisons)
+gene_program_targets <- m3_fanout_gene_program(comparisons)
 deconv_pairs <- m3_empty_df(m3_deconv_cols)
 spatial_pairs <- m3_empty_df(m3_spatial_cols)
 
@@ -105,18 +126,20 @@ m3_assert_unique(communication_pairs, "pair_id", "communication_pairs.tsv")
 m3_assert_unique(trajectory_pairs, "trajectory_id", "trajectory_pairs.tsv")
 m3_assert_unique(scenic_targets, "target_id", "scenic_targets.tsv")
 m3_assert_unique(enrichment_targets, "target_id", "enrichment_targets.tsv")
+m3_assert_unique(gene_program_targets, "comparison_id", "gene_program_targets.tsv")
 
 m3_write_generated_tsv(comparisons, file.path(metadata_dir, "comparisons.tsv"), m3_comparison_cols)
 m3_write_generated_tsv(communication_pairs, file.path(metadata_dir, "communication_pairs.tsv"), m3_communication_cols)
 m3_write_generated_tsv(trajectory_pairs, file.path(metadata_dir, "trajectory_pairs.tsv"), m3_trajectory_cols)
 m3_write_generated_tsv(scenic_targets, file.path(metadata_dir, "scenic_targets.tsv"), m3_scenic_cols)
 m3_write_generated_tsv(enrichment_targets, file.path(metadata_dir, "enrichment_targets.tsv"), m3_enrichment_cols)
+m3_write_generated_tsv(gene_program_targets, file.path(metadata_dir, "gene_program_targets.tsv"), m3_gene_program_cols)
 m3_write_generated_tsv(deconv_pairs, file.path(metadata_dir, "deconv_pairs.tsv"), m3_deconv_cols)
 m3_write_generated_tsv(spatial_pairs, file.path(metadata_dir, "spatial_pairs.tsv"), m3_spatial_cols)
 
 summary <- data.frame(
-  table = c("comparisons.tsv", "communication_pairs.tsv", "trajectory_pairs.tsv", "scenic_targets.tsv", "enrichment_targets.tsv", "deconv_pairs.tsv", "spatial_pairs.tsv"),
-  rows = c(nrow(comparisons), nrow(communication_pairs), nrow(trajectory_pairs), nrow(scenic_targets), nrow(enrichment_targets), nrow(deconv_pairs), nrow(spatial_pairs)),
+  table = c("comparisons.tsv", "communication_pairs.tsv", "trajectory_pairs.tsv", "scenic_targets.tsv", "enrichment_targets.tsv", "gene_program_targets.tsv", "deconv_pairs.tsv", "spatial_pairs.tsv"),
+  rows = c(nrow(comparisons), nrow(communication_pairs), nrow(trajectory_pairs), nrow(scenic_targets), nrow(enrichment_targets), nrow(gene_program_targets), nrow(deconv_pairs), nrow(spatial_pairs)),
   stringsAsFactors = FALSE
 )
 dir.create(dirname(summary_path), recursive = TRUE, showWarnings = FALSE)

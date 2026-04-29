@@ -91,6 +91,15 @@ split_list <- function(x, sep = ";") {
   out[nzchar(out)]
 }
 
+split_dependency_ids <- function(x) {
+  x <- trim(x)
+  if (!nzchar(x)) {
+    return(character(0))
+  }
+  out <- trimws(unlist(strsplit(x, "[;,]", perl = TRUE), use.names = FALSE))
+  out[nzchar(out)]
+}
+
 required_cols <- c(
   "question_id", "question_zh", "scope", "sender_groups", "receiver_groups",
   "condition_split", "contrast_axis", "tools_to_run", "priority", "status",
@@ -162,6 +171,9 @@ valid_dsl <- function(x) {
   if (!nzchar(x) || x %in% c("-", "*")) {
     return(TRUE)
   }
+  if (x %in% c("(sequential)", "(fromI05+I06)")) {
+    return(TRUE)
+  }
   left_n <- gregexpr("\\[", x, perl = TRUE)[[1]]
   right_n <- gregexpr("\\]", x, perl = TRUE)[[1]]
   left_count <- if (identical(left_n, -1L)) 0L else length(left_n)
@@ -183,6 +195,9 @@ extract_group_tokens <- function(x) {
   if (!nzchar(x) || x %in% c("-", "*")) {
     return(character(0))
   }
+  if (x %in% c("(sequential)", "(fromI05+I06)")) {
+    return(character(0))
+  }
   x <- gsub("\\[|\\]", "", x, perl = TRUE)
   pieces <- trimws(unlist(strsplit(x, "\\||->|,", perl = TRUE), use.names = FALSE))
   pieces <- pieces[nzchar(pieces)]
@@ -197,7 +212,7 @@ parse_condition_split <- function(x) {
     return(list(type = "none", column = "", values = character(0), ok = TRUE))
   }
   if (x %in% c("syf_only", "f5_only")) {
-    return(list(type = "shortcut", column = "group", values = sub("_only$", "", x), ok = TRUE))
+    return(list(type = "shortcut", column = "group_id", values = sub("_only$", "", x), ok = TRUE))
   }
   if (!grepl("^[A-Za-z0-9_.:-]+:[A-Za-z0-9_.-]+(,[A-Za-z0-9_.-]+)*$", x, perl = TRUE)) {
     return(list(type = "invalid", column = "", values = character(0), ok = FALSE))
@@ -217,9 +232,17 @@ tools_for_axis_ok <- function(axis, tools_to_run) {
 
 find_dependency_cycle <- function(df) {
   ids <- df$question_id
+  resolve_dep <- function(dep) {
+    dep <- trim(dep)
+    if (!nzchar(dep)) return("")
+    if (dep %in% ids) return(dep)
+    hit <- ids[startsWith(ids, paste0(dep, "_"))]
+    if (length(hit) == 1L) hit[[1]] else ""
+  }
   graph <- setNames(vector("list", length(ids)), ids)
   for (idx in seq_len(nrow(df))) {
-    graph[[df$question_id[[idx]]]] <- intersect(split_list(df$depends_on[[idx]]), ids)
+    deps <- vapply(split_dependency_ids(df$depends_on[[idx]]), resolve_dep, character(1))
+    graph[[df$question_id[[idx]]]] <- deps[nzchar(deps)]
   }
 
   state <- setNames(rep(0L, length(ids)), ids)
@@ -414,9 +437,12 @@ if (nrow(questions) > 0 && length(missing_cols) == 0) {
     pass("questions.coverage_mapping", sprintf("%s active rows have known Tier 2 target mappings", nrow(active_rows)))
   }
 
-  dep_ids <- unique(unlist(strsplit(paste(questions$depends_on[nzchar(questions$depends_on)], collapse = ";"), ";", fixed = TRUE), use.names = FALSE))
+  dep_ids <- unique(unlist(lapply(questions$depends_on[nzchar(questions$depends_on)], split_dependency_ids), use.names = FALSE))
   dep_ids <- trimws(dep_ids[nzchar(trimws(dep_ids))])
-  missing_dep_ids <- setdiff(dep_ids, questions$question_id)
+  dep_known <- vapply(dep_ids, function(dep) {
+    dep %in% questions$question_id || any(startsWith(questions$question_id, paste0(dep, "_")))
+  }, logical(1))
+  missing_dep_ids <- dep_ids[!dep_known]
   if (length(missing_dep_ids) > 0) {
     fail("questions.depends_on", paste("unknown depends_on IDs:", paste(missing_dep_ids, collapse = ", ")))
   } else {
@@ -496,6 +522,7 @@ generated_tables <- list(
   trajectory_pairs = list(path = file.path(metadata_dir, "trajectory_pairs.tsv"), id = "trajectory_id"),
   scenic_targets = list(path = file.path(metadata_dir, "scenic_targets.tsv"), id = "target_id"),
   enrichment_targets = list(path = file.path(metadata_dir, "enrichment_targets.tsv"), id = "target_id"),
+  gene_program_targets = list(path = file.path(metadata_dir, "gene_program_targets.tsv"), id = "comparison_id"),
   deconv_pairs = list(path = file.path(metadata_dir, "deconv_pairs.tsv"), id = "deconv_id"),
   spatial_pairs = list(path = file.path(metadata_dir, "spatial_pairs.tsv"), id = "spatial_pair_id")
 )

@@ -199,7 +199,7 @@ stage 不直接维护模块输入表，而是在运行前调用 `ensure_metadata
 
 - 当 `analysis_questions.tsv` 比生成表更新，或任一 Tier 2 表缺失时，自动运行 `workflow/03stages/95_run_metadata_generator.sh`。
 - 随后运行 `workflow/03stages/96_validate_metadata.sh`，保证生成表和真实对象 metadata 的当前一致性。
-- 生成表包括 `comparisons.tsv`、`communication_pairs.tsv`、`trajectory_pairs.tsv`、`scenic_targets.tsv`、`enrichment_targets.tsv`、`deconv_pairs.tsv` 和 `spatial_pairs.tsv`。
+- 生成表包括 `comparisons.tsv`、`communication_pairs.tsv`、`trajectory_pairs.tsv`、`scenic_targets.tsv`、`enrichment_targets.tsv`、`gene_program_targets.tsv`、`deconv_pairs.tsv` 和 `spatial_pairs.tsv`。
 
 Tier 2 表为自动生成文件，不应手工编辑。后续新增 ST 或联合分析 stage 时，按 `docs/st_stage_metadata_hook_template.md` 在 `source common.sh` 后接入同一行 hook。
 
@@ -296,14 +296,18 @@ gate 规则采用 Option B：
 05 DEG 走当前 workflow-native stage，底层脚本在 `workflow/05single_script/05*`：
 
 - `workflow/03stages/05_deg.sh`
-  - `05a_marker_discovery.R`：逐 layer / comparison / cluster 运行探索性 Wilcoxon marker discovery。
-  - `05b_pseudobulk_de.R`：复制门通过时运行 muscat pseudobulk DE；复制门失败时只写探索性状态和 05a fallback 路径。
-  - `05c_composition.R`：复制门通过时运行 propeller；复制门失败时只写探索性状态。
-  - `05d_deg_eda.R`：汇总 marker / pseudobulk / composition manifest，输出 `reports/eda/deg/report.md`。
+  - `05a_marker_discovery.R`：按 `analysis_mode` 运行 cell-level marker/DEG；`composition` 行跳过并交给 05c。
+  - `05b_pseudobulk_de.R`：仅对 `condition_within_type` 行按 `aggregation_group_var` 运行 muscat pseudobulk DE；复制门失败时只写探索性状态和 05a fallback 路径。
+  - `05c_composition.R`：仅对 `composition` 行按 `composition_group_var` 运行 sample-level proportion / propeller。
+  - `05d_deg_eda.R`：汇总 marker / pseudobulk / composition manifest，输出 `reports/eda/deg/report.md` 和 `results/tables/deg/gene_program_registry.tsv`。
 
 `comparisons.tsv` 支持 05 专用可选列：
 
 - `subset_column` / `subset_value`：先过滤细胞，再做组间比较；`subset_value` 支持 CSV。
+- `analysis_mode`：区分 `subtype_marker`、`subtype_pairwise`、`condition_within_type` 和 `composition`。
+- `aggregation_group_var`：05b pseudobulk 的样本内聚合单位，例如 `cell_type`、`cell_subtype` 或 `all_cells`。
+- `composition_group_var`：05c proportion 的分类单位，例如 `cell_subtype` 或 `cell_type`。
+- `produces_gene_program` / `gene_program_role`：控制 05d gene-program registry 和 06/07/08 下游可用性。
 - `force_exploratory`：默认 `no`；设为 `yes` 时 N=1 等复制门失败结果会标记为 `exploratory_forced`，仅供探索和下游富集预览。
 - `min_cells_per_group`：默认 `3`，控制 05a 的 FindMarkers 最小细胞数。
 - `logfc_threshold`：默认 `0`，控制 05a 的 FindMarkers logFC 阈值。

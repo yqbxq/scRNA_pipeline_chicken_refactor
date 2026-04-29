@@ -46,7 +46,7 @@ run_formal_pbds_05 <- function(seu, vars) {
   meta_df <- standardize_design_metadata_df_05(seu@meta.data)
   meta_df$group_id <- trimws(as.character(meta_df[[vars$group_var]]))
   meta_df$sample_id <- trimws(as.character(meta_df$sample_id))
-  meta_df$cluster_id <- trimws(as.character(seu$cluster_id))
+  meta_df$deg_aggregation_group <- trimws(as.character(seu$deg_aggregation_group))
   meta_df$batch <- if (vars$batch_var %in% colnames(meta_df)) trimws(as.character(meta_df[[vars$batch_var]])) else "default"
   meta_df$batch[!nzchar(meta_df$batch)] <- "default"
 
@@ -54,8 +54,8 @@ run_formal_pbds_05 <- function(seu, vars) {
     assays = list(counts = get_assay_matrix(seu, assay = "RNA", type = "counts")),
     colData = S4Vectors::DataFrame(meta_df)
   )
-  sce <- muscat::prepSCE(sce, kid = "cluster_id", sid = "sample_id", gid = "group_id", drop = FALSE)
-  pb <- muscat::aggregateData(sce, assay = "counts", fun = "sum", by = c("cluster_id", "sample_id"))
+  sce <- muscat::prepSCE(sce, kid = "deg_aggregation_group", sid = "sample_id", gid = "group_id", drop = FALSE)
+  pb <- muscat::aggregateData(sce, assay = "counts", fun = "sum", by = c("deg_aggregation_group", "sample_id"))
 
   sample_info <- unique(meta_df[, c("sample_id", "group_id", "batch"), drop = FALSE])
   sample_info <- sample_info[match(colnames(pb), sample_info$sample_id), , drop = FALSE]
@@ -137,12 +137,47 @@ for (idx in seq_len(nrow(layer_status_df))) {
     subset_result <- subset_cells_for_comparison(obj, vars)
     marker_fallback <- marker_discovery_paths_05(cfg, layer_id, vars$comparison_id)$exploratory_tsv
 
+    if (!identical(vars$analysis_mode, "condition_within_type")) {
+      write_tsv_local(empty_gate_summary_05(), cmp_paths$gate_summary_tsv)
+      write_tsv_local(
+        data.frame(
+          comparison_id = vars$comparison_id,
+          layer_id = layer_id,
+          analysis_mode = vars$analysis_mode,
+          aggregation_group_var = vars$aggregation_group_var,
+          inference_status = "skipped_non_condition",
+          reason = "05b formal pseudobulk is only run for condition_within_type rows",
+          warning_banner = "",
+          exploratory_marker_discovery = marker_fallback,
+          stringsAsFactors = FALSE
+        ),
+        cmp_paths$status_tsv
+      )
+      manifest_rows[[length(manifest_rows) + 1]] <- data.frame(
+        layer_id = layer_id,
+        comparison_id = vars$comparison_id,
+        analysis_mode = vars$analysis_mode,
+        aggregation_group_var = vars$aggregation_group_var,
+        inference_status = "skipped_non_condition",
+        aggregation_rds = "",
+        aggregation_metadata_tsv = "",
+        ds_results_tsv = "",
+        gate_summary_tsv = normalizePath(cmp_paths$gate_summary_tsv, winslash = "/", mustWork = FALSE),
+        status_tsv = normalizePath(cmp_paths$status_tsv, winslash = "/", mustWork = FALSE),
+        exploratory_marker_discovery = marker_fallback,
+        stringsAsFactors = FALSE
+      )
+      next
+    }
+
     if (!identical(subset_result$status, "ok")) {
       write_tsv_local(empty_gate_summary_05(), cmp_paths$gate_summary_tsv)
       write_tsv_local(
         data.frame(
           comparison_id = vars$comparison_id,
           layer_id = layer_id,
+          analysis_mode = vars$analysis_mode,
+          aggregation_group_var = vars$aggregation_group_var,
           inference_status = "skipped",
           reason = subset_result$reason,
           warning_banner = "",
@@ -154,8 +189,11 @@ for (idx in seq_len(nrow(layer_status_df))) {
       manifest_rows[[length(manifest_rows) + 1]] <- data.frame(
         layer_id = layer_id,
         comparison_id = vars$comparison_id,
+        analysis_mode = vars$analysis_mode,
+        aggregation_group_var = vars$aggregation_group_var,
         inference_status = "skipped",
-        aggregation_rds = normalizePath(layer_paths$aggregation_rds, winslash = "/", mustWork = FALSE),
+        aggregation_rds = "",
+        aggregation_metadata_tsv = "",
         ds_results_tsv = "",
         gate_summary_tsv = normalizePath(cmp_paths$gate_summary_tsv, winslash = "/", mustWork = FALSE),
         status_tsv = normalizePath(cmp_paths$status_tsv, winslash = "/", mustWork = FALSE),
@@ -166,7 +204,46 @@ for (idx in seq_len(nrow(layer_status_df))) {
       next
     }
 
-    obj_sub <- subset_result$object
+    aggregation_result <- resolve_aggregation_group_var_05(subset_result$object, vars)
+    if (!identical(aggregation_result$status, "ok")) {
+      write_tsv_local(empty_gate_summary_05(), cmp_paths$gate_summary_tsv)
+      write_tsv_local(
+        data.frame(
+          comparison_id = vars$comparison_id,
+          layer_id = layer_id,
+          analysis_mode = vars$analysis_mode,
+          aggregation_group_var = vars$aggregation_group_var,
+          inference_status = "skipped",
+          reason = aggregation_result$reason,
+          warning_banner = "",
+          exploratory_marker_discovery = marker_fallback,
+          stringsAsFactors = FALSE
+        ),
+        cmp_paths$status_tsv
+      )
+      manifest_rows[[length(manifest_rows) + 1]] <- data.frame(
+        layer_id = layer_id,
+        comparison_id = vars$comparison_id,
+        analysis_mode = vars$analysis_mode,
+        aggregation_group_var = vars$aggregation_group_var,
+        inference_status = "skipped",
+        aggregation_rds = "",
+        aggregation_metadata_tsv = "",
+        ds_results_tsv = "",
+        gate_summary_tsv = normalizePath(cmp_paths$gate_summary_tsv, winslash = "/", mustWork = FALSE),
+        status_tsv = normalizePath(cmp_paths$status_tsv, winslash = "/", mustWork = FALSE),
+        exploratory_marker_discovery = marker_fallback,
+        stringsAsFactors = FALSE
+      )
+      report_lines <- c(report_lines, sprintf("### `%s`", vars$comparison_id), sprintf("- status: skipped; reason: %s", aggregation_result$reason))
+      next
+    }
+
+    obj_sub <- aggregation_result$object
+    cmp_aggregation <- aggregate_cluster_sample_counts_05(obj_sub, cluster_var = "deg_aggregation_group")
+    saveRDS(cmp_aggregation$counts, cmp_paths$aggregation_rds)
+    write_tsv_local(cmp_aggregation$metadata, cmp_paths$aggregation_tsv)
+
     gate <- replicate_gate_summary_05(obj_sub@meta.data, vars)
     write_tsv_local(gate$summary, cmp_paths$gate_summary_tsv)
 
@@ -177,6 +254,8 @@ for (idx in seq_len(nrow(layer_status_df))) {
         data.frame(
           comparison_id = vars$comparison_id,
           layer_id = layer_id,
+          analysis_mode = vars$analysis_mode,
+          aggregation_group_var = vars$aggregation_group_var,
           inference_status = status,
           reason = gate$reason,
           warning_banner = warning_banner,
@@ -188,8 +267,11 @@ for (idx in seq_len(nrow(layer_status_df))) {
       manifest_rows[[length(manifest_rows) + 1]] <- data.frame(
         layer_id = layer_id,
         comparison_id = vars$comparison_id,
+        analysis_mode = vars$analysis_mode,
+        aggregation_group_var = vars$aggregation_group_var,
         inference_status = status,
-        aggregation_rds = normalizePath(layer_paths$aggregation_rds, winslash = "/", mustWork = FALSE),
+        aggregation_rds = normalizePath(cmp_paths$aggregation_rds, winslash = "/", mustWork = FALSE),
+        aggregation_metadata_tsv = normalizePath(cmp_paths$aggregation_tsv, winslash = "/", mustWork = FALSE),
         ds_results_tsv = "",
         gate_summary_tsv = normalizePath(cmp_paths$gate_summary_tsv, winslash = "/", mustWork = FALSE),
         status_tsv = normalizePath(cmp_paths$status_tsv, winslash = "/", mustWork = FALSE),
@@ -214,6 +296,8 @@ for (idx in seq_len(nrow(layer_status_df))) {
       data.frame(
         comparison_id = vars$comparison_id,
         layer_id = layer_id,
+        analysis_mode = vars$analysis_mode,
+        aggregation_group_var = vars$aggregation_group_var,
         inference_status = "formal",
         reason = gate$reason,
         warning_banner = "",
@@ -225,8 +309,11 @@ for (idx in seq_len(nrow(layer_status_df))) {
     manifest_rows[[length(manifest_rows) + 1]] <- data.frame(
       layer_id = layer_id,
       comparison_id = vars$comparison_id,
+      analysis_mode = vars$analysis_mode,
+      aggregation_group_var = vars$aggregation_group_var,
       inference_status = "formal",
-      aggregation_rds = normalizePath(layer_paths$aggregation_rds, winslash = "/", mustWork = FALSE),
+      aggregation_rds = normalizePath(cmp_paths$aggregation_rds, winslash = "/", mustWork = FALSE),
+      aggregation_metadata_tsv = normalizePath(cmp_paths$aggregation_tsv, winslash = "/", mustWork = FALSE),
       ds_results_tsv = normalizePath(cmp_paths$ds_results_tsv, winslash = "/", mustWork = FALSE),
       gate_summary_tsv = normalizePath(cmp_paths$gate_summary_tsv, winslash = "/", mustWork = FALSE),
       status_tsv = normalizePath(cmp_paths$status_tsv, winslash = "/", mustWork = FALSE),
@@ -238,7 +325,8 @@ for (idx in seq_len(nrow(layer_status_df))) {
 }
 
 manifest_df <- if (length(manifest_rows) > 0) dplyr::bind_rows(manifest_rows) else empty_df_05(c(
-  "layer_id", "comparison_id", "inference_status", "aggregation_rds",
+  "layer_id", "comparison_id", "analysis_mode", "aggregation_group_var",
+  "inference_status", "aggregation_rds", "aggregation_metadata_tsv",
   "ds_results_tsv", "gate_summary_tsv", "status_tsv", "exploratory_marker_discovery"
 ))
 manifest_tsv <- file.path(cfg$pseudobulk_table_dir, "pseudobulk_manifest.tsv")

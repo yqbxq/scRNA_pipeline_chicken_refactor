@@ -19,6 +19,7 @@ analysis intent. Generated module input tables should be derived from it.
 | `trajectory_pairs.tsv` | Generated trajectory inputs |
 | `scenic_targets.tsv` | Generated regulation inputs |
 | `enrichment_targets.tsv` | Generated enrichment inputs |
+| `gene_program_targets.tsv` | Generated 05 gene-program availability contract |
 | `deconv_pairs.tsv` | Future generated ST deconvolution inputs |
 | `spatial_pairs.tsv` | Future generated ST spatial inputs |
 
