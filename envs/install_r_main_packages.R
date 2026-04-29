@@ -12,7 +12,7 @@ require_pkgs <- function(pkgs, label) {
   if (length(missing_pkgs) > 0) {
     stop(
       sprintf(
-        "缺少%s依赖包: %s。请先重新运行 workflow/01_install_envs.sh 更新 conda 环境。",
+        "缺少%s依赖包: %s。请先重新运行 workflow/03stages/install_envs.sh 更新 conda 环境。",
         label,
         paste(missing_pkgs, collapse = ", ")
       ),

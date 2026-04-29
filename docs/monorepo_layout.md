@@ -11,19 +11,14 @@ scRNA_pipeline_chicken_refactor/
 ├── docs/                       Human-readable design and migration notes
 ├── envs/                       Conda and post-install environment recipes
 ├── metadata/                   Project metadata and generated module inputs
-├── shell/                      Canonical shell-native pipeline implementation
-│   ├── 02lib/                  Shared shell runtime, gates, stage helpers
+├── workflow/                   Canonical pipeline implementation
+│   ├── 01run.sh                Stage dispatcher
+│   ├── 02lib/                  Shared Bash runtime, gates, stage helpers
 │   ├── 03stages/               Stage wrappers, numbered by analysis module
-│   ├── 04python/               Shell-owned Python helpers
-│   ├── 05single_script/        Shell-owned single-module R and shell scripts
-│   └── 06tools/                Small utility scripts
-└── workflow/                   Legacy and cross-cutting workflow entrypoints
-    ├── lib/                    Legacy workflow shell helpers
-    ├── python/                 scRNA Python helpers
-    ├── python_st/              Future spatial Python helpers
-    ├── r/                      Legacy and shared R workflow modules
-    │   └── lib/                Metadata DSL and fan-out library entrypoint
-    └── testing/                Smoke tests
+│   ├── 04python/               Workflow-owned Python helpers
+│   ├── 05single_script/        Workflow-owned single-module R/Bash scripts
+│   ├── 06tools/                Small utility scripts
+│   └── testing/                Smoke tests for active workflow code
 ```
 
 ## Active Development Rule
@@ -47,7 +42,7 @@ The intended metadata architecture is:
 - Tier 0: static experimental design tables, such as `metadata/samples.tsv`
 - Tier 1: `metadata/analysis_questions.tsv`, the human-maintained source of truth
 - Tier 2: generated module input tables, not hand-edited
-- Tier 3: shell stages and single-module scripts
+- Tier 3: `workflow/03stages` wrappers and `workflow/05single_script` modules
 
 The placeholder files in `metadata/` reserve the planned paths. M1-M5 should
 replace placeholders with the implemented schema, validator, generator, stage

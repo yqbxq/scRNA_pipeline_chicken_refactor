@@ -17,20 +17,20 @@
 
 从这一版开始，正式推荐的 shell 入口顺序是：
 
-- `workflow/00_init_project.sh`
-- `workflow/01_register_delivery.sh`
-- `workflow/02_validate_metadata.sh`
-- `workflow/03_audit_inputs.sh`
-- `workflow/04_standardize_inputs.sh`
-- `workflow/05_input_summary.sh`
-- `workflow/10_run_cellranger_from_fastq.sh`
-- `workflow/20_run_main_pipeline.sh`
-- `workflow/30_run_velocyto.sh`
-- `workflow/31_run_scvelo.sh`
-- `workflow/40_build_ortholog_cache.sh`
-- `workflow/41_download_scenic_resources.sh`
-- `workflow/42_run_scenic.sh`
-- `workflow/45_download_nichenet_resources.sh`
+- `workflow/03stages/init_project.sh`
+- `workflow/03stages/register_delivery.sh`
+- `workflow/03stages/validate_metadata.sh`
+- `workflow/03stages/audit_inputs.sh`
+- `workflow/03stages/standardize_inputs.sh`
+- `workflow/03stages/input_summary.sh`
+- `workflow/03stages/alignment.sh`
+- `workflow/01run.sh <stage>`
+- `workflow/03stages/10_velocity.sh`
+- `workflow/03stages/10_velocity.sh`
+- `workflow/03stages/00_ortholog.sh`
+- `workflow/03stages/08_regulation.sh`
+- `workflow/03stages/08_regulation.sh`
+- `workflow/06tools/download_nichenet_resources.sh`
 
 旧编号脚本仍保留兼容，但不再是推荐的主入口。
 
@@ -153,21 +153,21 @@
 
 核心入口：
 
-- `workflow/00_init_project.sh`
-- `workflow/01_register_delivery.sh`
-- `workflow/02_validate_metadata.sh`
-- `workflow/03_audit_inputs.sh`
-- `workflow/04_standardize_inputs.sh`
-- `workflow/05_input_summary.sh`
-- `workflow/10_run_cellranger_from_fastq.sh`
-- `workflow/01_install_envs.sh`
-- `workflow/20_run_main_pipeline.sh`
-- `workflow/30_run_velocyto.sh`
-- `workflow/31_run_scvelo.sh`
-- `workflow/40_build_ortholog_cache.sh`
-- `workflow/41_download_scenic_resources.sh`
-- `workflow/42_run_scenic.sh`
-- `workflow/45_download_nichenet_resources.sh`
+- `workflow/03stages/init_project.sh`
+- `workflow/03stages/register_delivery.sh`
+- `workflow/03stages/validate_metadata.sh`
+- `workflow/03stages/audit_inputs.sh`
+- `workflow/03stages/standardize_inputs.sh`
+- `workflow/03stages/input_summary.sh`
+- `workflow/03stages/alignment.sh`
+- `workflow/03stages/install_envs.sh`
+- `workflow/01run.sh <stage>`
+- `workflow/03stages/10_velocity.sh`
+- `workflow/03stages/10_velocity.sh`
+- `workflow/03stages/00_ortholog.sh`
+- `workflow/03stages/08_regulation.sh`
+- `workflow/03stages/08_regulation.sh`
+- `workflow/06tools/download_nichenet_resources.sh`
 
 ---
 
@@ -177,7 +177,7 @@
 
 入口：
 
-- `workflow/00_init_project.sh`
+- `workflow/03stages/init_project.sh`
 
 作用：
 
@@ -190,7 +190,7 @@
 
 入口：
 
-- `workflow/01_install_envs.sh`
+- `workflow/03stages/install_envs.sh`
 
 作用：
 
@@ -204,7 +204,7 @@
 
 入口：
 
-- `workflow/20_run_main_pipeline.sh`
+- `workflow/01run.sh <stage>`
 
 内部步骤：
 
@@ -237,8 +237,8 @@
 
 入口：
 
-- `workflow/30_run_velocyto.sh`
-- `workflow/31_run_scvelo.sh`
+- `workflow/03stages/10_velocity.sh`
+- `workflow/03stages/10_velocity.sh`
 
 要求：
 
@@ -250,7 +250,7 @@
 
 入口：
 
-- `workflow/40_build_ortholog_cache.sh`
+- `workflow/03stages/00_ortholog.sh`
 
 作用：
 
@@ -276,7 +276,7 @@
 
 入口：
 
-- `workflow/42_run_scenic.sh`
+- `workflow/03stages/08_regulation.sh`
 
 运行顺序：
 
@@ -412,7 +412,7 @@
 
 这些图的通用函数集中在：
 
-- [plotting_helpers.R](/D:/code/r/scRNA_liucheng/server_final_pipeline/workflow/r/plotting_helpers.R)
+- `workflow/05single_script/helpers/plotting_utils.R`
 
 ### 8.2 仍然留在论文模式的图
 

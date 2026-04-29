@@ -163,10 +163,10 @@ export INPUT_STANDARDIZE_MODE="symlink"
 export USE_EXISTING_SIF="no"
 EOF
 
-SCRNA_PIPELINE_CONFIG="${CONFIG_FILE}" bash "${PIPELINE_ROOT}/workflow/02_validate_metadata.sh"
-SCRNA_PIPELINE_CONFIG="${CONFIG_FILE}" bash "${PIPELINE_ROOT}/workflow/03_audit_inputs.sh"
-SCRNA_PIPELINE_CONFIG="${CONFIG_FILE}" bash "${PIPELINE_ROOT}/workflow/04_standardize_inputs.sh"
-SCRNA_PIPELINE_CONFIG="${CONFIG_FILE}" bash "${PIPELINE_ROOT}/workflow/05_input_summary.sh"
+SCRNA_PIPELINE_CONFIG="${CONFIG_FILE}" bash "${PIPELINE_ROOT}/workflow/03stages/validate_metadata.sh"
+SCRNA_PIPELINE_CONFIG="${CONFIG_FILE}" bash "${PIPELINE_ROOT}/workflow/03stages/audit_inputs.sh"
+SCRNA_PIPELINE_CONFIG="${CONFIG_FILE}" bash "${PIPELINE_ROOT}/workflow/03stages/standardize_inputs.sh"
+SCRNA_PIPELINE_CONFIG="${CONFIG_FILE}" bash "${PIPELINE_ROOT}/workflow/03stages/input_summary.sh"
 
 python3 - <<PY
 import csv

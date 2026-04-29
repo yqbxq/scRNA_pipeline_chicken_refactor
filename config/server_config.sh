@@ -4,7 +4,7 @@
 # 这个文件当前是“激活中的项目配置”。
 # 在论文验证示例中，SAMPLE_NAMES=HF_GCs,PHF_GCs，而 RAW_SAMPLES=5 个 SRR；
 # 这是因为作者直接提供了聚合后的 matrix，但 RNA velocity 仍然依赖原始 Cell Ranger 样本。
-# 正式项目模式下，通常应先运行 workflow/00_init_project.sh 生成新项目配置，
+# 正式项目模式下，通常应先运行 workflow/03stages/init_project.sh 生成新项目配置，
 # 此时 SAMPLE_NAMES 与 RAW_SAMPLES 一般保持一致，都是你自己的样本名。
 
 # =============================== [TUNABLE] ===============================

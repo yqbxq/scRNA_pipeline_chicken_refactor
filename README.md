@@ -21,23 +21,22 @@
 
 ## 0. 当前规范入口
 
-从这一版开始，workflow 的规范执行顺序已经重构为：
+`workflow/` 是唯一的流程目录，包含 stage shell、R 单模块脚本、Python helper 和工具脚本。推荐入口是：
 
-- `workflow/00_init_project.sh`
-- `workflow/01_register_delivery.sh`
-- `workflow/02_validate_metadata.sh`
-- `workflow/03_audit_inputs.sh`
-- `workflow/04_standardize_inputs.sh`
-- `workflow/05_input_summary.sh`
-- `workflow/10_run_cellranger_from_fastq.sh`
-- `workflow/20_run_main_pipeline.sh`
-- `workflow/30_run_velocyto.sh`
-- `workflow/31_run_scvelo.sh`
-- `workflow/40_build_ortholog_cache.sh`
-- `workflow/41_download_scenic_resources.sh`
-- `workflow/42_run_scenic.sh`
+- `workflow/03stages/init_project.sh`
+- `workflow/03stages/register_delivery.sh`
+- `workflow/03stages/validate_metadata.sh`
+- `workflow/03stages/audit_inputs.sh`
+- `workflow/03stages/standardize_inputs.sh`
+- `workflow/03stages/input_summary.sh`
+- `workflow/03stages/install_envs.sh`
+- `workflow/03stages/alignment.sh`
+- `workflow/03stages/00_ortholog.sh`
+- `workflow/01run.sh <stage>`
+- `workflow/03stages/10_velocity.sh`
+- `workflow/03stages/08_regulation.sh`
 
-旧编号脚本仍然保留，但仅作为兼容 wrapper，不再是推荐入口。
+旧的顶层 wrapper 和旧 `workflow/r` 结构已在 `all-repo` 中移除，避免和新的单目录 workflow 重复。
 
 ## 1. 两种运行模式
 
@@ -86,7 +85,7 @@
 
 新增入口脚本：
 
-- `workflow/00_init_project.sh`
+- `workflow/03stages/init_project.sh`
 
 它的作用是：
 
@@ -176,44 +175,44 @@
 
 ### 5.1 项目初始化
 
-- `workflow/00_init_project.sh`
+- `workflow/03stages/init_project.sh`
   - 正式项目入口
   - 生成项目框架并自动切换全局配置
 
 ### 5.2 收件登记
 
-- `workflow/01_register_delivery.sh`
+- `workflow/03stages/register_delivery.sh`
   - 冻结原始交付物
   - 写入 delivery manifest 和 received files manifest
 
 ### 5.3 metadata 校验
 
-- `workflow/02_validate_metadata.sh`
+- `workflow/03stages/validate_metadata.sh`
   - 校验 `metadata/samples.tsv` 和 `metadata/comparisons.tsv`
   - `comparisons.tsv` 支持可选 `subset_column` / `subset_value`，两列必须同时填写或同时留空
   - 生成 canonical sample sheet
 
 ### 5.4 输入审计
 
-- `workflow/03_audit_inputs.sh`
+- `workflow/03stages/audit_inputs.sh`
   - 识别 `fastq / cellranger_out / matrix`
   - 生成 input inventory 和 branch readiness
 
 ### 5.5 输入标准化
 
-- `workflow/04_standardize_inputs.sh`
+- `workflow/03stages/standardize_inputs.sh`
   - 把 workflow 可用主输入统一挂到 `data/<sample>`
   - 不再区分旧的 `00_prepare_*` 入口
 
 ### 5.6 intake summary
 
-- `workflow/05_input_summary.sh`
+- `workflow/03stages/input_summary.sh`
   - 生成 intake summary
   - 更新 `status/workflow_status.json`
 
 ### 5.7 环境安装
 
-- `workflow/01_install_envs.sh`
+- `workflow/03stages/install_envs.sh`
   - 安装：
     - `r_main`
     - `r_legacy`
@@ -224,37 +223,37 @@
 
 ### 5.8 从 FASTQ 开始跑 Cell Ranger
 
-- `workflow/10_run_cellranger_from_fastq.sh`
+- `workflow/03stages/alignment.sh`
   - 从 `FASTQ` 开始
   - 生成 `cellranger_out`
 
 ### 5.9 主流程
 
-- `workflow/20_run_main_pipeline.sh`
-  - 分阶段执行：
-    - `01_build_raw_objects.R`
-    - `01a_pre_qc_eda.R`
-    - `01b_qc_doublet.R`
-    - `01c_post_qc_eda.R`
-    - `02_build_reductions.R`
-    - `02a_integration_eda.R`
-    - `02b_finalize_clustering.R`
-    - `03_annotation.R`
-    - `03a_annotation_eda.R`
-    - legacy annotation statistics: `04_marker_discovery.R` / `04a_pseudobulk_ds.R` / `04b_composition.R`
+- `workflow/01run.sh <stage>`
+  - 分阶段调度 `workflow/03stages/*.sh`
+  - 例如：
+    - `workflow/01run.sh 00_ortholog`
+    - `workflow/01run.sh 01_build_raw`
+    - `workflow/01run.sh 02_qc`
+    - `workflow/01run.sh 03_panorama`
+    - `workflow/01run.sh 04_subcluster`
+    - `workflow/01run.sh 05_deg`
+    - `workflow/01run.sh 06_enrichment`
+    - `workflow/01run.sh 07_communication`
+    - `workflow/01run.sh 08_regulation`
   - 会在 `pre_qc / post_qc / integration / annotation` 四个 gate 自动停住
-  - 审阅对应 `reports/eda/<stage>/report.md` 后，在 `config/eda_gates.tsv` 中把该 gate 设为 `approved`，再重跑同一个 `20_run_main_pipeline.sh`
+  - 审阅对应 `reports/eda/<stage>/report.md` 后，在 `config/eda_gates.tsv` 中把该 gate 设为 `approved`，再重跑对应 stage
 
 ### 5.10 04 子聚类模块（v04 分支）
 
-v04 分支的 04 子聚类模块走 standalone stage 入口，不并入旧的 `workflow/20_run_main_pipeline.sh`：
+04 子聚类模块走 workflow stage 入口：
 
-- `shell/03stages/04_subcluster.sh`
+- `workflow/03stages/04_subcluster.sh`
   - `04a_subcluster_build.R`：按 `object_layers.tsv` 生成 subcluster 层；默认继承 panorama 选定的 normalization/integration，只有 layer 显式配置多候选时才进入候选模式。
   - `04a_review.R`：汇总 candidate diagnostics，写 `subcluster_review_summary.tsv` 和每层 `selected_integration.txt`。
   - `04b_subcluster_annotate.R`：对已经 finalize 的 `clustered_<layer_id>` 复用 annotation helper，写 `annotated_<layer_id>` 和跨层注释汇总。
   - `04c_subcluster_eda.R`：生成 subcluster review 报告，汇总 cluster count、注释置信度、condition split、panorama-vs-subcluster 对照。
-- `shell/03stages/04d_cluster_robustness.sh`
+- `workflow/03stages/04d_cluster_robustness.sh`
   - `04d_cluster_robustness.R`：当前是 runnable placeholder，只写空 metrics schema 和报告；真实 scDesign3 robustness 留到后续里程碑。
 
 gate 规则采用 Option B：
@@ -281,11 +280,11 @@ gate 规则采用 Option B：
 | `status.04_subcluster_completed` | 04a→04b→04c 全链完成后写入 |
 | `status.04d_cluster_robustness_completed` | 独立 04d placeholder stage 完成后写入 |
 
-### 5.11 05 DEG 模块（shell standalone）
+### 5.11 05 DEG 模块（workflow standalone）
 
-05 DEG 走当前 shell-native stage，不再使用旧的 `workflow/r/04_deg_enrichment.R` 别名：
+05 DEG 走当前 workflow-native stage，底层脚本在 `workflow/05single_script/05*`：
 
-- `shell/03stages/05_deg.sh`
+- `workflow/03stages/05_deg.sh`
   - `05a_marker_discovery.R`：逐 layer / comparison / cluster 运行探索性 Wilcoxon marker discovery。
   - `05b_pseudobulk_de.R`：复制门通过时运行 muscat pseudobulk DE；复制门失败时只写探索性状态和 05a fallback 路径。
   - `05c_composition.R`：复制门通过时运行 propeller；复制门失败时只写探索性状态。
@@ -300,11 +299,11 @@ gate 规则采用 Option B：
 
 05 完成后会把 `deg` gate 置为 `pending`。审阅 `reports/eda/deg/report.md` 后，在 `config/eda_gates.tsv` 中批准 `deg`，后续 06 enrichment 才能继续。
 
-### 5.12 06 Enrichment 模块（shell standalone）
+### 5.12 06 Enrichment 模块（workflow standalone）
 
 06 enrichment 依赖 05 DEG 完成且 `deg` gate 已批准：
 
-- `shell/03stages/06_enrichment.sh`
+- `workflow/03stages/06_enrichment.sh`
   - `06a_go_enrichment.R`：按 layer / comparison / cluster / up-down-all 运行 GO BP/CC/MF 富集。
   - `06b_kegg_enrichment.R`：按相同粒度运行 KEGG 富集。
   - `06c_enrichment_eda.R`：汇总 GO/KEGG manifest，输出 `reports/eda/enrichment/report.md`、跨 cluster 热图和 shared pathways。
@@ -320,16 +319,16 @@ gate 规则采用 Option B：
 - `results/figures/enrichment/cross_cluster_kegg_heatmap.png`
 - `reports/eda/enrichment/report.md`
 
-### 5.13 07 Communication 模块（shell standalone）
+### 5.13 07 Communication 模块（workflow standalone）
 
 07 communication 使用 `metadata/communication_pairs.tsv` 驱动，不复用 `comparisons.tsv`。每行是一个 `layer_scope + sender + receiver + condition_split` 通讯任务，适合 TC→GC、GC→TC、GC 亚群发育流等有方向的问题。
 
-- `shell/03stages/07_communication.sh`
+- `workflow/03stages/07_communication.sh`
   - `07a_cellchat.R`：按 layer / pair / condition 在 `r_interaction` 中运行 CellChat，并用 00 ortholog cache 将鸡表达矩阵映射到人类符号。
   - `07b_nichenet.R`：按 sender→receiver 方向运行 NicheNet；优先读 05 DEG，缺失时使用 receiver marker fallback。
   - `07c_communication_eda.R`：按 `pair_id + layer + condition` 汇总 CellChat / NicheNet 共识，输出审阅报告。
 
-`communication_pairs.tsv` 支持 `sender` / `receiver` 精确 cell type、CSV、`*` 和 `prefix_*`。`condition_split_var` / `condition_split_values` 用于把 syf、f5 等阶段拆开分别跑。NicheNet 三件套资源可用 `workflow/45_download_nichenet_resources.sh` 准备。
+`communication_pairs.tsv` 支持 `sender` / `receiver` 精确 cell type、CSV、`*` 和 `prefix_*`。`condition_split_var` / `condition_split_values` 用于把 syf、f5 等阶段拆开分别跑。NicheNet 三件套资源可用 `workflow/06tools/download_nichenet_resources.sh` 准备。
 
 主要输出：
 
@@ -343,25 +342,25 @@ gate 规则采用 Option B：
 
 ### 5.14 RNA velocity
 
-- `workflow/30_run_velocyto.sh`
+- `workflow/03stages/10_velocity.sh`
   - 需要：
     - `outs/possorted_genome_bam.bam`
     - `outs/filtered_feature_bc_matrix`
   - 生成 `.loom`
 
-- `workflow/31_run_scvelo.sh`
+- `workflow/03stages/10_velocity.sh`
   - 先准备参考对象
   - 再跑 `scVelo`
 
 ### 5.15 SCENIC
 
-- `workflow/40_build_ortholog_cache.sh`
+- `workflow/03stages/00_ortholog.sh`
   - 构建同源映射缓存
 
-- `workflow/41_download_scenic_resources.sh`
+- `workflow/03stages/08_regulation.sh`
   - 下载或检查 SCENIC 资源
 
-- `workflow/42_run_scenic.sh`
+- `workflow/03stages/08_regulation.sh`
   - 导出同源基因表达矩阵
   - 跑 pySCENIC
   - 跑 RSS / CSI 下游
@@ -375,7 +374,7 @@ gate 规则采用 Option B：
 ```bash
 cd /home/user_test/scRNA_pipeline_chicken
 
-bash workflow/00_init_project.sh \
+bash workflow/03stages/init_project.sh \
   --project-root /home/user_test/projects/chicken_case01 \
   --fastq-source-dir /path/to/fastq \
   --genome-fasta-gz /path/to/genome.fa.gz \
@@ -390,14 +389,14 @@ bash workflow/00_init_project.sh \
 然后按顺序跑：
 
 ```bash
-bash workflow/01_register_delivery.sh --source-path /path/to/fastq
-bash workflow/02_validate_metadata.sh
-bash workflow/03_audit_inputs.sh
-bash workflow/10_run_cellranger_from_fastq.sh
-bash workflow/04_standardize_inputs.sh
-bash workflow/05_input_summary.sh
-bash workflow/01_install_envs.sh
-bash workflow/20_run_main_pipeline.sh
+bash workflow/03stages/register_delivery.sh --source-path /path/to/fastq
+bash workflow/03stages/validate_metadata.sh
+bash workflow/03stages/audit_inputs.sh
+bash workflow/03stages/alignment.sh
+bash workflow/03stages/standardize_inputs.sh
+bash workflow/03stages/input_summary.sh
+bash workflow/03stages/install_envs.sh
+bash workflow/01run.sh <stage>
 ```
 
 注意：
@@ -409,14 +408,14 @@ bash workflow/20_run_main_pipeline.sh
 如果要 RNA velocity：
 
 ```bash
-bash workflow/30_run_velocyto.sh
-bash workflow/31_run_scvelo.sh
+bash workflow/03stages/10_velocity.sh
+bash workflow/03stages/10_velocity.sh
 ```
 
 如果要 SCENIC：
 
 ```bash
-bash workflow/42_run_scenic.sh
+bash workflow/03stages/08_regulation.sh
 ```
 
 ### 6.2 情况 B：你已经有 cellranger_out
@@ -430,13 +429,13 @@ bash workflow/42_run_scenic.sh
 然后跑：
 
 ```bash
-bash workflow/01_register_delivery.sh --source-path /path/to/cellranger_out
-bash workflow/02_validate_metadata.sh
-bash workflow/03_audit_inputs.sh
-bash workflow/04_standardize_inputs.sh
-bash workflow/05_input_summary.sh
-bash workflow/01_install_envs.sh
-bash workflow/20_run_main_pipeline.sh
+bash workflow/03stages/register_delivery.sh --source-path /path/to/cellranger_out
+bash workflow/03stages/validate_metadata.sh
+bash workflow/03stages/audit_inputs.sh
+bash workflow/03stages/standardize_inputs.sh
+bash workflow/03stages/input_summary.sh
+bash workflow/03stages/install_envs.sh
+bash workflow/01run.sh <stage>
 ```
 
 ### 6.3 情况 C：你已经有 10X matrix
@@ -450,13 +449,13 @@ bash workflow/20_run_main_pipeline.sh
 然后直接跑：
 
 ```bash
-bash workflow/01_register_delivery.sh --source-path /path/to/matrix_root
-bash workflow/02_validate_metadata.sh
-bash workflow/03_audit_inputs.sh
-bash workflow/04_standardize_inputs.sh
-bash workflow/05_input_summary.sh
-bash workflow/01_install_envs.sh
-bash workflow/20_run_main_pipeline.sh
+bash workflow/03stages/register_delivery.sh --source-path /path/to/matrix_root
+bash workflow/03stages/validate_metadata.sh
+bash workflow/03stages/audit_inputs.sh
+bash workflow/03stages/standardize_inputs.sh
+bash workflow/03stages/input_summary.sh
+bash workflow/03stages/install_envs.sh
+bash workflow/01run.sh <stage>
 ```
 
 注意：
@@ -628,13 +627,13 @@ bash workflow/20_run_main_pipeline.sh
 - 已有的 `r_main / velocity / r_scenic / pyscenic` 直接复用，不另外复制一套
 - `r_legacy` 逻辑层已纳入共享体系，迁移期默认仍复用现有 shared prefix `r_heart_legacy`
 - 共享环境根通过 `SHARED_ENV_DIR` 指向 `syf_f5/01shared_resources/envs/scRNA_pipeline_chicken`
-- `workflow/01_install_envs.sh` 对已存在 prefix 走原地 `conda env update`
+- `workflow/03stages/install_envs.sh` 对已存在 prefix 走原地 `conda env update`
 - 只有 prefix 不存在时才会新建
 - 新增的扩展环境只在真正需要时再建，不默认一次性全装
 
 ## 10. 环境安装日志
 
-运行 `workflow/01_install_envs.sh` 后，安装日志会自动写到项目的 `logs/` 目录：
+运行 `workflow/03stages/install_envs.sh` 后，安装日志会自动写到项目的 `logs/` 目录：
 
 - `install_r_main_env.log`
 - `install_r_legacy_env.log`
@@ -655,7 +654,7 @@ bash workflow/20_run_main_pipeline.sh
 按需更新示例：
 
 ```bash
-INSTALL_TARGETS=r_main,velocity INSTALL_SCENIC_RESOURCES=no bash workflow/01_install_envs.sh
+INSTALL_TARGETS=r_main,velocity INSTALL_SCENIC_RESOURCES=no bash workflow/03stages/install_envs.sh
 ```
 
 这条命令只会原地更新 `r_main` 和 `velocity`，不会碰 `r_legacy / r_scenic / pyscenic`。
@@ -663,13 +662,13 @@ INSTALL_TARGETS=r_main,velocity INSTALL_SCENIC_RESOURCES=no bash workflow/01_ins
 如果要把当前 5 套正式共享环境都同步到最新定义：
 
 ```bash
-INSTALL_TARGETS=all bash workflow/01_install_envs.sh
+INSTALL_TARGETS=all bash workflow/03stages/install_envs.sh
 ```
 
 如果要把扩展环境也一起建好：
 
 ```bash
-INSTALL_TARGETS=r_main,r_legacy,velocity,r_scenic,pyscenic,r_interaction,r_spatial,py_spatial,py_spatial_legacy,py_cell2location,r_validation bash workflow/01_install_envs.sh
+INSTALL_TARGETS=r_main,r_legacy,velocity,r_scenic,pyscenic,r_interaction,r_spatial,py_spatial,py_spatial_legacy,py_cell2location,r_validation bash workflow/03stages/install_envs.sh
 ```
 
 ## 11. 当前实际状态
