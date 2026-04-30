@@ -162,6 +162,19 @@ panorama cells to broad `cell_type` labels and overwriting subcluster cells from
 04b annotations before subtype-level sender/receiver rows such as
 pGC/eGC/rgGC/lGC are treated as fully semantic-checked runtime inputs.
 
+For 05 and 07, generated schemas are runtime contracts:
+
+- `__rest__` is valid only for `annotation_cluster_marker` and
+  `subtype_marker`.
+- `group_var=cell_type` is checked against object `cell_type`; `group_var=cell_subtype`
+  is checked against object `cell_subtype`.
+- NicheNet-capable rows must reference explicit gene-program comparison IDs in
+  `baseline_marker_comparison_id` and, for condition split tasks,
+  `receiver_deg_comparison_id`.
+- `direction_filter=no` keeps full CellChat networks; `direction_filter=yes`
+  keeps sender-to-receiver LR rows for consensus.
+- `requires_cell_subtype=yes` is strict and cannot fall back to broad labels.
+
 ## Derived Communication Rows
 
 The following conceptual rows are not written to
@@ -187,6 +200,9 @@ communication questions.
 - ST rows remain `planned`,
 - every active `contrast_axis` has a known Tier 2 target mapping,
 - generated table ID uniqueness when those tables exist,
+- generated table schema checks for 05/06/07 Tier 2 contracts,
+- 05 `analysis_mode`, `__rest__`, condition, composition, and group-var semantic checks,
+- 07 explicit `baseline_marker_comparison_id` / `receiver_deg_comparison_id` checks,
 - optional semantic checks against annotated RDS metadata when available,
 - NicheNet receiver/DEG consistency when generated comparisons exist.
 

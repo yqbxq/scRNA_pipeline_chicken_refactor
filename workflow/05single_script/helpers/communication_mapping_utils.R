@@ -216,7 +216,7 @@ rename_ligand_target_matrix_human_to_chicken <- function(ligand_target_matrix, l
 empty_cellchat_index_07 <- function() {
   empty_df_07(c(
     "pair_id", "layer_id", "condition_value", "condition_split_var", "sender", "receiver", "cell_type_col",
-    "n_cells", "n_cell_types", "status", "reason", "cellchat_rds_path",
+    "direction_filter", "requires_cell_subtype", "n_cells", "n_cell_types", "status", "reason", "cellchat_rds_path",
     "lr_table_path", "pathway_table_path", "bubble_png", "network_png", "heatmap_png"
   ))
 }
@@ -232,7 +232,9 @@ empty_mapping_summary_07 <- function() {
 empty_nichenet_index_07 <- function() {
   empty_df_07(c(
     "pair_id", "layer_id", "condition_value", "condition_split_var", "sender_set", "receiver_set",
-    "sender_cell_types", "receiver_cell_types", "deg_source", "deg_status", "status", "reason",
+    "sender_cell_types", "receiver_cell_types", "receiver_gene_program_source",
+    "baseline_marker_comparison_id", "receiver_deg_comparison_id", "gene_program_comparison_id",
+    "formal_status", "result_level", "deg_source", "deg_status", "status", "reason",
     "ligand_activity_tsv", "ligand_target_links_tsv", "nichenet_rds",
     "ligand_activity_heatmap_png", "ligand_target_heatmap_png", "circos_png"
   ))
@@ -387,6 +389,70 @@ resolve_cell_type_col_07 <- function(seu, layer_id, layer_role = "") {
   hit[[1]]
 }
 
+resolve_pair_cell_type_col_07 <- function(seu, layer_id, layer_role = "", pair_row = NULL) {
+  strict <- !is.null(pair_row) &&
+    exists("communication_pair_requires_cell_subtype", mode = "function") &&
+    communication_pair_requires_cell_subtype(pair_row)
+  if (strict) {
+    if (!"cell_subtype" %in% colnames(seu@meta.data)) {
+      return(list(
+        column = "",
+        status = "missing_cell_subtype",
+        reason = "requires_cell_subtype=yes but cell_subtype metadata column is absent",
+        strict = TRUE
+      ))
+    }
+    return(list(column = "cell_subtype", status = "ok", reason = "", strict = TRUE))
+  }
+
+  col <- resolve_cell_type_col_07(seu, layer_id, layer_role)
+  if (!nzchar(col)) {
+    return(list(
+      column = "",
+      status = "missing_cell_type_column",
+      reason = sprintf("Layer %s has no supported cell type metadata column.", layer_id),
+      strict = FALSE
+    ))
+  }
+  list(column = col, status = "ok", reason = "", strict = FALSE)
+}
+
+validate_resolved_roles_07 <- function(pair_row, roles, strict = FALSE) {
+  if (length(roles$sender) == 0 || length(roles$receiver) == 0) {
+    missing_msg <- paste(roles$missing %||% character(0), collapse = ",")
+    if (!nzchar(missing_msg)) {
+      missing_msg <- "sender or receiver resolved to an empty set"
+    }
+    return(list(
+      status = "missing_roles",
+      severity = if (strict) "error" else "warning",
+      reason = sprintf("Missing sender/receiver roles: %s", missing_msg)
+    ))
+  }
+  if (strict && length(roles$missing) > 0) {
+    return(list(
+      status = "missing_cell_subtype_roles",
+      severity = "error",
+      reason = sprintf("requires_cell_subtype=yes and these roles are absent from cell_subtype: %s", paste(roles$missing, collapse = ","))
+    ))
+  }
+  list(status = "ok", severity = "", reason = "")
+}
+
+filter_communication_direction_df_07 <- function(df, roles) {
+  if (nrow(df) == 0 || is.null(roles)) {
+    return(df)
+  }
+  out <- df
+  if ("source" %in% colnames(out) && length(roles$sender) > 0) {
+    out <- out[as.character(out$source) %in% roles$sender, , drop = FALSE]
+  }
+  if ("target" %in% colnames(out) && length(roles$receiver) > 0) {
+    out <- out[as.character(out$target) %in% roles$receiver, , drop = FALSE]
+  }
+  out
+}
+
 standardize_comm_metadata_07 <- function(seu) {
   if (exists("standardize_design_metadata_05", mode = "function")) {
     return(standardize_design_metadata_05(seu))
@@ -463,22 +529,195 @@ communication_triage_row_07 <- function(layer_id, comparison_id, severity, signa
   row
 }
 
-read_deg_for_nichenet_07 <- function(cfg, layer_id, comparison_id) {
-  input_grid <- tryCatch(read_enrichment_input_grid_06(cfg), error = function(e) empty_df_07())
-  if (nrow(input_grid) > 0 && all(c("layer_id", "comparison_id", "deg_tsv") %in% colnames(input_grid))) {
-    hit <- input_grid[input_grid$layer_id == layer_id & input_grid$comparison_id == comparison_id, , drop = FALSE]
-    if (nrow(hit) > 0 && nzchar(hit$deg_tsv[[1]]) && file.exists(hit$deg_tsv[[1]])) {
-      deg_df <- read_tsv_optional(hit$deg_tsv[[1]])
-      prep <- prepare_deg_gene_list_from_df_06(deg_df, cfg, cluster_id = NULL)
-      return(list(
-        genes = prep$up$genes,
-        source = hit$deg_source[[1]],
-        status = hit$deg_inference_status[[1]],
-        table = deg_df
-      ))
+empty_gene_program_07 <- function(source = "none", status = "missing", reason = "") {
+  list(
+    genes = character(0),
+    source = source,
+    status = status,
+    reason = reason,
+    comparison_id = "",
+    formal_status = status,
+    result_level = "",
+    warning = "",
+    table = data.frame(stringsAsFactors = FALSE)
+  )
+}
+
+gene_program_downstream_status_07 <- function(row) {
+  result_level <- normalize_scalar_value(row$result_level[[1]])
+  formal_status <- normalize_scalar_value(row$formal_status[[1]], "missing")
+  warning <- normalize_scalar_value(row$warning[[1]])
+  if (identical(result_level, "pseudobulk_formal") && identical(formal_status, "formal")) {
+    return("formal")
+  }
+  if (grepl("formal preferred", warning, ignore.case = TRUE)) {
+    return("exploratory_forced")
+  }
+  if (identical(result_level, "cell_level_exploratory")) {
+    return("exploratory_only")
+  }
+  if (identical(result_level, "unavailable")) {
+    return("unavailable")
+  }
+  if (nzchar(formal_status)) formal_status else "missing"
+}
+
+read_gene_program_registry_07 <- function(cfg) {
+  registry_path <- cfg$gene_program_registry_tsv %||% deg_report_paths_05(cfg)$gene_program_registry_tsv
+  registry <- read_tsv_optional(registry_path)
+  expected <- c(
+    "comparison_id", "source_question_id", "layer_id", "analysis_mode",
+    "gene_program_role", "result_level", "preferred_for_downstream",
+    "formal_status", "deg_tsv", "marker_tsv", "top_gene_tsv",
+    "n_significant", "warning"
+  )
+  for (col in expected) {
+    if (!col %in% colnames(registry)) {
+      registry[[col]] <- character(nrow(registry))
     }
   }
-  list(genes = character(0), source = "inline_findmarkers", status = "pending_inline", table = data.frame(stringsAsFactors = FALSE))
+  registry[, expected, drop = FALSE]
+}
+
+gene_program_path_for_registry_row_07 <- function(row, preferred = c("top", "formal", "marker")) {
+  preferred <- match.arg(preferred)
+  candidates <- switch(
+    preferred,
+    formal = c("deg_tsv", "top_gene_tsv", "marker_tsv"),
+    marker = c("marker_tsv", "top_gene_tsv", "deg_tsv"),
+    top = c("top_gene_tsv", "deg_tsv", "marker_tsv")
+  )
+  for (col in candidates) {
+    path <- normalize_scalar_value(row[[col]][[1]])
+    if (nzchar(path) && file.exists(path)) {
+      return(list(path = path, source_col = col))
+    }
+  }
+  list(path = "", source_col = "")
+}
+
+read_gene_program_by_comparison_id_07 <- function(cfg, layer_id, comparison_id, preferred = "top") {
+  comparison_id <- normalize_scalar_value(comparison_id)
+  if (!nzchar(comparison_id)) {
+    return(empty_gene_program_07(status = "missing_comparison_id", reason = "empty comparison_id"))
+  }
+  registry <- read_gene_program_registry_07(cfg)
+  if (nrow(registry) == 0) {
+    return(empty_gene_program_07(
+      source = sprintf("gene_program_registry:%s", comparison_id),
+      status = "missing_gene_program_registry",
+      reason = "gene_program_registry.tsv is empty or absent"
+    ))
+  }
+  hit <- registry[registry$comparison_id == comparison_id, , drop = FALSE]
+  if (nrow(hit) == 0) {
+    return(empty_gene_program_07(
+      source = sprintf("gene_program_registry:%s", comparison_id),
+      status = "missing_registry_row",
+      reason = sprintf("comparison_id not found in gene_program_registry.tsv: %s", comparison_id)
+    ))
+  }
+  exact <- hit[nzchar(hit$layer_id) & hit$layer_id == layer_id, , drop = FALSE]
+  if (nrow(exact) > 0) {
+    hit <- exact
+  }
+  row <- hit[1, , drop = FALSE]
+  path_info <- gene_program_path_for_registry_row_07(row, preferred = preferred)
+  if (!nzchar(path_info$path)) {
+    return(empty_gene_program_07(
+      source = sprintf("gene_program_registry:%s", comparison_id),
+      status = "missing_gene_program_file",
+      reason = sprintf("registry row has no existing DEG/marker table for %s", comparison_id)
+    ))
+  }
+
+  gp_df <- read_tsv_optional(path_info$path)
+  prep <- prepare_deg_gene_list_from_df_06(gp_df, cfg, cluster_id = NULL)
+  status <- gene_program_downstream_status_07(row)
+  if (length(prep$up$genes) == 0) {
+    status <- paste(status, prep$up$status, sep = ":")
+  }
+  list(
+    genes = prep$up$genes,
+    source = sprintf("gene_program_registry:%s:%s", comparison_id, path_info$source_col),
+    status = status,
+    reason = prep$up$reason %||% "",
+    comparison_id = comparison_id,
+    formal_status = normalize_scalar_value(row$formal_status[[1]], "missing"),
+    result_level = normalize_scalar_value(row$result_level[[1]]),
+    warning = normalize_scalar_value(row$warning[[1]]),
+    table = gp_df
+  )
+}
+
+read_gene_program_for_nichenet_07 <- function(
+    cfg,
+    layer_id,
+    receiver_deg_comparison_id = "",
+    baseline_marker_comparison_id = "",
+    receiver_gene_program_source = "none") {
+  source_kind <- tolower(normalize_scalar_value(receiver_gene_program_source, "none"))
+  if (identical(source_kind, "none")) {
+    return(empty_gene_program_07(
+      source = "communication_pairs:receiver_gene_program_source=none",
+      status = "skipped_no_gene_program_source",
+      reason = "communication pair explicitly does not request a receiver gene program"
+    ))
+  }
+
+  ids <- if (identical(source_kind, "condition_deg")) {
+    split_csv_local(receiver_deg_comparison_id)
+  } else if (identical(source_kind, "receiver_marker")) {
+    split_csv_local(baseline_marker_comparison_id)
+  } else {
+    unique(c(split_csv_local(receiver_deg_comparison_id), split_csv_local(baseline_marker_comparison_id)))
+  }
+  ids <- ids[nzchar(ids)]
+  if (length(ids) == 0) {
+    return(empty_gene_program_07(
+      source = sprintf("communication_pairs:%s", source_kind),
+      status = "missing_explicit_gene_program_id",
+      reason = sprintf("receiver_gene_program_source=%s but no comparison ID was provided", source_kind)
+    ))
+  }
+
+  preferred <- if (identical(source_kind, "condition_deg")) "formal" else "marker"
+  programs <- lapply(ids, function(id) read_gene_program_by_comparison_id_07(cfg, layer_id, id, preferred = preferred))
+  genes <- unique(unlist(lapply(programs, `[[`, "genes"), use.names = FALSE))
+  tables <- lapply(programs, `[[`, "table")
+  tables <- tables[vapply(tables, nrow, integer(1)) > 0]
+  status <- unique(vapply(programs, function(x) normalize_scalar_value(x$status, "missing"), character(1)))
+  reasons <- unique(vapply(programs, function(x) normalize_scalar_value(x$reason), character(1)))
+  warnings <- unique(vapply(programs, function(x) normalize_scalar_value(x$warning), character(1)))
+  list(
+    genes = genes,
+    source = sprintf("communication_pairs:%s:%s", source_kind, paste(ids, collapse = ",")),
+    status = paste(status[nzchar(status)], collapse = ";"),
+    reason = paste(reasons[nzchar(reasons)], collapse = "; "),
+    comparison_id = paste(ids, collapse = ","),
+    formal_status = paste(unique(vapply(programs, function(x) normalize_scalar_value(x$formal_status, "missing"), character(1))), collapse = ";"),
+    result_level = paste(unique(vapply(programs, function(x) normalize_scalar_value(x$result_level), character(1))), collapse = ";"),
+    warning = paste(warnings[nzchar(warnings)], collapse = "; "),
+    table = if (length(tables) > 0) dplyr::bind_rows(tables) else data.frame(stringsAsFactors = FALSE)
+  )
+}
+
+read_gene_program_for_pair_07 <- function(cfg, layer_id, pair_row) {
+  read_gene_program_for_nichenet_07(
+    cfg = cfg,
+    layer_id = layer_id,
+    receiver_deg_comparison_id = normalize_scalar_value(pair_row$receiver_deg_comparison_id[[1]]),
+    baseline_marker_comparison_id = normalize_scalar_value(pair_row$baseline_marker_comparison_id[[1]]),
+    receiver_gene_program_source = normalize_scalar_value(pair_row$receiver_gene_program_source[[1]], "none")
+  )
+}
+
+read_deg_for_nichenet_07 <- function(cfg, layer_id, comparison_id) {
+  comparison_id <- normalize_scalar_value(comparison_id)
+  if (!nzchar(comparison_id)) {
+    return(empty_gene_program_07(status = "missing_comparison_id", reason = "empty comparison_id"))
+  }
+  read_gene_program_by_comparison_id_07(cfg, layer_id, comparison_id, preferred = "formal")
 }
 
 inline_findmarkers_for_nichenet_07 <- function(seu, vars, receiver_cells, alpha = 0.05) {

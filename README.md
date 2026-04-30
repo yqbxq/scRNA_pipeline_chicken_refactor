@@ -319,11 +319,15 @@ gate 规则采用 Option B：
 06 enrichment 依赖 05 DEG 完成且 `deg` gate 已批准：
 
 - `workflow/03stages/06_enrichment.sh`
-  - `06a_go_enrichment.R`：按 layer / comparison / cluster / up-down-all 运行 GO BP/CC/MF 富集。
-  - `06b_kegg_enrichment.R`：按相同粒度运行 KEGG 富集。
+  - `06a_go_enrichment.R`：只消费 `metadata/enrichment_targets.tsv` 中 `database=GO` 的目标，再通过 `results/tables/deg/gene_program_registry.tsv` 找对应 gene program。
+  - `06b_kegg_enrichment.R`：只消费 `metadata/enrichment_targets.tsv` 中 `database=KEGG` 的目标，再通过同一个 registry 找对应 gene program。
   - `06c_enrichment_eda.R`：汇总 GO/KEGG manifest，输出 `reports/eda/enrichment/report.md`、跨 cluster 热图和 shared pathways。
 
+06 不再从 05 manifest 自动膨胀所有 DEG。没有出现在 `enrichment_targets.tsv` 的 DEG/marker 不会自动富集。每个 layer 会尽量生成 `results/tables/enrichment/background/background_genes_<layer>.tsv`，clusterProfiler GO/KEGG 使用该 layer-specific expressed universe；如果对象不可用，manifest 会保留背景为空/不可用的状态信息。
+
 物种策略默认是 `ENRICHMENT_SPECIES_STRATEGY=chicken_primary`。如果设置为包含 `human`、`dual`、`both` 或 `mapped`，06 会额外使用 00 ortholog cache 将鸡基因映射到人类符号后跑辅助通道。运行后端优先使用可加载的 `clusterProfiler`；如果当前环境中 `clusterProfiler` 因 `DOSE` 等依赖不可加载，会回退到 `gprofiler2` 并在 manifest 的 `status` / `reason` 中记录。KEGG 在线查询默认 `ENRICHMENT_KEGG_TIMEOUT_SEC=60`，超时会记录为 `timeout` 状态。
+
+06 manifest 和图标题会携带 `formal_status` / `result_level` / `biological_replicates`，使 `formal`、`exploratory_only`、`exploratory_forced` 不会在下游报告中丢失。
 
 主要输出：
 
@@ -340,10 +344,10 @@ gate 规则采用 Option B：
 
 - `workflow/03stages/07_communication.sh`
   - `07a_cellchat.R`：按 layer / pair / condition 在 `r_interaction` 中运行 CellChat，并用 00 ortholog cache 将鸡表达矩阵映射到人类符号。
-  - `07b_nichenet.R`：按 sender→receiver 方向运行 NicheNet；优先读 05 DEG，缺失时使用 receiver marker fallback。
-  - `07c_communication_eda.R`：按 `pair_id + layer + condition` 汇总 CellChat / NicheNet 共识，输出审阅报告。
+  - `07b_nichenet.R`：按 sender→receiver 方向运行 NicheNet；通过 `communication_pairs.tsv` 的显式 `receiver_deg_comparison_id` / `baseline_marker_comparison_id` 到 `gene_program_registry.tsv` 查 gene program。
+  - `07c_communication_eda.R`：按 `pair_id + layer + condition` 汇总 CellChat / NicheNet 共识，并按 `direction_filter` 决定是否保留全网络。
 
-`communication_pairs.tsv` 支持 `sender` / `receiver` 精确 cell type、CSV、`*` 和 `prefix_*`。`condition_split_var` / `condition_split_values` 用于把 syf、f5 等阶段拆开分别跑。07 默认使用 `COMMUNICATION_CELL_TYPE_COL=cell_subtype` 解析 sender/receiver；需要临时回退旧列时可显式设置该环境变量。NicheNet 三件套资源可用 `workflow/06tools/download_nichenet_resources.sh` 准备。
+`communication_pairs.tsv` 支持 `sender` / `receiver` 精确 cell type、CSV、`*` 和 `prefix_*`。`condition_split_var` / `condition_split_values` 用于把 syf、f5 等阶段拆开分别跑。`requires_cell_subtype=yes` 时必须存在 `cell_subtype` 且 sender/receiver 必须能在该列解析，07 不允许 fallback 到 `cell_type` / `annotation_label` / `cluster_id`。NicheNet 缺失 gene program 会记录失败或跳过，不再临时跑 receiver FindMarkers，也不再用 `pair_id == comparison_id` 猜 DEG。NicheNet 三件套资源可用 `workflow/06tools/download_nichenet_resources.sh` 准备。
 
 主要输出：
 

@@ -304,7 +304,20 @@ run_nichenet_one_07b <- function(geneset, background, potential_ligands, paths) 
   list(status = "ok", reason = "")
 }
 
-append_nichenet_row_07b <- function(rows, pair_row, layer_id, condition_value, roles, deg_source, deg_status, status, reason, paths) {
+append_nichenet_row_07b <- function(
+    rows,
+    pair_row,
+    layer_id,
+    condition_value,
+    roles,
+    deg_source,
+    deg_status,
+    status,
+    reason,
+    paths,
+    gene_program_comparison_id = "",
+    formal_status = "",
+    result_level = "") {
   rows[[length(rows) + 1L]] <- data.frame(
     pair_id = pair_row$pair_id[[1]],
     layer_id = layer_id,
@@ -314,6 +327,12 @@ append_nichenet_row_07b <- function(rows, pair_row, layer_id, condition_value, r
     receiver_set = normalize_scalar_value(pair_row$receiver[[1]], "*"),
     sender_cell_types = roles$sender_label %||% "",
     receiver_cell_types = roles$receiver_label %||% "",
+    receiver_gene_program_source = normalize_scalar_value(pair_row$receiver_gene_program_source[[1]], "none"),
+    baseline_marker_comparison_id = normalize_scalar_value(pair_row$baseline_marker_comparison_id[[1]]),
+    receiver_deg_comparison_id = normalize_scalar_value(pair_row$receiver_deg_comparison_id[[1]]),
+    gene_program_comparison_id = gene_program_comparison_id,
+    formal_status = formal_status,
+    result_level = result_level,
     deg_source = deg_source,
     deg_status = deg_status,
     status = status,
@@ -339,20 +358,27 @@ for (layer_idx in seq_len(nrow(layers))) {
   layer_id <- layer_row$layer_id[[1]]
   message("07b NicheNet layer: ", layer_id)
   seu <- load_comm_layer_object_07(layer_row)
-  cell_type_col <- resolve_cell_type_col_07(seu, layer_id, layer_row$layer_role[[1]])
-  if (!nzchar(cell_type_col)) {
-    triage_rows[[length(triage_rows) + 1L]] <- communication_triage_row_07(
-      layer_id, "", "error", "communication_missing_cell_type",
-      sprintf("Layer %s has no supported cell type metadata column.", layer_id),
-      "Check 03/04 annotation outputs and metadata column names."
-    )
-    next
-  }
 
   layer_pairs <- communication_pairs_for_layer(pairs, layer_id, "nichenet")
   for (pair_idx in seq_len(nrow(layer_pairs))) {
     pair_row <- layer_pairs[pair_idx, , drop = FALSE]
     pair_id <- pair_row$pair_id[[1]]
+    col_result <- resolve_pair_cell_type_col_07(seu, layer_id, layer_row$layer_role[[1]], pair_row)
+    cell_type_col <- col_result$column
+    if (!identical(col_result$status, "ok")) {
+      triage_rows[[length(triage_rows) + 1L]] <- communication_triage_row_07(
+        layer_id, pair_id, "error", col_result$status,
+        col_result$reason,
+        "Run M5 subtype backfill or fix communication metadata before rerunning 07b."
+      )
+      for (condition_value in condition_values_for_failed_pair_07b(pair_row)) {
+        paths <- nichenet_paths_07(cfg, layer_id, pair_id, condition_value)
+        write_nichenet_empty_outputs_07b(paths, col_result$reason)
+        index_rows <- append_nichenet_row_07b(index_rows, pair_row, layer_id, condition_value, list(sender_label = "", receiver_label = ""), "none", "missing", col_result$status, col_result$reason, paths)
+      }
+      next
+    }
+
     base_subset <- subset_by_pair_filter_07(seu, pair_row)
     if (!identical(base_subset$status, "ok")) {
       for (condition_value in condition_values_for_failed_pair_07b(pair_row)) {
@@ -373,10 +399,14 @@ for (layer_idx in seq_len(nrow(layers))) {
       reason <- split_item$reason
       deg_source <- "none"
       deg_status <- "missing"
+      gene_program_comparison_id <- ""
+      formal_status <- ""
+      result_level <- ""
 
       if (identical(status, "ok")) {
         obj <- split_item$object
         roles <- resolve_sender_receiver_sets(pair_row, obj, cell_type_col)
+        role_check <- validate_resolved_roles_07(pair_row, roles, strict = isTRUE(col_result$strict))
         roles_rows[[length(roles_rows) + 1L]] <- data.frame(
           pair_id = pair_id,
           layer_id = layer_id,
@@ -386,12 +416,12 @@ for (layer_idx in seq_len(nrow(layers))) {
           sender_cell_types = roles$sender_label,
           receiver_cell_types = roles$receiver_label,
           missing_cell_types = paste(roles$missing, collapse = ","),
-          status = ifelse(length(roles$sender) > 0 && length(roles$receiver) > 0, "ok", "missing_roles"),
+          status = role_check$status,
           stringsAsFactors = FALSE
         )
-        if (length(roles$sender) == 0 || length(roles$receiver) == 0) {
-          status <- "missing_roles"
-          reason <- sprintf("Missing sender/receiver roles: %s", paste(roles$missing, collapse = ","))
+        if (!identical(role_check$status, "ok")) {
+          status <- role_check$status
+          reason <- role_check$reason
         }
       }
 
@@ -400,17 +430,24 @@ for (layer_idx in seq_len(nrow(layers))) {
         meta <- obj@meta.data
         sender_cells <- rownames(meta)[as.character(meta[[cell_type_col]]) %in% roles$sender]
         receiver_cells <- rownames(meta)[as.character(meta[[cell_type_col]]) %in% roles$receiver]
-        deg <- read_deg_for_nichenet_07(cfg, layer_id, pair_id)
+        deg <- read_gene_program_for_pair_07(cfg, layer_id, pair_row)
         geneset <- deg$genes
         deg_source <- deg$source
         deg_status <- deg$status
+        gene_program_comparison_id <- deg$comparison_id %||% ""
+        formal_status <- deg$formal_status %||% ""
+        result_level <- deg$result_level %||% ""
         if (length(geneset) == 0) {
-          receiver_markers <- receiver_marker_genes_for_nichenet_07b(obj, receiver_cells, alpha = cfg$deg_alpha)
-          geneset <- receiver_markers$genes
-          deg_source <- "receiver_marker_findmarkers"
-          deg_status <- receiver_markers$status
+          status <- deg_status
+          reason <- normalize_scalar_value(deg$reason, "No receiver gene program genes were available from gene_program_registry.tsv")
         }
+      }
 
+      if (identical(status, "ok")) {
+        obj <- split_item$object
+        meta <- obj@meta.data
+        sender_cells <- rownames(meta)[as.character(meta[[cell_type_col]]) %in% roles$sender]
+        receiver_cells <- rownames(meta)[as.character(meta[[cell_type_col]]) %in% roles$receiver]
         sender_expressed <- expressed_genes_for_cells_07b(obj, sender_cells, cfg$nichenet_expression_pct)
         receiver_expressed <- expressed_genes_for_cells_07b(obj, receiver_cells, cfg$nichenet_expression_pct)
         lr_hit <- lr_network_chicken[
@@ -447,7 +484,13 @@ for (layer_idx in seq_len(nrow(layers))) {
         )
       }
 
-      index_rows <- append_nichenet_row_07b(index_rows, pair_row, layer_id, condition_value, roles, deg_source, deg_status, status, reason, paths)
+      index_rows <- append_nichenet_row_07b(
+        index_rows, pair_row, layer_id, condition_value, roles, deg_source,
+        deg_status, status, reason, paths,
+        gene_program_comparison_id = gene_program_comparison_id,
+        formal_status = formal_status,
+        result_level = result_level
+      )
       suffix <- paste(safe_id_07(layer_id), safe_id_07(pair_id), safe_id_07(condition_value), sep = "_")
       dynamic_outputs[[paste0("ligand_activity_", suffix)]] <- build_output_entry(paths$ligand_activity_tsv, "tsv", module_name, "NicheNet ligand activity table", base_dir = cfg$project_root)
       dynamic_outputs[[paste0("ligand_target_links_", suffix)]] <- build_output_entry(paths$ligand_target_links_tsv, "tsv", module_name, "NicheNet ligand-target links", base_dir = cfg$project_root)
@@ -487,6 +530,7 @@ write_manifest_local(
     weighted_networks_rds = cfg$nichenet_weighted_networks_rds,
     communication_pairs_sheet = cfg$communication_pairs_sheet,
     communication_cell_type_col = cfg$communication_cell_type_col,
+    gene_program_registry_tsv = cfg$gene_program_registry_tsv,
     module_05d = cfg$module_05d_manifest_path
   ),
   version = cfg$module_version,

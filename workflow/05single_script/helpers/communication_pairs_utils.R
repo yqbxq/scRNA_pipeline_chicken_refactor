@@ -1,7 +1,10 @@
 empty_communication_pairs_07 <- function() {
   empty_df_07(c(
-    "pair_id", "layer_scope", "sender", "receiver", "subset_column", "subset_value",
-    "condition_split_var", "condition_split_values", "tool", "enabled", "notes"
+    "pair_id", "source_question_id", "layer_scope", "sender", "receiver",
+    "subset_column", "subset_value", "condition_split_var", "condition_split_values",
+    "tool", "communication_mode", "receiver_gene_program_source",
+    "baseline_marker_comparison_id", "receiver_deg_comparison_id",
+    "direction_filter", "requires_cell_subtype", "enabled", "notes"
   ))
 }
 
@@ -22,6 +25,13 @@ read_communication_pairs <- function(cfg) {
   }
   df$tool[!nzchar(df$tool)] <- "both"
   df$tool <- tolower(df$tool)
+  df$communication_mode[!nzchar(df$communication_mode)] <- "baseline"
+  df$receiver_gene_program_source[!nzchar(df$receiver_gene_program_source)] <- "none"
+  df$receiver_gene_program_source <- tolower(df$receiver_gene_program_source)
+  df$direction_filter[!nzchar(df$direction_filter)] <- "yes"
+  df$direction_filter <- tolower(df$direction_filter)
+  df$requires_cell_subtype[!nzchar(df$requires_cell_subtype)] <- "no"
+  df$requires_cell_subtype <- tolower(df$requires_cell_subtype)
   df$enabled[!nzchar(df$enabled)] <- "yes"
   df$enabled <- tolower(df$enabled)
   df <- df[nzchar(df$pair_id), , drop = FALSE]
@@ -45,6 +55,16 @@ communication_pair_tool_enabled <- function(pair_row, tool) {
     return(requested %in% c("nichenet", "nichenet_only"))
   }
   FALSE
+}
+
+communication_pair_direction_filter <- function(pair_row) {
+  flag <- tolower(normalize_scalar_value(pair_row$direction_filter[[1]], "yes"))
+  flag %in% c("yes", "true", "1", "on")
+}
+
+communication_pair_requires_cell_subtype <- function(pair_row) {
+  flag <- tolower(normalize_scalar_value(pair_row$requires_cell_subtype[[1]], "no"))
+  flag %in% c("yes", "true", "1", "on")
 }
 
 pair_scope_applies_to_layer_07 <- function(pair_row, layer_id) {

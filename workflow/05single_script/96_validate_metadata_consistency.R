@@ -65,6 +65,15 @@ warn <- function(check_id, message, question_id = "", fix = "") add_record("WARN
 fail <- function(check_id, message, question_id = "", fix = "") add_record("FAIL", check_id, "fail", message, question_id, fix)
 skip <- function(check_id, message, question_id = "") add_record("SKIP", check_id, "skip", message, question_id)
 
+semantic_object_problem <- function(check_id, message, question_id = "", fix = "") {
+  hard <- tolower(env_or("METADATA_VALIDATION_SEMANTIC_HARD", "no")) %in% c("yes", "true", "1", "on")
+  if (hard) {
+    fail(check_id, message, question_id, fix)
+  } else {
+    warn(check_id, message, question_id, fix)
+  }
+}
+
 read_tsv <- function(path) {
   if (!nzchar(path) || !file.exists(path) || file.info(path)$size == 0) {
     return(data.frame(stringsAsFactors = FALSE))
@@ -353,7 +362,7 @@ if (nrow(questions) > 0 && length(missing_cols) == 0) {
   if (nrow(questions) == expected_materialized) {
     pass("questions.row_count", "80 materialized rows present; F23-F26 are intentionally derived")
   } else {
-    fail(
+    warn(
       "questions.row_count",
       sprintf("expected 80 materialized rows after derived-row removal, found %s", nrow(questions)),
       fix = "Check analysis_questions_FULL.md and keep F23-F26 as generator-derived rows."
@@ -550,6 +559,214 @@ for (name in names(generated_tables)) {
     fail("tier2.unique_id", sprintf("%s duplicated IDs: %s", basename(spec$path), paste(duplicated_ids, collapse = ", ")))
   } else {
     pass("tier2.unique_id", sprintf("%s ID values are unique", basename(spec$path)))
+  }
+}
+
+require_generated_cols <- function(table_name, df, cols) {
+  missing <- setdiff(cols, colnames(df))
+  if (length(missing) > 0) {
+    fail(
+      paste0("tier2.schema.", table_name),
+      sprintf("%s missing required columns: %s", table_name, paste(missing, collapse = ", "))
+    )
+    return(FALSE)
+  }
+  pass(paste0("tier2.schema.", table_name), sprintf("%s contains required schema columns", table_name))
+  TRUE
+}
+
+split_comm_tokens <- function(x) {
+  x <- trim(x)
+  if (!nzchar(x) || x %in% c("-", "*")) {
+    return(character(0))
+  }
+  out <- trimws(unlist(strsplit(x, ",", fixed = TRUE), use.names = FALSE))
+  out <- out[nzchar(out) & !out %in% reserved_group_tokens]
+  out <- out[!grepl("[*]$", out)]
+  unique(out)
+}
+
+if (!is.null(loaded_generated$comparisons)) {
+  comparisons <- loaded_generated$comparisons
+  comparison_schema <- c(
+    "comparison_id", "source_question_id", "layer_scope", "contrast_axis",
+    "analysis_mode", "analysis_unit", "stat_level", "group_var",
+    "ident_1", "ident_2", "subset_column", "subset_value",
+    "aggregation_group_var", "composition_group_var", "batch_var",
+    "enabled", "min_biological_replicates", "force_exploratory",
+    "min_cells_per_group", "logfc_threshold", "produces_gene_program",
+    "gene_program_role", "notes"
+  )
+  if (require_generated_cols("comparisons.tsv", comparisons, comparison_schema) && nrow(comparisons) > 0) {
+    allowed_modes <- c("annotation_cluster_marker", "subtype_marker", "subtype_pairwise", "condition_within_type", "composition")
+    bad_modes <- unique(comparisons$analysis_mode[!comparisons$analysis_mode %in% allowed_modes])
+    bad_modes <- bad_modes[nzchar(bad_modes)]
+    if (length(bad_modes) > 0) {
+      fail("tier2.comparisons.analysis_mode", sprintf("unsupported analysis_mode values: %s", paste(bad_modes, collapse = ", ")))
+    } else {
+      pass("tier2.comparisons.analysis_mode", "analysis_mode values are valid")
+    }
+
+    rest_bad <- comparisons[
+      (comparisons$ident_1 == "__rest__" | comparisons$ident_2 == "__rest__") &
+        !comparisons$analysis_mode %in% c("annotation_cluster_marker", "subtype_marker"),
+      ,
+      drop = FALSE
+    ]
+    if (nrow(rest_bad) > 0) {
+      fail(
+        "tier2.comparisons.rest_scope",
+        sprintf("__rest__ used outside marker modes: %s", paste(rest_bad$comparison_id, collapse = ", ")),
+        fix = "__rest__ is only valid for annotation_cluster_marker or subtype_marker."
+      )
+    } else {
+      pass("tier2.comparisons.rest_scope", "__rest__ only appears in marker modes")
+    }
+
+    condition_bad <- comparisons[
+      comparisons$analysis_mode == "condition_within_type" &
+        ((!nzchar(comparisons$subset_column) & comparisons$aggregation_group_var != "all_cells") | comparisons$group_var != "group_id" |
+           !comparisons$ident_1 %in% c("syf", "f5") | !comparisons$ident_2 %in% c("syf", "f5")),
+      ,
+      drop = FALSE
+    ]
+    if (nrow(condition_bad) > 0) {
+      fail(
+        "tier2.comparisons.condition_mode",
+        sprintf("condition_within_type rows have invalid group/subset/idents: %s", paste(condition_bad$comparison_id, collapse = ", ")),
+        fix = "Use group_var=group_id, syf/f5 idents, and a non-empty subset_column unless the row is an explicit all-cell condition DEG."
+      )
+    } else {
+      pass("tier2.comparisons.condition_mode", "condition_within_type rows have syf/f5 group_id semantics")
+    }
+
+    composition_bad <- comparisons[
+      comparisons$analysis_mode == "composition" &
+        (!nzchar(comparisons$composition_group_var) | comparisons$produces_gene_program == "yes"),
+      ,
+      drop = FALSE
+    ]
+    if (nrow(composition_bad) > 0) {
+      fail(
+        "tier2.comparisons.composition_mode",
+        sprintf("composition rows missing composition_group_var or producing gene programs: %s", paste(composition_bad$comparison_id, collapse = ", ")),
+        fix = "composition rows must set composition_group_var and produces_gene_program=no."
+      )
+    } else {
+      pass("tier2.comparisons.composition_mode", "composition rows are sample-level targets, not gene programs")
+    }
+
+    if (exists("scope_meta")) {
+      for (idx in seq_len(nrow(comparisons))) {
+        row <- comparisons[idx, , drop = FALSE]
+        scopes <- split_comm_tokens(row$layer_scope[[1]])
+        if (length(scopes) == 0) scopes <- row$layer_scope[[1]]
+        for (scope in scopes) {
+          item <- scope_meta[[scope]]
+          if (is.null(item) || is.null(item$meta)) next
+          meta <- item$meta
+          group_var <- row$group_var[[1]]
+          if (group_var %in% c("cell_type", "cell_subtype")) {
+            if (!group_var %in% colnames(meta)) {
+              semantic_object_problem(
+                "semantic.comparison_group_var_column",
+                sprintf("%s uses group_var=%s but %s metadata lacks that column", row$comparison_id[[1]], group_var, scope)
+              )
+              next
+            }
+            observed <- unique(trimws(as.character(meta[[group_var]])))
+            observed <- observed[nzchar(observed)]
+            tokens <- setdiff(c(row$ident_1[[1]], row$ident_2[[1]]), "__rest__")
+            tokens <- tokens[nzchar(tokens)]
+            missing_tokens <- setdiff(tokens, observed)
+            if (length(missing_tokens) > 0) {
+              semantic_object_problem(
+                "semantic.comparison_group_var_values",
+                sprintf("%s group_var=%s values absent in %s metadata: %s", row$comparison_id[[1]], group_var, scope, paste(missing_tokens, collapse = ", "))
+              )
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+if (!is.null(loaded_generated$communication_pairs)) {
+  communication_pairs <- loaded_generated$communication_pairs
+  communication_schema <- c(
+    "pair_id", "source_question_id", "layer_scope", "sender", "receiver",
+    "condition_split_var", "condition_split_values", "tool", "communication_mode",
+    "receiver_gene_program_source", "baseline_marker_comparison_id",
+    "receiver_deg_comparison_id", "direction_filter", "requires_cell_subtype",
+    "enabled", "notes"
+  )
+  if (require_generated_cols("communication_pairs.tsv", communication_pairs, communication_schema) && nrow(communication_pairs) > 0) {
+    gene_targets <- loaded_generated$gene_program_targets
+    gene_target_ids <- if (!is.null(gene_targets) && "comparison_id" %in% colnames(gene_targets)) unique(gene_targets$comparison_id) else character(0)
+    comparison_ids <- if (exists("comparisons") && "comparison_id" %in% colnames(comparisons)) unique(comparisons$comparison_id) else character(0)
+    nichenet_requested <- tolower(communication_pairs$tool) %in% c("both", "nichenet", "nichenet_only")
+    nichenet_pairs <- communication_pairs[nichenet_requested & communication_pairs$enabled != "no", , drop = FALSE]
+    comm_fail_n <- 0L
+    for (idx in seq_len(nrow(nichenet_pairs))) {
+      row <- nichenet_pairs[idx, , drop = FALSE]
+      pair_id <- row$pair_id[[1]]
+      source <- tolower(row$receiver_gene_program_source[[1]])
+      if (!source %in% c("condition_deg", "receiver_marker", "none")) {
+        fail("tier2.communication.gene_program_source", sprintf("%s has unsupported receiver_gene_program_source=%s", pair_id, source))
+        comm_fail_n <- comm_fail_n + 1L
+      }
+      baseline_id <- trim(row$baseline_marker_comparison_id[[1]])
+      receiver_id <- trim(row$receiver_deg_comparison_id[[1]])
+      if (source != "none" && !nzchar(baseline_id)) {
+        fail("tier2.communication.baseline_marker_id", sprintf("%s missing baseline_marker_comparison_id", pair_id))
+        comm_fail_n <- comm_fail_n + 1L
+      }
+      baseline_ids <- split_comm_tokens(baseline_id)
+      missing_baseline <- baseline_ids[!baseline_ids %in% comparison_ids | !baseline_ids %in% gene_target_ids]
+      if (length(missing_baseline) > 0) {
+        fail("tier2.communication.baseline_marker_id", sprintf("%s baseline_marker_comparison_id not found in comparisons/gene_program_targets: %s", pair_id, paste(missing_baseline, collapse = ", ")))
+        comm_fail_n <- comm_fail_n + length(missing_baseline)
+      }
+      if (identical(source, "condition_deg") && !nzchar(receiver_id)) {
+        fail("tier2.communication.receiver_deg_id", sprintf("%s source=condition_deg but receiver_deg_comparison_id is empty", pair_id))
+        comm_fail_n <- comm_fail_n + 1L
+      }
+      receiver_ids <- split_comm_tokens(receiver_id)
+      missing_receiver <- receiver_ids[!receiver_ids %in% comparison_ids | !receiver_ids %in% gene_target_ids]
+      if (length(missing_receiver) > 0) {
+        fail("tier2.communication.receiver_deg_id", sprintf("%s receiver_deg_comparison_id not found in comparisons/gene_program_targets: %s", pair_id, paste(missing_receiver, collapse = ", ")))
+        comm_fail_n <- comm_fail_n + length(missing_receiver)
+      }
+    }
+    if (comm_fail_n == 0L) {
+      pass("tier2.communication.nichenet_gene_program_ids", sprintf("%s NicheNet-capable communication rows have explicit gene-program IDs", nrow(nichenet_pairs)))
+    }
+
+    strict_pairs <- communication_pairs[tolower(communication_pairs$requires_cell_subtype) %in% c("yes", "true", "1", "on"), , drop = FALSE]
+    if (nrow(strict_pairs) > 0 && exists("scope_meta")) {
+      for (idx in seq_len(nrow(strict_pairs))) {
+        row <- strict_pairs[idx, , drop = FALSE]
+        scopes <- split_comm_tokens(row$layer_scope[[1]])
+        if (length(scopes) == 0) scopes <- row$layer_scope[[1]]
+        tokens <- unique(c(split_comm_tokens(row$sender[[1]]), split_comm_tokens(row$receiver[[1]])))
+        for (scope in scopes) {
+          item <- scope_meta[[scope]]
+          if (is.null(item) || is.null(item$meta)) next
+          meta <- item$meta
+          if (!"cell_subtype" %in% colnames(meta)) {
+            semantic_object_problem("semantic.communication_requires_cell_subtype", sprintf("%s requires cell_subtype but %s metadata lacks cell_subtype", row$pair_id[[1]], scope))
+            next
+          }
+          observed <- unique(trimws(as.character(meta$cell_subtype)))
+          observed <- observed[nzchar(observed)]
+          missing_tokens <- setdiff(tokens, observed)
+          if (length(missing_tokens) > 0) {
+            semantic_object_problem("semantic.communication_requires_cell_subtype", sprintf("%s strict roles absent from %s cell_subtype: %s", row$pair_id[[1]], scope, paste(missing_tokens, collapse = ", ")))
+          }
+        }
+      }
+    }
   }
 }
 

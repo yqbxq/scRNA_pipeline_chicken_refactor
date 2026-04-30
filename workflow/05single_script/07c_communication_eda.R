@@ -39,6 +39,7 @@ cellchat_index <- read_tsv_optional(cfg$cellchat_index_tsv)
 nichenet_index <- read_tsv_optional(cfg$nichenet_index_tsv)
 cellchat_triage <- read_tsv_optional(cfg$cellchat_triage_tsv)
 nichenet_triage <- read_tsv_optional(cfg$nichenet_triage_tsv)
+pairs <- read_communication_pairs(cfg)
 
 for (col in c("pair_id", "layer_id", "condition_value", "status", "lr_table_path")) {
   if (!col %in% colnames(cellchat_index)) cellchat_index[[col]] <- character(nrow(cellchat_index))
@@ -99,6 +100,17 @@ filter_lr_direction_07c <- function(lr, sender_cell_types, receiver_cell_types) 
   lr
 }
 
+direction_filter_for_pair_07c <- function(pair_id) {
+  if (nrow(pairs) == 0 || !"pair_id" %in% colnames(pairs)) {
+    return(TRUE)
+  }
+  hit <- pairs[pairs$pair_id == pair_id, , drop = FALSE]
+  if (nrow(hit) == 0) {
+    return(TRUE)
+  }
+  communication_pair_direction_filter(hit[1, , drop = FALSE])
+}
+
 keys <- unique(dplyr::bind_rows(
   cellchat_index[, intersect(c("pair_id", "layer_id", "condition_value"), colnames(cellchat_index)), drop = FALSE],
   nichenet_index[, intersect(c("pair_id", "layer_id", "condition_value"), colnames(nichenet_index)), drop = FALSE]
@@ -144,7 +156,7 @@ for (idx in seq_len(nrow(keys))) {
 
   lr <- if (nrow(cc_hit) > 0) read_lr_for_row_07c(cc_hit[1, , drop = FALSE]) else empty_df_07()
   activity <- if (nrow(nn_hit) > 0) read_ligand_activity_07c(nn_hit[1, , drop = FALSE]) else empty_df_07()
-  if (nrow(nn_hit) > 0 && nrow(lr) > 0) {
+  if (direction_filter_for_pair_07c(key$pair_id[[1]]) && nrow(nn_hit) > 0 && nrow(lr) > 0) {
     lr <- filter_lr_direction_07c(lr, nn_hit$sender_cell_types[[1]], nn_hit$receiver_cell_types[[1]])
   }
   lr_sig <- lr[is.finite(lr$prob) & lr$prob >= cfg$cellchat_prob_cutoff, , drop = FALSE]

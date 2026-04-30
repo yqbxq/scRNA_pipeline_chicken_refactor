@@ -7,9 +7,11 @@ empty_df_06 <- function(cols = character()) {
 
 empty_enrichment_manifest_06 <- function() {
   empty_df_06(c(
-    "layer_id", "comparison_id", "cluster_id", "gene_direction",
+    "target_id", "layer_id", "comparison_id", "cluster_id", "gene_direction",
     "analysis_type", "ontology", "source_species", "deg_source",
-    "deg_inference_status", "status", "reason", "input_gene_n",
+    "deg_inference_status", "formal_status", "result_level", "biological_replicates",
+    "background_tsv", "background_gene_n", "background_mapped_n",
+    "status", "reason", "input_gene_n",
     "mapped_gene_n", "mapping_rate", "significant_term_n",
     "enrichment_tsv", "enrichment_significant_tsv", "dotplot_png", "barplot_png"
   ))
@@ -25,6 +27,7 @@ normalize_path_06 <- function(path) {
 }
 
 build_enrichment_manifest_row_06 <- function(
+    target_id = "",
     layer_id,
     comparison_id,
     cluster_id,
@@ -34,6 +37,12 @@ build_enrichment_manifest_row_06 <- function(
     source_species,
     deg_source,
     deg_inference_status,
+    formal_status = "",
+    result_level = "",
+    biological_replicates = "",
+    background_tsv = "",
+    background_gene_n = 0L,
+    background_mapped_n = 0L,
     status,
     reason = "",
     input_gene_n = 0L,
@@ -50,6 +59,7 @@ build_enrichment_manifest_row_06 <- function(
     enrichment_significant_tsv <- paths$enrichment_significant_tsv %||% enrichment_significant_tsv
   }
   data.frame(
+    target_id = target_id,
     layer_id = layer_id,
     comparison_id = comparison_id,
     cluster_id = cluster_id,
@@ -59,6 +69,12 @@ build_enrichment_manifest_row_06 <- function(
     source_species = source_species,
     deg_source = deg_source,
     deg_inference_status = deg_inference_status,
+    formal_status = formal_status,
+    result_level = result_level,
+    biological_replicates = biological_replicates,
+    background_tsv = normalize_scalar_value(background_tsv),
+    background_gene_n = background_gene_n,
+    background_mapped_n = background_mapped_n,
     status = status,
     reason = reason,
     input_gene_n = input_gene_n,
@@ -188,87 +204,218 @@ map_genes_to_human <- function(gene_list, ortholog_map) {
 }
 
 read_enrichment_input_grid_06 <- function(cfg) {
-  marker_manifest_tsv <- file.path(cfg$marker_discovery_table_dir, "marker_discovery_manifest.tsv")
-  pseudobulk_manifest_tsv <- file.path(cfg$pseudobulk_table_dir, "pseudobulk_manifest.tsv")
-  deg_status_matrix_tsv <- deg_report_paths_05(cfg)$status_matrix_tsv
-
-  marker_df <- read_tsv_optional(marker_manifest_tsv)
-  pb_df <- read_tsv_optional(pseudobulk_manifest_tsv)
-  status_df <- read_tsv_optional(deg_status_matrix_tsv)
-
-  key_cols <- c("layer_id", "comparison_id")
-  for (col in key_cols) {
-    if (!col %in% colnames(marker_df)) marker_df[[col]] <- character(nrow(marker_df))
-    if (!col %in% colnames(pb_df)) pb_df[[col]] <- character(nrow(pb_df))
-    if (!col %in% colnames(status_df)) status_df[[col]] <- character(nrow(status_df))
-  }
-  keyed_empty <- empty_df_06(key_cols)
-  keys <- dplyr::bind_rows(
-    if (all(key_cols %in% colnames(status_df))) status_df[, key_cols, drop = FALSE] else keyed_empty,
-    if (all(key_cols %in% colnames(marker_df))) marker_df[, key_cols, drop = FALSE] else keyed_empty,
-    if (all(key_cols %in% colnames(pb_df))) pb_df[, key_cols, drop = FALSE] else keyed_empty
+  targets <- read_tsv_optional(cfg$enrichment_targets_sheet)
+  registry <- read_tsv_optional(cfg$gene_program_registry_tsv %||% deg_report_paths_05(cfg)$gene_program_registry_tsv)
+  target_cols <- c(
+    "target_id", "source_question_id", "comparison_id", "layer_scope",
+    "analysis_mode", "gene_program_role", "organism", "database",
+    "min_genes", "enabled", "notes"
   )
-  if (nrow(keys) == 0) {
+  registry_cols <- c(
+    "comparison_id", "source_question_id", "layer_id", "analysis_mode",
+    "gene_program_role", "result_level", "preferred_for_downstream",
+    "formal_status", "deg_tsv", "marker_tsv", "top_gene_tsv",
+    "n_significant", "warning"
+  )
+  for (col in target_cols) {
+    if (!col %in% colnames(targets)) targets[[col]] <- character(nrow(targets))
+  }
+  for (col in registry_cols) {
+    if (!col %in% colnames(registry)) registry[[col]] <- character(nrow(registry))
+  }
+  if (nrow(targets) == 0) {
     return(empty_df_06(c(
-      "layer_id", "comparison_id", "deg_tsv", "deg_source", "deg_inference_status",
-      "marker_results_tsv", "pseudobulk_results_tsv"
+      "target_id", "layer_id", "comparison_id", "database", "organism",
+      "deg_tsv", "deg_source", "deg_inference_status", "formal_status",
+      "result_level", "biological_replicates", "background_tsv",
+      "background_gene_n", "marker_results_tsv", "pseudobulk_results_tsv",
+      "registry_warning"
     )))
   }
-  keys <- unique(keys[nzchar(keys$layer_id) & nzchar(keys$comparison_id), , drop = FALSE])
+  targets <- targets[, target_cols, drop = FALSE]
+  registry <- registry[, registry_cols, drop = FALSE]
+  targets$enabled <- tolower(vapply(targets$enabled, normalize_scalar_value, character(1), default = "yes"))
+  targets <- targets[targets$enabled %in% c("yes", "true", "1", "on") & nzchar(targets$comparison_id), , drop = FALSE]
+  if (nrow(targets) == 0) {
+    return(empty_df_06(c(
+      "target_id", "layer_id", "comparison_id", "database", "organism",
+      "deg_tsv", "deg_source", "deg_inference_status", "formal_status",
+      "result_level", "biological_replicates", "background_tsv",
+      "background_gene_n", "marker_results_tsv", "pseudobulk_results_tsv",
+      "registry_warning"
+    )))
+  }
 
-  rows <- lapply(seq_len(nrow(keys)), function(idx) {
-    layer_id <- keys$layer_id[[idx]]
-    comparison_id <- keys$comparison_id[[idx]]
-    marker_hit <- marker_df[marker_df$layer_id == layer_id & marker_df$comparison_id == comparison_id, , drop = FALSE]
-    pb_hit <- pb_df[pb_df$layer_id == layer_id & pb_df$comparison_id == comparison_id, , drop = FALSE]
-    status_hit <- status_df[status_df$layer_id == layer_id & status_df$comparison_id == comparison_id, , drop = FALSE]
-
-    pb_status <- if (nrow(pb_hit) > 0 && "inference_status" %in% colnames(pb_hit)) normalize_scalar_value(pb_hit$inference_status[[1]], "skipped") else ""
-    pb_path <- if (nrow(pb_hit) > 0 && "ds_results_tsv" %in% colnames(pb_hit)) normalize_scalar_value(pb_hit$ds_results_tsv[[1]]) else ""
-    if (!nzchar(pb_path) && nrow(status_hit) > 0 && "pseudobulk_results_tsv" %in% colnames(status_hit)) {
-      pb_path <- normalize_scalar_value(status_hit$pseudobulk_results_tsv[[1]])
+  rows <- lapply(seq_len(nrow(targets)), function(idx) {
+    target <- targets[idx, , drop = FALSE]
+    comparison_id <- normalize_scalar_value(target$comparison_id[[1]])
+    layer_id <- normalize_scalar_value(target$layer_scope[[1]])
+    hit <- registry[registry$comparison_id == comparison_id, , drop = FALSE]
+    if (nrow(hit) > 0) {
+      exact <- hit[nzchar(hit$layer_id) & hit$layer_id == layer_id, , drop = FALSE]
+      if (nrow(exact) > 0) hit <- exact
+      hit <- hit[1, , drop = FALSE]
     }
 
-    marker_path <- ""
-    if (nrow(marker_hit) > 0 && "exploratory_results_tsv" %in% colnames(marker_hit)) {
-      marker_path <- normalize_scalar_value(marker_hit$exploratory_results_tsv[[1]])
-    }
-    if (!nzchar(marker_path) && nrow(pb_hit) > 0 && "exploratory_marker_discovery" %in% colnames(pb_hit)) {
-      marker_path <- normalize_scalar_value(pb_hit$exploratory_marker_discovery[[1]])
-    }
-    if (!nzchar(marker_path) && nrow(status_hit) > 0 && "marker_results_tsv" %in% colnames(status_hit)) {
-      marker_path <- normalize_scalar_value(status_hit$marker_results_tsv[[1]])
-    }
-
-    use_formal <- identical(pb_status, "formal") && nzchar(pb_path) && file.exists(pb_path)
-    use_marker <- nzchar(marker_path) && file.exists(marker_path)
-
-    if (use_formal) {
-      deg_tsv <- pb_path
-      deg_source <- "formal_pseudobulk"
-      deg_status <- "formal"
-    } else if (use_marker) {
+    marker_path <- if (nrow(hit) > 0) normalize_scalar_value(hit$marker_tsv[[1]]) else ""
+    deg_path <- if (nrow(hit) > 0) normalize_scalar_value(hit$deg_tsv[[1]]) else ""
+    top_path <- if (nrow(hit) > 0) normalize_scalar_value(hit$top_gene_tsv[[1]]) else ""
+    deg_tsv <- ""
+    deg_source <- "none"
+    if (nzchar(top_path) && file.exists(top_path)) {
+      deg_tsv <- top_path
+      deg_source <- "gene_program_registry:top_gene_tsv"
+    } else if (nzchar(deg_path) && file.exists(deg_path)) {
+      deg_tsv <- deg_path
+      deg_source <- "gene_program_registry:deg_tsv"
+    } else if (nzchar(marker_path) && file.exists(marker_path)) {
       deg_tsv <- marker_path
-      deg_source <- "exploratory_marker"
-      deg_status <- if (nzchar(pb_status)) pb_status else "exploratory_cell_level"
-    } else {
-      deg_tsv <- ""
-      deg_source <- "none"
-      deg_status <- if (nzchar(pb_status)) pb_status else "missing"
+      deg_source <- "gene_program_registry:marker_tsv"
     }
+
+    result_level <- if (nrow(hit) > 0) normalize_scalar_value(hit$result_level[[1]], "unavailable") else "unavailable"
+    formal_status_raw <- if (nrow(hit) > 0) normalize_scalar_value(hit$formal_status[[1]], "missing") else "missing"
+    warning <- if (nrow(hit) > 0) normalize_scalar_value(hit$warning[[1]]) else "comparison_id missing from gene_program_registry.tsv"
+    downstream_status <- if (identical(result_level, "pseudobulk_formal") && identical(formal_status_raw, "formal")) {
+      "formal"
+    } else if (grepl("formal preferred", warning, ignore.case = TRUE)) {
+      "exploratory_forced"
+    } else if (identical(result_level, "cell_level_exploratory")) {
+      "exploratory_only"
+    } else if (identical(result_level, "unavailable")) {
+      "unavailable"
+    } else {
+      formal_status_raw
+    }
+    bg <- enrichment_background_for_layer_06(cfg, layer_id)
 
     data.frame(
+      target_id = normalize_scalar_value(target$target_id[[1]]),
+      source_question_id = normalize_scalar_value(target$source_question_id[[1]]),
       layer_id = layer_id,
       comparison_id = comparison_id,
+      database = toupper(normalize_scalar_value(target$database[[1]], "GO")),
+      organism = normalize_scalar_value(target$organism[[1]], "chicken_primary"),
+      analysis_mode = normalize_scalar_value(target$analysis_mode[[1]], if (nrow(hit) > 0) hit$analysis_mode[[1]] else ""),
+      gene_program_role = normalize_scalar_value(target$gene_program_role[[1]], if (nrow(hit) > 0) hit$gene_program_role[[1]] else ""),
+      min_genes = normalize_scalar_value(target$min_genes[[1]], as.character(cfg$enrichment_min_input_genes)),
       deg_tsv = deg_tsv,
       deg_source = deg_source,
-      deg_inference_status = deg_status,
+      deg_inference_status = downstream_status,
+      formal_status = downstream_status,
+      result_level = result_level,
+      biological_replicates = "unknown",
+      background_tsv = bg$path,
+      background_gene_n = length(bg$genes),
       marker_results_tsv = marker_path,
-      pseudobulk_results_tsv = pb_path,
+      pseudobulk_results_tsv = deg_path,
+      registry_warning = warning,
       stringsAsFactors = FALSE
     )
   })
   dplyr::bind_rows(rows)
+}
+
+enrichment_layer_status_06 <- function(cfg) {
+  layer_df <- read_tsv_optional(cfg$layer_status_file)
+  rows <- list()
+  if (nrow(layer_df) > 0) {
+    expected <- c("layer_id", "layer_role", "annotated_rds", "clustered_rds", "status")
+    for (col in expected) {
+      if (!col %in% colnames(layer_df)) layer_df[[col]] <- ""
+    }
+    for (idx in seq_len(nrow(layer_df))) {
+      row <- layer_df[idx, , drop = FALSE]
+      obj_path <- normalize_scalar_value(row$annotated_rds[[1]])
+      if (!nzchar(obj_path) || !file.exists(obj_path)) {
+        obj_path <- normalize_scalar_value(row$clustered_rds[[1]])
+      }
+      if (nzchar(row$layer_id[[1]]) && nzchar(obj_path) && file.exists(obj_path)) {
+        rows[[length(rows) + 1L]] <- data.frame(
+          layer_id = normalize_scalar_value(row$layer_id[[1]]),
+          object_rds = obj_path,
+          source = "layer_status",
+          stringsAsFactors = FALSE
+        )
+      }
+    }
+  }
+  panorama_path <- resolve_manifest_output_optional_06(cfg$module_03d_manifest_path, c("annotated_object"))
+  if (nzchar(panorama_path) && file.exists(panorama_path)) {
+    rows[[length(rows) + 1L]] <- data.frame(layer_id = cfg$panorama_layer_id, object_rds = panorama_path, source = "03d_manifest", stringsAsFactors = FALSE)
+  }
+  if (file.exists(cfg$module_04b_manifest_path)) {
+    manifest <- read_manifest_local(cfg$module_04b_manifest_path)
+    keys <- names(manifest$outputs %||% list())
+    keys <- keys[startsWith(keys, "annotated_")]
+    for (key in keys) {
+      obj_path <- resolve_output_local(manifest, key)
+      if (file.exists(obj_path)) {
+        rows[[length(rows) + 1L]] <- data.frame(layer_id = sub("^annotated_", "", key), object_rds = obj_path, source = "04b_manifest", stringsAsFactors = FALSE)
+      }
+    }
+  }
+  if (length(rows) == 0) {
+    return(empty_df_06(c("layer_id", "object_rds", "source")))
+  }
+  out <- dplyr::bind_rows(rows)
+  out <- out[nzchar(out$layer_id) & nzchar(out$object_rds), , drop = FALSE]
+  out[!duplicated(out$layer_id), , drop = FALSE]
+}
+
+enrichment_background_path_06 <- function(cfg, layer_id) {
+  file.path(cfg$enrichment_background_table_dir, paste0("background_genes_", safe_id_06(layer_id), ".tsv"))
+}
+
+enrichment_background_for_layer_06 <- function(cfg, layer_id) {
+  path <- enrichment_background_path_06(cfg, layer_id)
+  existing <- read_tsv_optional(path)
+  if (nrow(existing) > 0 && "gene" %in% colnames(existing)) {
+    genes <- unique(trimws(as.character(existing$gene)))
+    genes <- genes[nzchar(genes)]
+    return(list(path = path, genes = genes, status = "cached"))
+  }
+
+  status_df <- enrichment_layer_status_06(cfg)
+  hit <- status_df[status_df$layer_id == layer_id, , drop = FALSE]
+  if (nrow(hit) == 0 || !file.exists(hit$object_rds[[1]]) || !requireNamespace("Seurat", quietly = TRUE) || !requireNamespace("Matrix", quietly = TRUE)) {
+    write_tsv_local(empty_df_06(c("layer_id", "gene", "background_source", "status")), path)
+    return(list(path = path, genes = character(0), status = "unavailable"))
+  }
+
+  genes <- tryCatch(
+    {
+      obj <- readRDS(hit$object_rds[[1]])
+      if (exists("maybe_join_layers", mode = "function")) {
+        obj <- maybe_join_layers(obj)
+      }
+      mat <- if (exists("get_assay_matrix", mode = "function")) {
+        get_assay_matrix(obj, assay = "RNA", type = "counts")
+      } else {
+        Seurat::GetAssayData(obj, assay = "RNA", layer = "counts")
+      }
+      rownames(mat)[Matrix::rowSums(mat > 0) > 0]
+    },
+    error = function(e) character(0)
+  )
+  genes <- unique(trimws(as.character(genes)))
+  genes <- genes[nzchar(genes)]
+  out <- if (length(genes) == 0) {
+    empty_df_06(c("layer_id", "gene", "background_source", "status"))
+  } else {
+    data.frame(layer_id = layer_id, gene = genes, background_source = normalize_scalar_value(hit$source[[1]]), status = "ok", stringsAsFactors = FALSE)
+  }
+  write_tsv_local(out, path)
+  list(path = path, genes = genes, status = if (length(genes) == 0) "empty" else "ok")
+}
+
+read_background_genes_06 <- function(path) {
+  df <- read_tsv_optional(path)
+  if (nrow(df) == 0 || !"gene" %in% colnames(df)) {
+    return(character(0))
+  }
+  genes <- unique(trimws(as.character(df$gene)))
+  genes[nzchar(genes)]
 }
 
 detect_deg_columns_06 <- function(df) {
@@ -409,7 +556,7 @@ safe_run_enrichment <- function(fn, ...) {
   )
 }
 
-run_go_enrichment_single <- function(gene_list, org_db, ont, pvalue_cutoff, qvalue_cutoff, min_gs_size = 10L, max_gs_size = 500L) {
+run_go_enrichment_single <- function(gene_list, org_db, ont, pvalue_cutoff, qvalue_cutoff, min_gs_size = 10L, max_gs_size = 500L, universe_ids = character(0)) {
   if (!clusterprofiler_available_06()) {
     return(list(result = NULL, status = "clusterprofiler_unavailable", reason = "clusterProfiler is not loadable in this runtime"))
   }
@@ -419,6 +566,7 @@ run_go_enrichment_single <- function(gene_list, org_db, ont, pvalue_cutoff, qval
   res <- tryCatch(
     clusterProfiler::enrichGO(
       gene = unique(as.character(gene_list)),
+      universe = if (length(universe_ids) > 0) unique(as.character(universe_ids)) else NULL,
       OrgDb = org_db,
       keyType = "ENTREZID",
       ont = ont,
@@ -445,7 +593,7 @@ is_timeout_error_06 <- function(message) {
   grepl("time.?out|timed out|Timeout", message, ignore.case = TRUE)
 }
 
-run_kegg_enrichment_single <- function(gene_list, organism, pvalue_cutoff, qvalue_cutoff, min_gs_size = 10L, max_gs_size = 500L, timeout_sec = 60L) {
+run_kegg_enrichment_single <- function(gene_list, organism, pvalue_cutoff, qvalue_cutoff, min_gs_size = 10L, max_gs_size = 500L, timeout_sec = 60L, universe_ids = character(0)) {
   if (!clusterprofiler_available_06()) {
     return(list(result = NULL, status = "clusterprofiler_unavailable", reason = "clusterProfiler is not loadable in this runtime"))
   }
@@ -464,6 +612,9 @@ run_kegg_enrichment_single <- function(gene_list, organism, pvalue_cutoff, qvalu
     minGSSize = min_gs_size,
     maxGSSize = max_gs_size
   )
+  if (length(universe_ids) > 0) {
+    base_args$universe <- unique(as.character(universe_ids))
+  }
   attempts <- list(
     c(base_args, list(keyType = "ncbi-geneid")),
     c(base_args, list(keyType = "kegg")),
@@ -535,7 +686,7 @@ format_gprofiler_result_06 <- function(gost_result, extra_cols = list()) {
   df[, unique(c(extra_names, colnames(df))), drop = FALSE]
 }
 
-run_gprofiler_enrichment_single <- function(gene_symbols, organism, sources, pvalue_cutoff) {
+run_gprofiler_enrichment_single <- function(gene_symbols, organism, sources, pvalue_cutoff, background_symbols = character(0)) {
   genes <- unique(trimws(as.character(gene_symbols)))
   genes <- genes[nzchar(genes)]
   if (length(genes) == 0) {
@@ -549,6 +700,7 @@ run_gprofiler_enrichment_single <- function(gene_symbols, organism, sources, pva
       query = genes,
       organism = organism,
       sources = sources,
+      custom_bg = if (length(background_symbols) > 0) unique(as.character(background_symbols)) else NULL,
       significant = FALSE,
       correction_method = "g_SCS"
     ),
