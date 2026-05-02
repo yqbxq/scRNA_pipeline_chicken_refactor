@@ -13,6 +13,13 @@
 | `qc_composition` | QC-only capture/composition check. | Not a gene program. |
 | `global_context` | Whole-layer/global syf-vs-f5 context signature. | Contextual only; not NicheNet receiver DEG. |
 
+E03 is the canonical QC composition row. It keeps `question_id=E03_layer_compo`
+but uses `output_alias=E03_scRNA_GC_TC_capture_balance` for the QC mirror table
+and report. E03 is a scRNA captured-cell balance QC result, not a spatial or
+tissue abundance estimate. Do not use E03 to claim GC/TC tissue proportion
+changes; use ST region annotation, ST deconvolution, or histology/image
+quantification for tissue abundance.
+
 `__rest__` is only valid for `annotation_cluster_marker` and `subtype_marker`.
 Rows using `group_var=cell_type` are checked against `cell_type`; rows using
 `group_var=cell_subtype` are checked against `cell_subtype`.
@@ -33,6 +40,12 @@ must use this registry instead of guessing paths from `pair_id` or
 | `marker_tsv` | Cell-level marker / exploratory table path. |
 | `top_gene_tsv` | Preferred table for downstream use. |
 | `warning` | Explains exploratory fallback, especially when formal was preferred. |
+
+For E03, registry rows must remain explicitly ineligible for downstream gene
+program use: `result_status=qc_only`,
+`skip_reason=qc_composition_does_not_produce_gene_program`,
+`preferred_for_downstream=no`, and `deg_tsv` / `marker_tsv` / `top_gene_tsv`
+must be empty. `composition_tsv` may point to the QC mirror table.
 
 06, 07, and future 08 must propagate `formal`, `exploratory_only`, or
 `exploratory_forced` into manifests and plot/report labels.

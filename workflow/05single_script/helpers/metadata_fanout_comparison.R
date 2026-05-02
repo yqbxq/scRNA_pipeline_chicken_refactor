@@ -1,5 +1,6 @@
 m3_comparison_cols <- c(
-  "comparison_id", "source_question_id", "layer_scope", "contrast_axis",
+  "comparison_id", "source_question_id", "display_question_id",
+  "output_alias", "report_title", "layer_scope", "contrast_axis",
   "analysis_mode", "analysis_unit", "stat_level",
   "group_var", "ident_1", "ident_2", "subset_column", "subset_value",
   "aggregation_group_var", "composition_group_var",
@@ -25,9 +26,16 @@ m3_comparison_row <- function(q, suffix, ident_1, ident_2, group_var = "cell_sub
                               produces_gene_program = "yes",
                               gene_program_role = "subtype_pairwise_deg",
                               notes = "") {
+  comparison_id <- paste(q$question_id, m3_safe_id(suffix), sep = "__")
+  display_question_id <- m3_question_scalar(q, "display_question_id", q$question_id[[1]])
+  output_alias <- m3_question_scalar(q, "output_alias", display_question_id)
+  report_title <- m3_question_scalar(q, "report_title", m3_question_scalar(q, "question_zh", display_question_id))
   list(
-    comparison_id = paste(q$question_id, m3_safe_id(suffix), sep = "__"),
+    comparison_id = comparison_id,
     source_question_id = q$question_id,
+    display_question_id = display_question_id,
+    output_alias = output_alias,
+    report_title = report_title,
     layer_scope = q$scope,
     contrast_axis = q$contrast_axis,
     analysis_mode = analysis_mode,
@@ -50,6 +58,14 @@ m3_comparison_row <- function(q, suffix, ident_1, ident_2, group_var = "cell_sub
     logfc_threshold = "0",
     notes = notes
   )
+}
+
+m3_question_scalar <- function(q, col, default = "") {
+  if (!col %in% colnames(q)) {
+    return(default)
+  }
+  value <- m3_trim(q[[col]][[1]], default)
+  if (!nzchar(value)) default else value
 }
 
 m3_uses_cell_type <- function(groups) {

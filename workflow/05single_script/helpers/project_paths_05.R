@@ -21,9 +21,11 @@ get_single_script_config_05 <- function() {
   base$marker_discovery_table_dir <- file.path(base$table_dir, "marker_discovery")
   base$pseudobulk_table_dir <- file.path(base$table_dir, "pseudobulk_ds")
   base$composition_table_dir <- file.path(base$table_dir, "composition")
+  base$qc_composition_table_dir <- file.path(base$table_dir, "qc", "composition")
   base$marker_discovery_report_dir <- file.path(base$eda_report_dir, "marker_discovery")
   base$pseudobulk_report_dir <- file.path(base$eda_report_dir, "pseudobulk_ds")
   base$composition_report_dir <- file.path(base$eda_report_dir, "composition")
+  base$qc_composition_report_dir <- file.path(base$report_dir, "qc", "composition")
 
   base$deg_default_min_cells_per_group <- env_integer_05("DEG_MIN_CELLS_PER_GROUP", 3L)
   base$deg_default_logfc_threshold <- env_numeric_05("DEG_LOGFC_THRESHOLD", 0)
@@ -43,9 +45,11 @@ prepare_dirs_05 <- function(cfg) {
     cfg$marker_discovery_table_dir,
     cfg$pseudobulk_table_dir,
     cfg$composition_table_dir,
+    cfg$qc_composition_table_dir,
     cfg$marker_discovery_report_dir,
     cfg$pseudobulk_report_dir,
     cfg$composition_report_dir,
+    cfg$qc_composition_report_dir,
     dirname(cfg$module_05a_manifest_path),
     dirname(cfg$module_05b_manifest_path),
     dirname(cfg$module_05c_manifest_path),
@@ -112,9 +116,18 @@ composition_paths_05 <- function(cfg, layer_id, comparison_id = NULL) {
   list(
     table_dir = file.path(cfg$composition_table_dir, "comparisons", safe_cmp, safe_layer),
     proportion_tsv = file.path(cfg$composition_table_dir, "comparisons", safe_cmp, safe_layer, "sample_level_proportions.tsv"),
+    comparison_tsv = file.path(cfg$composition_table_dir, paste0(safe_cmp, ".tsv")),
     formal_results_tsv = file.path(cfg$composition_table_dir, "comparisons", safe_cmp, safe_layer, "formal_propeller.tsv"),
     gate_summary_tsv = file.path(cfg$composition_table_dir, "comparisons", safe_cmp, safe_layer, "replicate_gate_summary.tsv"),
     status_tsv = file.path(cfg$composition_table_dir, "comparisons", safe_cmp, safe_layer, "composition_status.tsv")
+  )
+}
+
+qc_composition_paths_05 <- function(cfg, output_alias) {
+  safe_alias <- safe_id_05(output_alias)
+  list(
+    table_tsv = file.path(cfg$qc_composition_table_dir, paste0(safe_alias, ".tsv")),
+    report_md = file.path(cfg$qc_composition_report_dir, paste0(safe_alias, ".md"))
   )
 }
 
