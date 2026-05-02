@@ -61,6 +61,9 @@ empty_pathway_table_07a <- function() {
 write_cellchat_empty_outputs_07a <- function(paths, reason = "No CellChat result") {
   ensure_dir(paths$table_dir)
   ensure_dir(paths$figure_dir)
+  if (file.exists(paths$cellchat_rds)) {
+    unlink(paths$cellchat_rds)
+  }
   write_tsv_local(empty_lr_table_07a(), paths$lr_table_tsv)
   write_tsv_local(empty_pathway_table_07a(), paths$pathway_table_tsv)
   write_empty_png_07(paths$bubble_png, reason)
@@ -244,7 +247,7 @@ append_cellchat_row_07a <- function(rows, pair_row, layer_id, condition_value, c
     fallback_lr_table_path = fallback$fallback_lr_table_path,
     fallback_pathway_table_path = fallback$fallback_pathway_table_path,
     result_copied = fallback$result_copied,
-    cellchat_rds_path = if (file.exists(paths$cellchat_rds)) normalize_path_07(paths$cellchat_rds) else "",
+    cellchat_rds_path = if (identical(status, "ok") && file.exists(paths$cellchat_rds)) normalize_path_07(paths$cellchat_rds) else "",
     lr_table_path = normalize_path_07(paths$lr_table_tsv),
     pathway_table_path = normalize_path_07(paths$pathway_table_tsv),
     bubble_png = normalize_path_07(paths$bubble_png),
