@@ -77,6 +77,7 @@ standardize_design_metadata_05 <- function(seu) {
 read_deg_comparison_sheet <- function(cfg) {
   expected_cols <- c(
     "comparison_id", "source_question_id", "contrast_axis", "ident_1", "ident_2",
+    "display_question_id", "output_alias", "report_title",
     "enabled", "group_var", "batch_var", "layer_scope",
     "min_biological_replicates", "subset_column", "subset_value",
     "analysis_mode", "analysis_unit", "stat_level", "aggregation_group_var",
@@ -92,6 +93,9 @@ read_deg_comparison_sheet <- function(cfg) {
       contrast_axis = "contrast_only",
       ident_1 = cfg$deg_ident_1,
       ident_2 = cfg$deg_ident_2,
+      display_question_id = "",
+      output_alias = "",
+      report_title = "",
       enabled = "yes",
       group_var = "group_id",
       batch_var = "batch",
@@ -120,6 +124,9 @@ read_deg_comparison_sheet <- function(cfg) {
     enabled = "yes",
     source_question_id = "",
     contrast_axis = "",
+    display_question_id = "",
+    output_alias = "",
+    report_title = "",
     group_var = "group_id",
     batch_var = "batch",
     layer_scope = "*",
@@ -147,6 +154,12 @@ read_deg_comparison_sheet <- function(cfg) {
     df[[col]] <- vapply(df[[col]], normalize_scalar_value, character(1))
   }
   df$enabled <- normalize_flag(df$enabled, "yes")
+  missing_display <- !nzchar(df$display_question_id)
+  df$display_question_id[missing_display] <- ifelse(nzchar(df$source_question_id[missing_display]), df$source_question_id[missing_display], df$comparison_id[missing_display])
+  missing_alias <- !nzchar(df$output_alias)
+  df$output_alias[missing_alias] <- df$display_question_id[missing_alias]
+  missing_title <- !nzchar(df$report_title)
+  df$report_title[missing_title] <- df$display_question_id[missing_title]
   df$group_var[!nzchar(df$group_var)] <- "group_id"
   df$batch_var[!nzchar(df$batch_var)] <- "batch"
   df$layer_scope[!nzchar(df$layer_scope)] <- "*"
@@ -260,8 +273,12 @@ resolve_comparison_vars_05 <- function(seu, comparison_row) {
   subset_value <- normalize_scalar_value(comparison_row$subset_value[[1]])
   list(
     comparison_id = normalize_scalar_value(comparison_row$comparison_id[[1]]),
+    source_question_id = normalize_scalar_value(comparison_row$source_question_id[[1]]),
     ident_1 = normalize_scalar_value(comparison_row$ident_1[[1]]),
     ident_2 = normalize_scalar_value(comparison_row$ident_2[[1]]),
+    display_question_id = normalize_scalar_value(comparison_row$display_question_id[[1]], comparison_row$source_question_id[[1]]),
+    output_alias = normalize_scalar_value(comparison_row$output_alias[[1]], comparison_row$source_question_id[[1]]),
+    report_title = normalize_scalar_value(comparison_row$report_title[[1]], comparison_row$source_question_id[[1]]),
     group_var = group_var,
     batch_var = batch_var,
     subset_column = subset_column,

@@ -88,6 +88,29 @@ key_subset_05d <- function(df) {
   }
   out
 }
+
+composition_result_path_05d <- function(comp_hit) {
+  if (nrow(comp_hit) == 0) {
+    return("")
+  }
+  is_qc <- "is_qc_composition" %in% colnames(comp_hit) &&
+    tolower(normalize_scalar_value(comp_hit$is_qc_composition[[1]], "no")) %in% c("yes", "true", "1", "on")
+  candidates <- if (is_qc) {
+    c("qc_mirror_tsv", "composition_tsv", "proportion_tsv", "formal_results_tsv")
+  } else {
+    c("formal_results_tsv", "composition_tsv", "proportion_tsv", "qc_mirror_tsv")
+  }
+  for (col in candidates) {
+    if (col %in% colnames(comp_hit)) {
+      path <- normalize_scalar_value(comp_hit[[col]][[1]])
+      if (nzchar(path)) {
+        return(path)
+      }
+    }
+  }
+  ""
+}
+
 keys <- dplyr::bind_rows(
   key_subset_05d(marker_df),
   key_subset_05d(pb_df),
@@ -108,7 +131,7 @@ for (idx in seq_len(nrow(keys))) {
   pb_status <- if (nrow(pb_hit) > 0) normalize_scalar_value(pb_hit$inference_status[[1]], "skipped") else "missing"
   comp_status <- if (nrow(comp_hit) > 0) normalize_scalar_value(comp_hit$inference_status[[1]], "skipped") else "missing"
   pb_path <- if (nrow(pb_hit) > 0 && "ds_results_tsv" %in% colnames(pb_hit)) normalize_scalar_value(pb_hit$ds_results_tsv[[1]]) else ""
-  comp_path <- if (nrow(comp_hit) > 0 && "formal_results_tsv" %in% colnames(comp_hit)) normalize_scalar_value(comp_hit$formal_results_tsv[[1]]) else ""
+  comp_path <- composition_result_path_05d(comp_hit)
   marker_path <- if (nrow(marker_hit) > 0 && "exploratory_results_tsv" %in% colnames(marker_hit)) normalize_scalar_value(marker_hit$exploratory_results_tsv[[1]]) else ""
 
   marker_counts <- count_significant_rows_05(marker_path, alpha = cfg$deg_alpha)
@@ -189,7 +212,7 @@ if (nrow(gene_program_targets) == 0) {
 
     marker_path <- if (nrow(marker_hit) > 0 && "exploratory_results_tsv" %in% colnames(marker_hit)) normalize_scalar_value(marker_hit$exploratory_results_tsv[[1]]) else ""
     deg_path <- if (nrow(pb_hit) > 0 && "ds_results_tsv" %in% colnames(pb_hit)) normalize_scalar_value(pb_hit$ds_results_tsv[[1]]) else ""
-    composition_path <- if (nrow(comp_hit) > 0 && "formal_results_tsv" %in% colnames(comp_hit)) normalize_scalar_value(comp_hit$formal_results_tsv[[1]]) else ""
+    composition_path <- composition_result_path_05d(comp_hit)
     formal_status <- if (nrow(pb_hit) > 0 && "inference_status" %in% colnames(pb_hit)) normalize_scalar_value(pb_hit$inference_status[[1]], "missing") else normalize_scalar_value(target$formal_status[[1]], "missing")
     marker_status <- if (nrow(marker_hit) > 0 && "status" %in% colnames(marker_hit)) normalize_scalar_value(marker_hit$status[[1]], "missing") else "missing"
     composition_status <- if (nrow(comp_hit) > 0 && "inference_status" %in% colnames(comp_hit)) normalize_scalar_value(comp_hit$inference_status[[1]], "missing") else "missing"

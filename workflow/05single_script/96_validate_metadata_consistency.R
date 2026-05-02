@@ -371,6 +371,13 @@ if (length(missing_cols) > 0) {
   pass("questions.required_columns", "all required columns are present")
 }
 
+optional_question_cols <- c("display_question_id", "output_alias", "report_title")
+for (col in optional_question_cols) {
+  if (!col %in% colnames(questions)) {
+    questions[[col]] <- character(nrow(questions))
+  }
+}
+
 if (nrow(questions) > 0 && length(missing_cols) == 0) {
   expected_materialized <- 80L
   if (nrow(questions) == expected_materialized) {
@@ -388,6 +395,27 @@ if (nrow(questions) > 0 && length(missing_cols) == 0) {
     fail("questions.unique_id", paste("duplicated question_id:", paste(duplicated_ids, collapse = ", ")))
   } else {
     pass("questions.unique_id", "question_id values are unique")
+  }
+
+  e03_question <- questions[questions$question_id == "E03_layer_compo", , drop = FALSE]
+  if (nrow(e03_question) != 1L) {
+    fail("questions.E03_qc_alias", "E03_layer_compo must exist exactly once")
+  } else {
+    e03_alias_bad <- trim(e03_question$display_question_id[[1]]) != "E03_scRNA_GC_TC_capture_balance" ||
+      trim(e03_question$output_alias[[1]]) != "E03_scRNA_GC_TC_capture_balance" ||
+      !grepl("captured-cell balance QC", trim(e03_question$report_title[[1]]), fixed = TRUE) ||
+      e03_question$question_class[[1]] != "qc" ||
+      e03_question$contrast_axis[[1]] != "qc_composition" ||
+      e03_question$tools_to_run[[1]] != "composition_qc"
+    if (e03_alias_bad) {
+      fail(
+        "questions.E03_qc_alias",
+        "E03 must be qc_composition with display/output alias E03_scRNA_GC_TC_capture_balance and captured-cell QC title",
+        "E03_layer_compo"
+      )
+    } else {
+      pass("questions.E03_qc_alias", "E03 has the required captured-cell balance QC alias and Tier1 mode")
+    }
   }
 
   enum_checks <- list(
@@ -681,6 +709,7 @@ if (!is.null(loaded_generated$comparisons)) {
   comparisons <- loaded_generated$comparisons
   comparison_schema <- c(
     "comparison_id", "source_question_id", "layer_scope", "contrast_axis",
+    "display_question_id", "output_alias", "report_title",
     "analysis_mode", "analysis_unit", "stat_level", "group_var",
     "ident_1", "ident_2", "subset_column", "subset_value",
     "aggregation_group_var", "composition_group_var", "batch_var",
@@ -764,6 +793,23 @@ if (!is.null(loaded_generated$comparisons)) {
       fail("tier2.comparisons.qc_composition", sprintf("qc_composition rows must be qc_only and produce no gene program: %s", paste(qc_bad$comparison_id, collapse = ", ")))
     } else {
       pass("tier2.comparisons.qc_composition", "qc_composition rows are qc_only")
+    }
+
+    e03_cmp <- comparisons[comparisons$source_question_id == "E03_layer_compo", , drop = FALSE]
+    if (nrow(e03_cmp) != 1L) {
+      fail("tier2.comparisons.E03_qc_alias", sprintf("E03 must fan out to exactly one qc_composition row, found %s", nrow(e03_cmp)))
+    } else {
+      e03_cmp_bad <- e03_cmp$analysis_mode[[1]] != "qc_composition" ||
+        e03_cmp$gene_program_role[[1]] != "qc_only" ||
+        e03_cmp$produces_gene_program[[1]] != "no" ||
+        e03_cmp$display_question_id[[1]] != "E03_scRNA_GC_TC_capture_balance" ||
+        e03_cmp$output_alias[[1]] != "E03_scRNA_GC_TC_capture_balance" ||
+        !grepl("captured-cell balance QC", e03_cmp$report_title[[1]], fixed = TRUE)
+      if (e03_cmp_bad) {
+        fail("tier2.comparisons.E03_qc_alias", "E03 comparison row must carry qc_only semantics and captured-cell balance alias/title")
+      } else {
+        pass("tier2.comparisons.E03_qc_alias", "E03 comparison row carries qc_only alias/title metadata")
+      }
     }
 
     global_bad <- comparisons[
@@ -901,12 +947,21 @@ if (!is.null(loaded_generated$gene_program_targets)) {
     }
     e03_bad <- gene_program_targets[
       gene_program_targets$source_question_id == "E03_layer_compo" &
-        (gene_program_targets$nichenet_eligible != "no" | gene_program_targets$enrichment_eligible != "no"),
+        (gene_program_targets$analysis_mode != "qc_composition" |
+           gene_program_targets$gene_program_role != "qc_only" |
+           gene_program_targets$produces_gene_program != "no" |
+           gene_program_targets$qc_only != "yes" |
+           gene_program_targets$nichenet_eligible != "no" |
+           gene_program_targets$enrichment_eligible != "no" |
+           gene_program_targets$preferred_for_downstream != "no" |
+           gene_program_targets$result_status != "qc_only" |
+           gene_program_targets$skip_reason != "qc_composition_does_not_produce_gene_program" |
+           gene_program_targets$ineligible_reason != "qc_composition_does_not_produce_gene_program"),
       ,
       drop = FALSE
     ]
     if (nrow(e03_bad) > 0) {
-      fail("tier2.gene_program_targets.E03_qc_only", "E03 must not be NicheNet or enrichment eligible")
+      fail("tier2.gene_program_targets.E03_qc_only", "E03 must be qc_only, not produce gene programs, and remain ineligible for 06/07")
       gp_fail_n <- gp_fail_n + nrow(e03_bad)
     }
     d05_bad <- gene_program_targets[
@@ -923,6 +978,18 @@ if (!is.null(loaded_generated$gene_program_targets)) {
     }
     if (gp_fail_n == 0L) {
       pass("tier2.gene_program_targets.contract", "gene program role and eligibility matrix is valid")
+    }
+  }
+}
+
+if (!is.null(loaded_generated$enrichment_targets)) {
+  enrichment_targets <- loaded_generated$enrichment_targets
+  if (nrow(enrichment_targets) > 0 && "source_question_id" %in% colnames(enrichment_targets)) {
+    e03_enrichment <- enrichment_targets[enrichment_targets$source_question_id == "E03_layer_compo", , drop = FALSE]
+    if (nrow(e03_enrichment) > 0) {
+      fail("tier2.enrichment_targets.E03_absent", "E03 qc_composition must not enter enrichment_targets.tsv")
+    } else {
+      pass("tier2.enrichment_targets.E03_absent", "E03 qc_composition is absent from enrichment targets")
     }
   }
 }
@@ -1043,6 +1110,23 @@ if (!is.null(loaded_generated$communication_pairs)) {
     nichenet_requested <- tolower(communication_pairs$tool) %in% c("both", "nichenet", "nichenet_only")
     nichenet_pairs <- communication_pairs[nichenet_requested & communication_pairs$enabled != "no", , drop = FALSE]
     comm_fail_n <- 0L
+    e03_comparison_ids <- if (exists("comparisons") && all(c("comparison_id", "source_question_id") %in% colnames(comparisons))) {
+      comparisons$comparison_id[comparisons$source_question_id == "E03_layer_compo"]
+    } else {
+      character(0)
+    }
+    if (length(e03_comparison_ids) > 0) {
+      e03_comm_refs <- communication_pairs[
+        communication_pairs$baseline_marker_comparison_id %in% e03_comparison_ids |
+          communication_pairs$receiver_deg_comparison_id %in% e03_comparison_ids,
+        ,
+        drop = FALSE
+      ]
+      if (nrow(e03_comm_refs) > 0) {
+        fail("tier2.communication.E03_absent", sprintf("E03 qc_composition must not be referenced by 07 communication rows: %s", paste(e03_comm_refs$pair_id, collapse = ", ")))
+        comm_fail_n <- comm_fail_n + nrow(e03_comm_refs)
+      }
+    }
     for (idx in seq_len(nrow(nichenet_pairs))) {
       row <- nichenet_pairs[idx, , drop = FALSE]
       pair_id <- row$pair_id[[1]]

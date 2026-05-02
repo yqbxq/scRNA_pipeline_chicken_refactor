@@ -1,81 +1,81 @@
-question_id	question_class	question_zh	scope	sender_groups	receiver_groups	condition_split	contrast_axis	tools_to_run	priority	status	depends_on	notes	activation_policy	min_sender_cells	min_receiver_cells	min_cells_per_condition	fallback_pair_id	derived_from_pair_id	run_baseline_if_split_fails
-A01_panorama_marker	marker	panorama大类identity marker(GC vs TC)	panorama	*	*	-	identity_marker	deg+enrichment	P0	active		注释完成后的cell_type identity marker; raw cluster marker evidence由03/04 annotation输出	always						no
-A02_GC_subtype_marker	marker	GC 4亚群identity marker	GC_subcluster	*	*	-	identity_marker	deg+enrichment	P0	active		注释完成后的cell_subtype identity marker; pGC/eGC/rgGC/lGC each vs rest	always						no
-A03_TC_subtype_marker	marker	TC亚群identity marker	TC_subcluster	*	*	-	identity_marker	deg+enrichment	P0	planned		等TC注释	always						no
-A04_ST_region_marker	marker	ST region identity marker	ST_section	*	*	-	identity_marker	deg+enrichment	P0	planned		等ST	always						no
-B01_GC_vs_TC	deg	GC vs TC整体差异	panorama	[GC]	[TC]	-	directional_DEG	deg+enrichment	P0	active		whole_layer	always						no
-B02_GC_subtypes_pairwise	deg	GC 4亚群pairwise(6对)	GC_subcluster	[pGC,eGC,rgGC,lGC]	*	-	pairwise	deg+enrichment	P1	active		C(4,2)=6	always						no
-B03_TC_subtypes_pairwise	deg	TC亚群pairwise	TC_subcluster	[TC_*]	*	-	pairwise	deg+enrichment	P1	planned		等TC	always						no
-C01_GC_vs_TC_in_syf	deg	syf内GC vs TC	panorama	[GC]	[TC]	syf_only	directional_DEG	deg+enrichment	P0	active			always						no
-C02_GC_vs_TC_in_f5	deg	f5内GC vs TC	panorama	[GC]	[TC]	f5_only	directional_DEG	deg+enrichment	P0	active			always						no
-C03_GC_subtypes_pairwise_syf	deg	GC亚群pairwise in syf	GC_subcluster	[pGC,eGC,rgGC,lGC]	*	syf_only	pairwise	deg+enrichment	P1	active			always						no
-C04_GC_subtypes_pairwise_f5	deg	GC亚群pairwise in f5	GC_subcluster	[pGC,eGC,rgGC,lGC]	*	f5_only	pairwise	deg+enrichment	P1	active			always						no
-C05_TC_subtypes_pairwise_syf	deg	TC亚群pairwise in syf	TC_subcluster	[TC_*]	*	syf_only	pairwise	deg+enrichment	P1	planned		等TC	always						no
-C06_TC_subtypes_pairwise_f5	deg	TC亚群pairwise in f5	TC_subcluster	[TC_*]	*	f5_only	pairwise	deg+enrichment	P1	planned		等TC	always						no
-D01_GC_stage_DEG	deg	GC大类syf vs f5	panorama	[GC]	-	group_id:syf,f5	contrast_only	deg+enrichment	P0	active		pseudobulk优先	always						no
-D02_TC_stage_DEG	deg	TC大类syf vs f5	panorama	[TC]	-	group_id:syf,f5	contrast_only	deg+enrichment	P0	active		pseudobulk优先	always						no
-D03_GC_subtype_stage_DEG	deg	每个GC亚群syf vs f5	GC_subcluster	*	-	group_id:syf,f5	contrast_only	deg+enrichment	P0	active		展开4行	always						no
-D04_TC_subtype_stage_DEG	deg	每个TC亚群syf vs f5	TC_subcluster	*	-	group_id:syf,f5	contrast_only	deg+enrichment	P1	planned		等TC	always						no
-D05_panorama_global_stage	global_context	panorama整体syf vs f5 global context	panorama	all_cells	-	group_id:syf,f5	global_stage_context	deg+enrichment	P2	active		全局signature; global_context_only; not receiver DEG	always						no
-D06_ST_region_stage	deg	每个region syf vs f5	ST_section	*	-	group_id:syf,f5	contrast_only	deg+enrichment	P1	planned		等ST	always						no
-E01_GC_subtype_compo	composition	GC 4亚群比例syf vs f5	panorama	GC_subtypes	-	group_id:syf,f5	composition	composition_test	P0	active		propeller	always						no
-E02_TC_subtype_compo	composition	TC亚群比例syf vs f5	panorama	TC_subtypes	-	group_id:syf,f5	composition	composition_test	P1	planned		等TC	always						no
-E03_layer_compo	qc	GC vs TC capture balance QC	panorama	[GC,TC]	-	group_id:syf,f5	qc_composition	composition_qc	P1	active		取样均衡控制; qc_only; biological_conclusion_allowed=no	always						no
-E04_ST_region_compo	composition	ST region比例syf vs f5	ST_section	regions	-	section:syf,f5	composition	composition_test	P1	planned		等ST	always						no
-F01_TC_GC_bidir_baseline	communication	TC-GC双向baseline	panorama	[TC]	[GC]	-	bidirectional	cellchat+nichenet	P1	active			always						no
-F02_TC_GC_bidir_split	communication	TC-GC双向syf/f5 split	panorama	[TC]	[GC]	group_id:syf,f5	bidirectional	cellchat+nichenet	P0	active			always						no
-F03_TC_to_GC_each_baseline	communication	TC->每个GC亚群baseline	panorama	[TC]	[pGC]|[eGC]|[rgGC]|[lGC]	-	directional	cellchat	P1	active	A02	依赖M5	always						no
-F04_TC_to_GC_each_split	communication	TC->每个GC亚群split	panorama	[TC]	[pGC]|[eGC]|[rgGC]|[lGC]	group_id:syf,f5	directional	cellchat+nichenet	P0	active	A02,D03	核心问题	always						no
-F05_GC_each_to_TC_baseline	communication	每个GC->TC baseline	panorama	[pGC]|[eGC]|[rgGC]|[lGC]	[TC]	-	directional	cellchat	P1	active	A01	反向	always						no
-F06_GC_each_to_TC_split	communication	每个GC->TC split	panorama	[pGC]|[eGC]|[rgGC]|[lGC]	[TC]	group_id:syf,f5	directional	cellchat+nichenet	P0	active	A01,D02	反向+split	always						no
-F07_GC_dev_seq_baseline	communication	GC发育流3段baseline	GC_subcluster	[pGC]->[eGC]->[rgGC]->[lGC]	(sequential)	-	sequential	cellchat+nichenet	P0	active	A02	Yu2025	always	20	20	40			no
-F08_GC_dev_seq_split	communication	GC发育流3段split	GC_subcluster	[pGC]->[eGC]->[rgGC]->[lGC]	(sequential)	group_id:syf,f5	sequential	cellchat+nichenet	P1	active	D03	细胞数风险	auto_if_min_cells	20	20	40	F07_GC_dev_seq_baseline		yes
-F09_GC_dev_skip	communication	GC跨段	GC_subcluster	[pGC]	[rgGC]|[lGC]	-	directional	nichenet	P2	active	A02	shortcut	always						no
-F10_GC_feedback	communication	GC反馈	GC_subcluster	[lGC]	[pGC]|[rgGC]	-	directional	nichenet	P2	active	A02	反馈环	always						no
-F11_GC_skip_split	communication	GC跨段split	GC_subcluster	[pGC]	[rgGC]|[lGC]	group_id:syf,f5	directional	nichenet	P3	planned	D03	探索性	always						no
-F12_GC_feedback_split	communication	GC反馈split	GC_subcluster	[lGC]	[pGC]|[rgGC]	group_id:syf,f5	directional	nichenet	P3	planned	D03	探索性	always						no
-F13_GC_subtype_pairwise	communication	GC亚群pairwise通讯	GC_subcluster	[pGC,eGC,rgGC,lGC]	*	-	pairwise_comm	cellchat	P2	active		12任务	always						no
-F14_panorama_screen_baseline	communication	panorama全矩阵baseline	panorama	*	*	-	symmetric	cellchat	P1	active		无偏筛查	always						no
-F15_panorama_screen_split	communication	panorama全矩阵split	panorama	*	*	group_id:syf,f5	symmetric	cellchat	P0	active		重连图谱	always						no
-F16_GC_screen_baseline	communication	GC全矩阵baseline	GC_subcluster	*	*	-	symmetric	cellchat	P1	active			always	20	20	40			no
-F17_GC_screen_split	communication	GC全矩阵split	GC_subcluster	*	*	group_id:syf,f5	symmetric	cellchat	P2	active		细胞数风险	auto_if_min_cells	20	20	40	F16_GC_screen_baseline		yes
-F18_TC_screen_baseline	communication	TC全矩阵baseline	TC_subcluster	*	*	-	symmetric	cellchat	P3	planned		等TC	always						no
-F19_TC_screen_split	communication	TC全矩阵split	TC_subcluster	*	*	group_id:syf,f5	symmetric	cellchat	P3	planned		等TC	always						no
-F20_TC_sub_to_GC_baseline	communication	TC亚群->GC亚群baseline	panorama	[TC_*]	[pGC,eGC,rgGC,lGC]	-	directional	cellchat+nichenet	P1	planned		等TC	always						no
-F21_TC_sub_to_GC_split	communication	TC亚群->GC亚群split	panorama	[TC_*]	[pGC,eGC,rgGC,lGC]	group_id:syf,f5	directional	cellchat+nichenet	P1	planned		等TC	always						no
-F22_TC_sub_to_GC_each	communication	TC亚群->单GC亚群	panorama	[TC_*]	[pGC]|[eGC]|[rgGC]|[lGC]	group_id:syf,f5	directional	cellchat	P2	planned		等TC	always						no
-G01_panorama_TF	regulation	panorama大类TF	panorama	*	-	-	regulation_per	scenic+decoupler	P0	active			always						no
-G02_GC_subtype_TF	regulation	GC亚群TF	GC_subcluster	*	-	-	regulation_per	scenic+decoupler	P0	active			always						no
-G03_TC_subtype_TF	regulation	TC亚群TF	TC_subcluster	*	-	-	regulation_per	scenic+decoupler	P1	planned		等TC	always						no
-G04_GC_subtype_TF_pairwise	regulation	GC亚群间TF差异	GC_subcluster	*	*	-	regulation_pair	decoupler	P1	active			always						no
-G05_TC_subtype_TF_pairwise	regulation	TC亚群间TF差异	TC_subcluster	*	*	-	regulation_pair	decoupler	P2	planned		等TC	always						no
-G06_GC_stage_TF	regulation	GC syf vs f5 TF	panorama	[GC]	-	group_id:syf,f5	regulation_stage	decoupler	P0	active			always						no
-G07_TC_stage_TF	regulation	TC syf vs f5 TF	panorama	[TC]	-	group_id:syf,f5	regulation_stage	decoupler	P0	active			always						no
-G08_GC_subtype_stage_TF	regulation	GC各亚群syf vs f5 TF	GC_subcluster	*	-	group_id:syf,f5	regulation_stage	decoupler	P1	active		展开4行	always						no
-G09_TC_subtype_stage_TF	regulation	TC各亚群syf vs f5 TF	TC_subcluster	*	-	group_id:syf,f5	regulation_stage	decoupler	P2	planned		等TC	always						no
-H01_GC_trajectory_baseline	trajectory	GC pseudotime	GC_subcluster	[pGC]	[lGC]	-	lineage	trajectory+velocity	P0	active		pGC->lGC	always						no
-H02_GC_trajectory_split	trajectory	GC pseudotime split	GC_subcluster	[pGC]	[lGC]	group_id:syf,f5	lineage	trajectory+velocity	P0	active			always						no
-H03_TC_trajectory_baseline	trajectory	TC轨迹	TC_subcluster	auto	auto	-	lineage	trajectory+velocity	P2	planned		等TC	always						no
-H04_TC_trajectory_split	trajectory	TC轨迹split	TC_subcluster	auto	auto	group_id:syf,f5	lineage	trajectory+velocity	P3	planned		等TC	always						no
-H05_GC_velocity	trajectory	GC RNA velocity	GC_subcluster	*	*	-	velocity	velocity	P0	active		独立验证	always						no
-I01_ST_clustering	spatial	ST clustering	ST_section	*	*	-	spatial_clustering	spatial_clustering	P0	planned		2.5	always						no
-I02_ST_region_marker	spatial	region marker	ST_section	*	*	-	pairwise	deg+enrichment	P0	planned		2.6	always						no
-I03_ST_region_marker_syf	spatial	region in syf	ST_section	*	*	syf_only	pairwise	deg+enrichment	P1	planned			always						no
-I04_ST_region_marker_f5	spatial	region in f5	ST_section	*	*	f5_only	pairwise	deg+enrichment	P1	planned			always						no
-I05_ST_region_stage	spatial	region syf vs f5	ST_section	*	-	section:syf,f5	contrast_only	deg+enrichment	P0	planned		2.9	always						no
-I06_SVG	spatial	SVG	ST_section	all_spots	-	-	SVG	spark+spatialDE	P0	planned		2.10	always						no
-I07_SVG_by_stage	spatial	SVG syf vs f5	ST_section	all_spots	-	section:syf,f5	SVG_diff	spark	P1	planned			always						no
-I08_deconv_panorama	spatial	panorama->ST去卷积	ST_section	panorama_ref	*	section:syf,f5	deconv_pair	rctd+cell2location	P0	planned		2.7	always						no
-I09_deconv_GC_subtype	spatial	GC->ST去卷积	ST_section	GC_sub_ref	*	section:syf,f5	deconv_pair	rctd	P0	planned			always						no
-I10_deconv_TC_subtype	spatial	TC->ST去卷积	ST_section	TC_sub_ref	*	section:syf,f5	deconv_pair	rctd	P1	planned			always						no
-I11_deconv_validation	spatial	去卷积验证	ST_section	synthetic	*	-	deconv_validation	scdesign3+rctd	P1	planned		2.7.1	always						no
-I12_ST_region_compo	spatial	ST比例	ST_section	regions	-	section:syf,f5	composition	composition_test	P1	planned			always						no
-I13_neighborhood	spatial	邻接生态位	ST_section	region	region	-	spatial_neighbor	squidpy	P0	planned		4.1	always						no
-I14_neighborhood_stage	spatial	邻接syf vs f5	ST_section	region	region	section:syf,f5	spatial_neighbor	squidpy	P1	planned			always						no
-I15_ST_enrichment	spatial	空间富集	ST_section	(from I05+I06)	-	-	enrichment_target	deg+enrichment	P1	planned		4.2	always						no
-I16_ST_decoupler	spatial	ST decoupleR	ST_section	all_spots	-	-	regulation_per	decoupler	P1	planned		4.3	always						no
-I17_ST_decoupler_stage	spatial	ST decoupleR split	ST_section	all_spots	-	section:syf,f5	regulation_stage	decoupler	P2	planned			always						no
-I18_traj_in_space	spatial	轨迹空间映射	ST_section	H01_results	*	section:syf,f5	spatial_overlay	rctd+stlearn	P0	planned		5.1	always						no
-I19_comm_in_space	spatial	通讯空间叠图	ST_section	F02_results	*	section:syf,f5	spatial_overlay	rctd	P0	planned		5.2.1	always						no
-I20_comm_neighbor_check	spatial	通讯邻接一致性	ST_section	I19_results	I13_results	-	spatial_overlay	custom	P0	planned		5.2.2	always						no
-I21_comm_final_figure	spatial	最终通讯图版	ST_section	I19+I20	*	-	spatial_overlay	visualization	P0	planned		5.2.3	always						no
+question_id	question_class	question_zh	scope	sender_groups	receiver_groups	condition_split	contrast_axis	tools_to_run	priority	status	depends_on	notes	activation_policy	min_sender_cells	min_receiver_cells	min_cells_per_condition	fallback_pair_id	derived_from_pair_id	display_question_id	output_alias	report_title	run_baseline_if_split_fails
+A01_panorama_marker	marker	panorama大类identity marker(GC vs TC)	panorama	*	*	-	identity_marker	deg+enrichment	P0	active		注释完成后的cell_type identity marker; raw cluster marker evidence由03/04 annotation输出	always									no
+A02_GC_subtype_marker	marker	GC 4亚群identity marker	GC_subcluster	*	*	-	identity_marker	deg+enrichment	P0	active		注释完成后的cell_subtype identity marker; pGC/eGC/rgGC/lGC each vs rest	always									no
+A03_TC_subtype_marker	marker	TC亚群identity marker	TC_subcluster	*	*	-	identity_marker	deg+enrichment	P0	planned		等TC注释	always									no
+A04_ST_region_marker	marker	ST region identity marker	ST_section	*	*	-	identity_marker	deg+enrichment	P0	planned		等ST	always									no
+B01_GC_vs_TC	deg	GC vs TC整体差异	panorama	[GC]	[TC]	-	directional_DEG	deg+enrichment	P0	active		whole_layer	always									no
+B02_GC_subtypes_pairwise	deg	GC 4亚群pairwise(6对)	GC_subcluster	[pGC,eGC,rgGC,lGC]	*	-	pairwise	deg+enrichment	P1	active		C(4,2)=6	always									no
+B03_TC_subtypes_pairwise	deg	TC亚群pairwise	TC_subcluster	[TC_*]	*	-	pairwise	deg+enrichment	P1	planned		等TC	always									no
+C01_GC_vs_TC_in_syf	deg	syf内GC vs TC	panorama	[GC]	[TC]	syf_only	directional_DEG	deg+enrichment	P0	active			always									no
+C02_GC_vs_TC_in_f5	deg	f5内GC vs TC	panorama	[GC]	[TC]	f5_only	directional_DEG	deg+enrichment	P0	active			always									no
+C03_GC_subtypes_pairwise_syf	deg	GC亚群pairwise in syf	GC_subcluster	[pGC,eGC,rgGC,lGC]	*	syf_only	pairwise	deg+enrichment	P1	active			always									no
+C04_GC_subtypes_pairwise_f5	deg	GC亚群pairwise in f5	GC_subcluster	[pGC,eGC,rgGC,lGC]	*	f5_only	pairwise	deg+enrichment	P1	active			always									no
+C05_TC_subtypes_pairwise_syf	deg	TC亚群pairwise in syf	TC_subcluster	[TC_*]	*	syf_only	pairwise	deg+enrichment	P1	planned		等TC	always									no
+C06_TC_subtypes_pairwise_f5	deg	TC亚群pairwise in f5	TC_subcluster	[TC_*]	*	f5_only	pairwise	deg+enrichment	P1	planned		等TC	always									no
+D01_GC_stage_DEG	deg	GC大类syf vs f5	panorama	[GC]	-	group_id:syf,f5	contrast_only	deg+enrichment	P0	active		pseudobulk优先	always									no
+D02_TC_stage_DEG	deg	TC大类syf vs f5	panorama	[TC]	-	group_id:syf,f5	contrast_only	deg+enrichment	P0	active		pseudobulk优先	always									no
+D03_GC_subtype_stage_DEG	deg	每个GC亚群syf vs f5	GC_subcluster	*	-	group_id:syf,f5	contrast_only	deg+enrichment	P0	active		展开4行	always									no
+D04_TC_subtype_stage_DEG	deg	每个TC亚群syf vs f5	TC_subcluster	*	-	group_id:syf,f5	contrast_only	deg+enrichment	P1	planned		等TC	always									no
+D05_panorama_global_stage	global_context	panorama整体syf vs f5 global context	panorama	all_cells	-	group_id:syf,f5	global_stage_context	deg+enrichment	P2	active		全局signature; global_context_only; not receiver DEG	always									no
+D06_ST_region_stage	deg	每个region syf vs f5	ST_section	*	-	group_id:syf,f5	contrast_only	deg+enrichment	P1	planned		等ST	always									no
+E01_GC_subtype_compo	composition	GC 4亚群比例syf vs f5	panorama	GC_subtypes	-	group_id:syf,f5	composition	composition_test	P0	active		propeller	always									no
+E02_TC_subtype_compo	composition	TC亚群比例syf vs f5	panorama	TC_subtypes	-	group_id:syf,f5	composition	composition_test	P1	planned		等TC	always									no
+E03_layer_compo	qc	GC vs TC capture balance QC	panorama	[GC,TC]	-	group_id:syf,f5	qc_composition	composition_qc	P1	active		取样均衡控制; qc_only; biological_conclusion_allowed=no	always						E03_scRNA_GC_TC_capture_balance	E03_scRNA_GC_TC_capture_balance	scRNA GC/TC captured-cell balance QC	no
+E04_ST_region_compo	composition	ST region比例syf vs f5	ST_section	regions	-	section:syf,f5	composition	composition_test	P1	planned		等ST	always									no
+F01_TC_GC_bidir_baseline	communication	TC-GC双向baseline	panorama	[TC]	[GC]	-	bidirectional	cellchat+nichenet	P1	active			always									no
+F02_TC_GC_bidir_split	communication	TC-GC双向syf/f5 split	panorama	[TC]	[GC]	group_id:syf,f5	bidirectional	cellchat+nichenet	P0	active			always									no
+F03_TC_to_GC_each_baseline	communication	TC->每个GC亚群baseline	panorama	[TC]	[pGC]|[eGC]|[rgGC]|[lGC]	-	directional	cellchat	P1	active	A02	依赖M5	always									no
+F04_TC_to_GC_each_split	communication	TC->每个GC亚群split	panorama	[TC]	[pGC]|[eGC]|[rgGC]|[lGC]	group_id:syf,f5	directional	cellchat+nichenet	P0	active	A02,D03	核心问题	always									no
+F05_GC_each_to_TC_baseline	communication	每个GC->TC baseline	panorama	[pGC]|[eGC]|[rgGC]|[lGC]	[TC]	-	directional	cellchat	P1	active	A01	反向	always									no
+F06_GC_each_to_TC_split	communication	每个GC->TC split	panorama	[pGC]|[eGC]|[rgGC]|[lGC]	[TC]	group_id:syf,f5	directional	cellchat+nichenet	P0	active	A01,D02	反向+split	always									no
+F07_GC_dev_seq_baseline	communication	GC发育流3段baseline	GC_subcluster	[pGC]->[eGC]->[rgGC]->[lGC]	(sequential)	-	sequential	cellchat+nichenet	P0	active	A02	Yu2025	always	20	20	40						no
+F08_GC_dev_seq_split	communication	GC发育流3段split	GC_subcluster	[pGC]->[eGC]->[rgGC]->[lGC]	(sequential)	group_id:syf,f5	sequential	cellchat+nichenet	P1	active	D03	细胞数风险	auto_if_min_cells	20	20	40	F07_GC_dev_seq_baseline					yes
+F09_GC_dev_skip	communication	GC跨段	GC_subcluster	[pGC]	[rgGC]|[lGC]	-	directional	nichenet	P2	active	A02	shortcut	always									no
+F10_GC_feedback	communication	GC反馈	GC_subcluster	[lGC]	[pGC]|[rgGC]	-	directional	nichenet	P2	active	A02	反馈环	always									no
+F11_GC_skip_split	communication	GC跨段split	GC_subcluster	[pGC]	[rgGC]|[lGC]	group_id:syf,f5	directional	nichenet	P3	planned	D03	探索性	always									no
+F12_GC_feedback_split	communication	GC反馈split	GC_subcluster	[lGC]	[pGC]|[rgGC]	group_id:syf,f5	directional	nichenet	P3	planned	D03	探索性	always									no
+F13_GC_subtype_pairwise	communication	GC亚群pairwise通讯	GC_subcluster	[pGC,eGC,rgGC,lGC]	*	-	pairwise_comm	cellchat	P2	active		12任务	always									no
+F14_panorama_screen_baseline	communication	panorama全矩阵baseline	panorama	*	*	-	symmetric	cellchat	P1	active		无偏筛查	always									no
+F15_panorama_screen_split	communication	panorama全矩阵split	panorama	*	*	group_id:syf,f5	symmetric	cellchat	P0	active		重连图谱	always									no
+F16_GC_screen_baseline	communication	GC全矩阵baseline	GC_subcluster	*	*	-	symmetric	cellchat	P1	active			always	20	20	40						no
+F17_GC_screen_split	communication	GC全矩阵split	GC_subcluster	*	*	group_id:syf,f5	symmetric	cellchat	P2	active		细胞数风险	auto_if_min_cells	20	20	40	F16_GC_screen_baseline					yes
+F18_TC_screen_baseline	communication	TC全矩阵baseline	TC_subcluster	*	*	-	symmetric	cellchat	P3	planned		等TC	always									no
+F19_TC_screen_split	communication	TC全矩阵split	TC_subcluster	*	*	group_id:syf,f5	symmetric	cellchat	P3	planned		等TC	always									no
+F20_TC_sub_to_GC_baseline	communication	TC亚群->GC亚群baseline	panorama	[TC_*]	[pGC,eGC,rgGC,lGC]	-	directional	cellchat+nichenet	P1	planned		等TC	always									no
+F21_TC_sub_to_GC_split	communication	TC亚群->GC亚群split	panorama	[TC_*]	[pGC,eGC,rgGC,lGC]	group_id:syf,f5	directional	cellchat+nichenet	P1	planned		等TC	always									no
+F22_TC_sub_to_GC_each	communication	TC亚群->单GC亚群	panorama	[TC_*]	[pGC]|[eGC]|[rgGC]|[lGC]	group_id:syf,f5	directional	cellchat	P2	planned		等TC	always									no
+G01_panorama_TF	regulation	panorama大类TF	panorama	*	-	-	regulation_per	scenic+decoupler	P0	active			always									no
+G02_GC_subtype_TF	regulation	GC亚群TF	GC_subcluster	*	-	-	regulation_per	scenic+decoupler	P0	active			always									no
+G03_TC_subtype_TF	regulation	TC亚群TF	TC_subcluster	*	-	-	regulation_per	scenic+decoupler	P1	planned		等TC	always									no
+G04_GC_subtype_TF_pairwise	regulation	GC亚群间TF差异	GC_subcluster	*	*	-	regulation_pair	decoupler	P1	active			always									no
+G05_TC_subtype_TF_pairwise	regulation	TC亚群间TF差异	TC_subcluster	*	*	-	regulation_pair	decoupler	P2	planned		等TC	always									no
+G06_GC_stage_TF	regulation	GC syf vs f5 TF	panorama	[GC]	-	group_id:syf,f5	regulation_stage	decoupler	P0	active			always									no
+G07_TC_stage_TF	regulation	TC syf vs f5 TF	panorama	[TC]	-	group_id:syf,f5	regulation_stage	decoupler	P0	active			always									no
+G08_GC_subtype_stage_TF	regulation	GC各亚群syf vs f5 TF	GC_subcluster	*	-	group_id:syf,f5	regulation_stage	decoupler	P1	active		展开4行	always									no
+G09_TC_subtype_stage_TF	regulation	TC各亚群syf vs f5 TF	TC_subcluster	*	-	group_id:syf,f5	regulation_stage	decoupler	P2	planned		等TC	always									no
+H01_GC_trajectory_baseline	trajectory	GC pseudotime	GC_subcluster	[pGC]	[lGC]	-	lineage	trajectory+velocity	P0	active		pGC->lGC	always									no
+H02_GC_trajectory_split	trajectory	GC pseudotime split	GC_subcluster	[pGC]	[lGC]	group_id:syf,f5	lineage	trajectory+velocity	P0	active			always									no
+H03_TC_trajectory_baseline	trajectory	TC轨迹	TC_subcluster	auto	auto	-	lineage	trajectory+velocity	P2	planned		等TC	always									no
+H04_TC_trajectory_split	trajectory	TC轨迹split	TC_subcluster	auto	auto	group_id:syf,f5	lineage	trajectory+velocity	P3	planned		等TC	always									no
+H05_GC_velocity	trajectory	GC RNA velocity	GC_subcluster	*	*	-	velocity	velocity	P0	active		独立验证	always									no
+I01_ST_clustering	spatial	ST clustering	ST_section	*	*	-	spatial_clustering	spatial_clustering	P0	planned		2.5	always									no
+I02_ST_region_marker	spatial	region marker	ST_section	*	*	-	pairwise	deg+enrichment	P0	planned		2.6	always									no
+I03_ST_region_marker_syf	spatial	region in syf	ST_section	*	*	syf_only	pairwise	deg+enrichment	P1	planned			always									no
+I04_ST_region_marker_f5	spatial	region in f5	ST_section	*	*	f5_only	pairwise	deg+enrichment	P1	planned			always									no
+I05_ST_region_stage	spatial	region syf vs f5	ST_section	*	-	section:syf,f5	contrast_only	deg+enrichment	P0	planned		2.9	always									no
+I06_SVG	spatial	SVG	ST_section	all_spots	-	-	SVG	spark+spatialDE	P0	planned		2.10	always									no
+I07_SVG_by_stage	spatial	SVG syf vs f5	ST_section	all_spots	-	section:syf,f5	SVG_diff	spark	P1	planned			always									no
+I08_deconv_panorama	spatial	panorama->ST去卷积	ST_section	panorama_ref	*	section:syf,f5	deconv_pair	rctd+cell2location	P0	planned		2.7	always									no
+I09_deconv_GC_subtype	spatial	GC->ST去卷积	ST_section	GC_sub_ref	*	section:syf,f5	deconv_pair	rctd	P0	planned			always									no
+I10_deconv_TC_subtype	spatial	TC->ST去卷积	ST_section	TC_sub_ref	*	section:syf,f5	deconv_pair	rctd	P1	planned			always									no
+I11_deconv_validation	spatial	去卷积验证	ST_section	synthetic	*	-	deconv_validation	scdesign3+rctd	P1	planned		2.7.1	always									no
+I12_ST_region_compo	spatial	ST比例	ST_section	regions	-	section:syf,f5	composition	composition_test	P1	planned			always									no
+I13_neighborhood	spatial	邻接生态位	ST_section	region	region	-	spatial_neighbor	squidpy	P0	planned		4.1	always									no
+I14_neighborhood_stage	spatial	邻接syf vs f5	ST_section	region	region	section:syf,f5	spatial_neighbor	squidpy	P1	planned			always									no
+I15_ST_enrichment	spatial	空间富集	ST_section	(from I05+I06)	-	-	enrichment_target	deg+enrichment	P1	planned		4.2	always									no
+I16_ST_decoupler	spatial	ST decoupleR	ST_section	all_spots	-	-	regulation_per	decoupler	P1	planned		4.3	always									no
+I17_ST_decoupler_stage	spatial	ST decoupleR split	ST_section	all_spots	-	section:syf,f5	regulation_stage	decoupler	P2	planned			always									no
+I18_traj_in_space	spatial	轨迹空间映射	ST_section	H01_results	*	section:syf,f5	spatial_overlay	rctd+stlearn	P0	planned		5.1	always									no
+I19_comm_in_space	spatial	通讯空间叠图	ST_section	F02_results	*	section:syf,f5	spatial_overlay	rctd	P0	planned		5.2.1	always									no
+I20_comm_neighbor_check	spatial	通讯邻接一致性	ST_section	I19_results	I13_results	-	spatial_overlay	custom	P0	planned		5.2.2	always									no
+I21_comm_final_figure	spatial	最终通讯图版	ST_section	I19+I20	*	-	spatial_overlay	visualization	P0	planned		5.2.3	always									no

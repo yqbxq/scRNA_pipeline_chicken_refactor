@@ -91,6 +91,135 @@ run_formal_propeller_05 <- function(seu, vars) {
   res
 }
 
+empty_composition_table_05c <- function() {
+  empty_df_05(c("sample_id", "group_id", "cluster_id", "cell_number", "sample_total", "proportion"))
+}
+
+normalize_output_path_05c <- function(path) {
+  path <- normalize_scalar_value(path)
+  if (!nzchar(path)) "" else normalizePath(path, winslash = "/", mustWork = FALSE)
+}
+
+qc_composition_notice_05c <- "该结果只表示 scRNA 捕获到的 GC/TC 细胞组成。不能解释为组织中 GC/TC 的真实比例变化。真实组织比例由 ST region 注释或 ST 去卷积评估。"
+
+write_qc_composition_outputs_05c <- function(cfg, vars, layer_id, cmp_paths, composition_df,
+                                             inference_status, reason, formal_results_tsv = "") {
+  if (!identical(vars$analysis_mode, "qc_composition")) {
+    return(list(
+      composition_tsv = normalize_output_path_05c(cmp_paths$proportion_tsv),
+      qc_mirror_tsv = "",
+      qc_report_md = "",
+      qc_mirror_written = "no",
+      biological_conclusion_allowed = "yes",
+      tissue_abundance_interpretation_allowed = "yes"
+    ))
+  }
+
+  if (is.null(composition_df) || !is.data.frame(composition_df)) {
+    composition_df <- empty_composition_table_05c()
+  }
+  qc_paths <- qc_composition_paths_05(cfg, vars$output_alias)
+  write_tsv_local(composition_df, cmp_paths$proportion_tsv)
+  write_tsv_local(composition_df, cmp_paths$comparison_tsv)
+  write_tsv_local(composition_df, qc_paths$table_tsv)
+
+  sample_n <- if ("sample_id" %in% colnames(composition_df)) length(unique(composition_df$sample_id[nzchar(as.character(composition_df$sample_id))])) else 0L
+  group_n <- if ("group_id" %in% colnames(composition_df)) length(unique(composition_df$group_id[nzchar(as.character(composition_df$group_id))])) else 0L
+  report_lines <- c(
+    sprintf("# %s", vars$report_title),
+    "",
+    sprintf("- canonical_question_id: `%s`", vars$source_question_id),
+    sprintf("- display_question_id: `%s`", vars$display_question_id),
+    sprintf("- comparison_id: `%s`", vars$comparison_id),
+    sprintf("- layer_id: `%s`", layer_id),
+    "- analysis_mode: `qc_composition`",
+    "- gene_program_role: `qc_only`",
+    "- biological_conclusion_allowed: `no`",
+    "- tissue_abundance_interpretation_allowed: `no`",
+    sprintf("- inference_status: `%s`", inference_status),
+    sprintf("- reason: %s", reason),
+    sprintf("- canonical_table: `%s`", cmp_paths$comparison_tsv),
+    sprintf("- qc_mirror_table: `%s`", qc_paths$table_tsv),
+    sprintf("- formal_results_tsv: `%s`", formal_results_tsv),
+    sprintf("- sample_n: `%s`", sample_n),
+    sprintf("- group_n: `%s`", group_n),
+    "",
+    "## Interpretation Guardrail",
+    "",
+    qc_composition_notice_05c,
+    "",
+    "E03 is a scRNA captured-cell balance QC result.",
+    "It is not a spatial or tissue abundance estimate.",
+    "Do not use E03 to claim GC/TC tissue proportion changes.",
+    "Use ST region annotation, ST deconvolution, or histology/image quantification for tissue abundance."
+  )
+  ensure_dir(dirname(qc_paths$report_md))
+  write_markdown_local(report_lines, qc_paths$report_md)
+
+  list(
+    composition_tsv = normalize_output_path_05c(cmp_paths$comparison_tsv),
+    qc_mirror_tsv = normalize_output_path_05c(qc_paths$table_tsv),
+    qc_report_md = normalize_output_path_05c(qc_paths$report_md),
+    qc_mirror_written = "yes",
+    biological_conclusion_allowed = "no",
+    tissue_abundance_interpretation_allowed = "no"
+  )
+}
+
+composition_manifest_row_05c <- function(layer_id, vars, inference_status,
+                                         proportion_tsv = "", formal_results_tsv = "",
+                                         gate_summary_tsv = "", status_tsv = "",
+                                         qc_info = NULL) {
+  if (is.null(qc_info)) {
+    qc_info <- list(
+      composition_tsv = normalize_output_path_05c(proportion_tsv),
+      qc_mirror_tsv = "",
+      qc_report_md = "",
+      qc_mirror_written = "no",
+      biological_conclusion_allowed = if (identical(vars$analysis_mode, "qc_composition")) "no" else "yes",
+      tissue_abundance_interpretation_allowed = if (identical(vars$analysis_mode, "qc_composition")) "no" else "yes"
+    )
+  }
+  data.frame(
+    layer_id = layer_id,
+    comparison_id = vars$comparison_id,
+    source_question_id = vars$source_question_id,
+    display_question_id = vars$display_question_id,
+    output_alias = vars$output_alias,
+    report_title = vars$report_title,
+    analysis_mode = vars$analysis_mode,
+    gene_program_role = vars$gene_program_role,
+    is_qc_composition = if (identical(vars$analysis_mode, "qc_composition")) "yes" else "no",
+    composition_group_var = vars$composition_group_var,
+    inference_status = inference_status,
+    proportion_tsv = normalize_output_path_05c(proportion_tsv),
+    composition_tsv = normalize_scalar_value(qc_info$composition_tsv),
+    formal_results_tsv = normalize_output_path_05c(formal_results_tsv),
+    gate_summary_tsv = normalize_output_path_05c(gate_summary_tsv),
+    status_tsv = normalize_output_path_05c(status_tsv),
+    qc_mirror_tsv = normalize_scalar_value(qc_info$qc_mirror_tsv),
+    qc_report_md = normalize_scalar_value(qc_info$qc_report_md),
+    biological_conclusion_allowed = normalize_scalar_value(qc_info$biological_conclusion_allowed),
+    tissue_abundance_interpretation_allowed = normalize_scalar_value(qc_info$tissue_abundance_interpretation_allowed),
+    qc_mirror_written = normalize_scalar_value(qc_info$qc_mirror_written, "no"),
+    stringsAsFactors = FALSE
+  )
+}
+
+qc_report_summary_lines_05c <- function(vars, qc_info) {
+  if (!identical(vars$analysis_mode, "qc_composition")) {
+    return(character(0))
+  }
+  c(
+    "- qc_composition: `yes`",
+    "- biological_conclusion_allowed: `no`",
+    "- tissue_abundance_interpretation_allowed: `no`",
+    sprintf("- qc_mirror_tsv: `%s`", normalize_scalar_value(qc_info$qc_mirror_tsv)),
+    sprintf("- qc_report_md: `%s`", normalize_scalar_value(qc_info$qc_report_md)),
+    sprintf("- interpretation_guardrail: %s", qc_composition_notice_05c)
+  )
+}
+
 layer_status_df <- deg_layer_status(cfg)
 comparison_df <- read_deg_comparison_sheet(cfg)
 
@@ -146,17 +275,10 @@ for (idx in seq_len(nrow(layer_status_df))) {
         ),
         cmp_paths$status_tsv
       )
-      manifest_rows[[length(manifest_rows) + 1]] <- data.frame(
-        layer_id = layer_id,
-        comparison_id = vars$comparison_id,
-        analysis_mode = vars$analysis_mode,
-        composition_group_var = vars$composition_group_var,
-        inference_status = "skipped_non_composition",
-        proportion_tsv = "",
-        formal_results_tsv = "",
-        gate_summary_tsv = normalizePath(cmp_paths$gate_summary_tsv, winslash = "/", mustWork = FALSE),
-        status_tsv = normalizePath(cmp_paths$status_tsv, winslash = "/", mustWork = FALSE),
-        stringsAsFactors = FALSE
+      manifest_rows[[length(manifest_rows) + 1]] <- composition_manifest_row_05c(
+        layer_id, vars, "skipped_non_composition",
+        gate_summary_tsv = cmp_paths$gate_summary_tsv,
+        status_tsv = cmp_paths$status_tsv
       )
       next
     }
@@ -176,19 +298,23 @@ for (idx in seq_len(nrow(layer_status_df))) {
         ),
         cmp_paths$status_tsv
       )
-      manifest_rows[[length(manifest_rows) + 1]] <- data.frame(
-        layer_id = layer_id,
-        comparison_id = vars$comparison_id,
-        analysis_mode = vars$analysis_mode,
-        composition_group_var = vars$composition_group_var,
-        inference_status = "skipped",
-        proportion_tsv = "",
-        formal_results_tsv = "",
-        gate_summary_tsv = normalizePath(cmp_paths$gate_summary_tsv, winslash = "/", mustWork = FALSE),
-        status_tsv = normalizePath(cmp_paths$status_tsv, winslash = "/", mustWork = FALSE),
-        stringsAsFactors = FALSE
+      qc_info <- write_qc_composition_outputs_05c(
+        cfg, vars, layer_id, cmp_paths, empty_composition_table_05c(),
+        "skipped", subset_result$reason
       )
-      report_lines <- c(report_lines, sprintf("### `%s`", vars$comparison_id), sprintf("- status: skipped; reason: %s", subset_result$reason))
+      manifest_rows[[length(manifest_rows) + 1]] <- composition_manifest_row_05c(
+        layer_id, vars, "skipped",
+        proportion_tsv = if (identical(vars$analysis_mode, "qc_composition")) cmp_paths$proportion_tsv else "",
+        gate_summary_tsv = cmp_paths$gate_summary_tsv,
+        status_tsv = cmp_paths$status_tsv,
+        qc_info = qc_info
+      )
+      report_lines <- c(
+        report_lines,
+        sprintf("### `%s`", vars$comparison_id),
+        sprintf("- status: skipped; reason: %s", subset_result$reason),
+        qc_report_summary_lines_05c(vars, qc_info)
+      )
       next
     }
 
@@ -208,19 +334,23 @@ for (idx in seq_len(nrow(layer_status_df))) {
         ),
         cmp_paths$status_tsv
       )
-      manifest_rows[[length(manifest_rows) + 1]] <- data.frame(
-        layer_id = layer_id,
-        comparison_id = vars$comparison_id,
-        analysis_mode = vars$analysis_mode,
-        composition_group_var = vars$composition_group_var,
-        inference_status = "skipped",
-        proportion_tsv = "",
-        formal_results_tsv = "",
-        gate_summary_tsv = normalizePath(cmp_paths$gate_summary_tsv, winslash = "/", mustWork = FALSE),
-        status_tsv = normalizePath(cmp_paths$status_tsv, winslash = "/", mustWork = FALSE),
-        stringsAsFactors = FALSE
+      qc_info <- write_qc_composition_outputs_05c(
+        cfg, vars, layer_id, cmp_paths, empty_composition_table_05c(),
+        "skipped", composition_result$reason
       )
-      report_lines <- c(report_lines, sprintf("### `%s`", vars$comparison_id), sprintf("- status: skipped; reason: %s", composition_result$reason))
+      manifest_rows[[length(manifest_rows) + 1]] <- composition_manifest_row_05c(
+        layer_id, vars, "skipped",
+        proportion_tsv = if (identical(vars$analysis_mode, "qc_composition")) cmp_paths$proportion_tsv else "",
+        gate_summary_tsv = cmp_paths$gate_summary_tsv,
+        status_tsv = cmp_paths$status_tsv,
+        qc_info = qc_info
+      )
+      report_lines <- c(
+        report_lines,
+        sprintf("### `%s`", vars$comparison_id),
+        sprintf("- status: skipped; reason: %s", composition_result$reason),
+        qc_report_summary_lines_05c(vars, qc_info)
+      )
       next
     }
 
@@ -253,19 +383,25 @@ for (idx in seq_len(nrow(layer_status_df))) {
         ),
         cmp_paths$status_tsv
       )
-      manifest_rows[[length(manifest_rows) + 1]] <- data.frame(
-        layer_id = layer_id,
-        comparison_id = vars$comparison_id,
-        analysis_mode = vars$analysis_mode,
-        composition_group_var = vars$composition_group_var,
-        inference_status = status,
-        proportion_tsv = normalizePath(cmp_paths$proportion_tsv, winslash = "/", mustWork = FALSE),
-        formal_results_tsv = "",
-        gate_summary_tsv = normalizePath(cmp_paths$gate_summary_tsv, winslash = "/", mustWork = FALSE),
-        status_tsv = normalizePath(cmp_paths$status_tsv, winslash = "/", mustWork = FALSE),
-        stringsAsFactors = FALSE
+      qc_info <- write_qc_composition_outputs_05c(
+        cfg, vars, layer_id, cmp_paths, cmp_proportion_df,
+        status, gate$reason
       )
-      report_lines <- c(report_lines, sprintf("### `%s`", vars$comparison_id), warning_banner, sprintf("- status: %s", status), sprintf("- reason: %s", gate$reason))
+      manifest_rows[[length(manifest_rows) + 1]] <- composition_manifest_row_05c(
+        layer_id, vars, status,
+        proportion_tsv = cmp_paths$proportion_tsv,
+        gate_summary_tsv = cmp_paths$gate_summary_tsv,
+        status_tsv = cmp_paths$status_tsv,
+        qc_info = qc_info
+      )
+      report_lines <- c(
+        report_lines,
+        sprintf("### `%s`", vars$comparison_id),
+        warning_banner,
+        sprintf("- status: %s", status),
+        sprintf("- reason: %s", gate$reason),
+        qc_report_summary_lines_05c(vars, qc_info)
+      )
       next
     }
 
@@ -284,26 +420,36 @@ for (idx in seq_len(nrow(layer_status_df))) {
       ),
       cmp_paths$status_tsv
     )
-    manifest_rows[[length(manifest_rows) + 1]] <- data.frame(
-      layer_id = layer_id,
-      comparison_id = vars$comparison_id,
-      analysis_mode = vars$analysis_mode,
-      composition_group_var = vars$composition_group_var,
-      inference_status = "formal",
-      proportion_tsv = normalizePath(cmp_paths$proportion_tsv, winslash = "/", mustWork = FALSE),
-      formal_results_tsv = normalizePath(cmp_paths$formal_results_tsv, winslash = "/", mustWork = FALSE),
-      gate_summary_tsv = normalizePath(cmp_paths$gate_summary_tsv, winslash = "/", mustWork = FALSE),
-      status_tsv = normalizePath(cmp_paths$status_tsv, winslash = "/", mustWork = FALSE),
-      stringsAsFactors = FALSE
+    qc_info <- write_qc_composition_outputs_05c(
+      cfg, vars, layer_id, cmp_paths, cmp_proportion_df,
+      "formal", gate$reason, formal_results_tsv = cmp_paths$formal_results_tsv
     )
-    report_lines <- c(report_lines, sprintf("### `%s`", vars$comparison_id), "- status: formal", sprintf("- formal_propeller: `%s`", cmp_paths$formal_results_tsv))
+    manifest_rows[[length(manifest_rows) + 1]] <- composition_manifest_row_05c(
+      layer_id, vars, "formal",
+      proportion_tsv = cmp_paths$proportion_tsv,
+      formal_results_tsv = cmp_paths$formal_results_tsv,
+      gate_summary_tsv = cmp_paths$gate_summary_tsv,
+      status_tsv = cmp_paths$status_tsv,
+      qc_info = qc_info
+    )
+    report_lines <- c(
+      report_lines,
+      sprintf("### `%s`", vars$comparison_id),
+      "- status: formal",
+      sprintf("- formal_propeller: `%s`", cmp_paths$formal_results_tsv),
+      qc_report_summary_lines_05c(vars, qc_info)
+    )
   }
 }
 
 manifest_df <- if (length(manifest_rows) > 0) dplyr::bind_rows(manifest_rows) else empty_df_05(c(
-  "layer_id", "comparison_id", "analysis_mode", "composition_group_var",
-  "inference_status", "proportion_tsv",
-  "formal_results_tsv", "gate_summary_tsv", "status_tsv"
+  "layer_id", "comparison_id", "source_question_id", "display_question_id",
+  "output_alias", "report_title", "analysis_mode", "gene_program_role",
+  "is_qc_composition", "composition_group_var", "inference_status",
+  "proportion_tsv", "composition_tsv", "formal_results_tsv",
+  "gate_summary_tsv", "status_tsv", "qc_mirror_tsv", "qc_report_md",
+  "biological_conclusion_allowed", "tissue_abundance_interpretation_allowed",
+  "qc_mirror_written"
 ))
 manifest_tsv <- file.path(cfg$composition_table_dir, "composition_manifest.tsv")
 write_tsv_local(manifest_df, manifest_tsv)

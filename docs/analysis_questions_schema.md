@@ -32,6 +32,9 @@ than hand-maintained.
 | `fallback_pair_id` | ID | `F07_GC_dev_seq_baseline` | Tier1 fallback parent; M3 resolves concrete Tier2 fallback task IDs. |
 | `derived_from_pair_id` | ID list | `F08...__pGC_to_eGC` | Tier2 derived rows list concrete split input pair IDs. |
 | `run_baseline_if_split_fails` | boolean | `yes` | Report baseline fallback when an auto-gated split is skipped. |
+| `display_question_id` | optional ID | `E03_scRNA_GC_TC_capture_balance` | Optional display ID; blank defaults to `question_id`. E03 must set this alias. |
+| `output_alias` | optional ID | `E03_scRNA_GC_TC_capture_balance` | Optional output file alias; blank defaults to `question_id`. E03 must set this alias. |
+| `report_title` | optional text | `scRNA GC/TC captured-cell balance QC` | Optional report title; blank defaults to an automatic title. E03 must set this title. |
 
 ## Scope Semantics
 
@@ -134,7 +137,7 @@ Current generated columns:
 
 | File | Columns |
 |---|---|
-| `comparisons.tsv` | `comparison_id`, `source_question_id`, `layer_scope`, `contrast_axis`, `analysis_mode`, `analysis_unit`, `stat_level`, `group_var`, `ident_1`, `ident_2`, `subset_column`, `subset_value`, `aggregation_group_var`, `composition_group_var`, `batch_var`, `enabled`, `min_biological_replicates`, `force_exploratory`, `min_cells_per_group`, `logfc_threshold`, `produces_gene_program`, `gene_program_role`, `notes` |
+| `comparisons.tsv` | `comparison_id`, `source_question_id`, `display_question_id`, `output_alias`, `report_title`, `layer_scope`, `contrast_axis`, `analysis_mode`, `analysis_unit`, `stat_level`, `group_var`, `ident_1`, `ident_2`, `subset_column`, `subset_value`, `aggregation_group_var`, `composition_group_var`, `batch_var`, `enabled`, `min_biological_replicates`, `force_exploratory`, `min_cells_per_group`, `logfc_threshold`, `produces_gene_program`, `gene_program_role`, `notes` |
 | `annotation_marker_targets.tsv` | `target_id`, `source_question_id`, `layer_scope`, `object_layer`, `cluster_column`, `annotation_label_column`, `group_var`, `ident_1`, `ident_2`, `analysis_mode`, `gene_program_role`, `output_dir`, `annotation_only`, `enabled`, `notes` |
 | `communication_pairs.tsv` | `pair_id`, `source_question_id`, `layer_scope`, `sender`, `receiver`, `condition_split_var`, `condition_split_values`, `tool`, `communication_mode`, `activation_policy`, `min_sender_cells`, `min_receiver_cells`, `min_cells_per_condition`, `fallback_pair_id`, `derived_from_pair_id`, `run_baseline_if_split_fails`, `requires_all_derived_inputs_pass`, `receiver_gene_program_source`, `baseline_marker_comparison_id`, `receiver_deg_comparison_id`, `direction_filter`, `requires_cell_subtype`, `notes`, `enabled` |
 | `trajectory_pairs.tsv` | `trajectory_id`, `source_question_id`, `layer_scope`, `root_group`, `terminal_group`, `condition_split_var`, `condition_split_values`, `method`, `enabled`, `notes` |
@@ -163,6 +166,19 @@ A01/A02 are post-annotation identity markers. They no longer use raw
 `cluster_marker` semantics. E03 is `qc_composition`; it must not be NicheNet or
 enrichment eligible. D05 is `global_context`; it must not be used as
 `receiver_deg_comparison_id`.
+
+E03 keeps canonical `question_id=E03_layer_compo` for compatibility, but its
+display/output alias is `E03_scRNA_GC_TC_capture_balance`. 05c keeps the normal
+composition manifest output and additionally writes:
+
+- `results/tables/composition/E03_layer_compo__composition_GC_TC.tsv`
+- `results/tables/qc/composition/E03_scRNA_GC_TC_capture_balance.tsv`
+- `reports/qc/composition/E03_scRNA_GC_TC_capture_balance.md`
+
+The E03 QC report must state that the result only describes captured scRNA
+GC/TC cell composition. It cannot be interpreted as true tissue GC/TC
+proportion change. Tissue abundance must be evaluated by ST region annotation,
+ST deconvolution, or histology/image quantification.
 
 07b NicheNet source rules:
 
