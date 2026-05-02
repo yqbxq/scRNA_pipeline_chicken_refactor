@@ -5,6 +5,7 @@ __pycache__/
 .RData
 
 logs/
+envs/conda/
 data/
 results/
 reports/
