@@ -90,12 +90,16 @@ ligand_target_matrix_chicken <- rename_ligand_target_matrix_human_to_chicken(rea
 layers <- communication_layer_status_07(cfg)
 pairs <- read_communication_pairs(cfg)
 
-write_nichenet_empty_outputs_07b <- function(paths, reason = "No NicheNet result") {
+write_nichenet_empty_outputs_07b <- function(paths, reason = "No NicheNet result", write_rds = FALSE) {
   ensure_dir(paths$table_dir)
   ensure_dir(paths$figure_dir)
   write_tsv_local(empty_df_07(c("test_ligand", "auroc", "aupr", "pearson", "rank")), paths$ligand_activity_tsv)
   write_tsv_local(empty_df_07(c("ligand", "target", "weight")), paths$ligand_target_links_tsv)
-  saveRDS(list(status = "empty", reason = reason), paths$nichenet_rds)
+  if (isTRUE(write_rds)) {
+    saveRDS(list(status = "empty", reason = reason), paths$nichenet_rds)
+  } else if (file.exists(paths$nichenet_rds)) {
+    unlink(paths$nichenet_rds)
+  }
   write_empty_png_07(paths$ligand_activity_heatmap_png, reason)
   write_empty_png_07(paths$ligand_target_heatmap_png, reason)
   write_empty_png_07(paths$circos_png, reason)
@@ -218,6 +222,41 @@ plot_circos_07b <- function(links_df, path) {
   path
 }
 
+empty_gate_info_07b <- function(pair_row) {
+  list(
+    sender_n = NA_integer_,
+    receiver_n = NA_integer_,
+    condition_pair_cell_n = NA_integer_,
+    gate_status = ifelse(communication_pair_auto_gate(pair_row), "not_evaluated", "not_applicable"),
+    min_sender_cells = communication_pair_min_int(pair_row, "min_sender_cells"),
+    min_receiver_cells = communication_pair_min_int(pair_row, "min_receiver_cells"),
+    min_cells_per_condition = communication_pair_min_int(pair_row, "min_cells_per_condition")
+  )
+}
+
+nichenet_fallback_info_07b <- function(cfg, layer_id, pair_row, status) {
+  fallback_pair_id <- normalize_scalar_value(pair_row$fallback_pair_id[[1]])
+  use_fallback <- !identical(status, "ok") &&
+    communication_pair_auto_gate(pair_row) &&
+    nzchar(fallback_pair_id) &&
+    communication_pair_run_baseline_if_split_fails(pair_row)
+  out <- list(
+    fallback_pair_id = fallback_pair_id,
+    fallback_used_in_report = ifelse(use_fallback, "yes", "no"),
+    fallback_nichenet_rds_path = "",
+    fallback_ligand_activity_tsv = "",
+    fallback_ligand_target_links_tsv = "",
+    result_copied = "no"
+  )
+  if (use_fallback) {
+    fallback_paths <- nichenet_paths_07(cfg, layer_id, fallback_pair_id, "all")
+    out$fallback_nichenet_rds_path <- if (file.exists(fallback_paths$nichenet_rds)) normalize_path_07(fallback_paths$nichenet_rds) else ""
+    out$fallback_ligand_activity_tsv <- if (file.exists(fallback_paths$ligand_activity_tsv)) normalize_path_07(fallback_paths$ligand_activity_tsv) else ""
+    out$fallback_ligand_target_links_tsv <- if (file.exists(fallback_paths$ligand_target_links_tsv)) normalize_path_07(fallback_paths$ligand_target_links_tsv) else ""
+  }
+  out
+}
+
 run_nichenet_one_07b <- function(geneset, background, potential_ligands, paths) {
   geneset <- unique(intersect(geneset, rownames(ligand_target_matrix_chicken)))
   background <- unique(intersect(background, rownames(ligand_target_matrix_chicken)))
@@ -317,7 +356,11 @@ append_nichenet_row_07b <- function(
     paths,
     gene_program_comparison_id = "",
     formal_status = "",
-    result_level = "") {
+    result_level = "",
+    gate = NULL,
+    fallback = NULL) {
+  gate <- gate %||% empty_gate_info_07b(pair_row)
+  fallback <- fallback %||% nichenet_fallback_info_07b(cfg, layer_id, pair_row, status)
   rows[[length(rows) + 1L]] <- data.frame(
     pair_id = pair_row$pair_id[[1]],
     layer_id = layer_id,
@@ -335,11 +378,26 @@ append_nichenet_row_07b <- function(
     result_level = result_level,
     deg_source = deg_source,
     deg_status = deg_status,
+    activation_policy = communication_pair_activation_policy(pair_row),
+    min_sender_cells = gate$min_sender_cells,
+    min_receiver_cells = gate$min_receiver_cells,
+    min_cells_per_condition = gate$min_cells_per_condition,
+    sender_n = gate$sender_n,
+    receiver_n = gate$receiver_n,
+    condition_pair_cell_n = gate$condition_pair_cell_n,
+    gate_status = gate$gate_status,
+    success = ifelse(identical(status, "ok"), "true", "false"),
     status = status,
     reason = reason,
+    fallback_pair_id = fallback$fallback_pair_id,
+    fallback_used_in_report = fallback$fallback_used_in_report,
+    fallback_nichenet_rds_path = fallback$fallback_nichenet_rds_path,
+    fallback_ligand_activity_tsv = fallback$fallback_ligand_activity_tsv,
+    fallback_ligand_target_links_tsv = fallback$fallback_ligand_target_links_tsv,
+    result_copied = fallback$result_copied,
     ligand_activity_tsv = normalize_path_07(paths$ligand_activity_tsv),
     ligand_target_links_tsv = normalize_path_07(paths$ligand_target_links_tsv),
-    nichenet_rds = normalize_path_07(paths$nichenet_rds),
+    nichenet_rds = if (file.exists(paths$nichenet_rds)) normalize_path_07(paths$nichenet_rds) else "",
     ligand_activity_heatmap_png = normalize_path_07(paths$ligand_activity_heatmap_png),
     ligand_target_heatmap_png = normalize_path_07(paths$ligand_target_heatmap_png),
     circos_png = normalize_path_07(paths$circos_png),
@@ -402,6 +460,7 @@ for (layer_idx in seq_len(nrow(layers))) {
       gene_program_comparison_id <- ""
       formal_status <- ""
       result_level <- ""
+      gate <- empty_gate_info_07b(pair_row)
 
       if (identical(status, "ok")) {
         obj <- split_item$object
@@ -427,6 +486,22 @@ for (layer_idx in seq_len(nrow(layers))) {
 
       if (identical(status, "ok")) {
         obj <- split_item$object
+        gate_counts <- communication_gate_counts_07(obj, cell_type_col, roles)
+        gate_eval <- evaluate_communication_min_cell_gate_07(
+          pair_row,
+          gate_counts$sender_n,
+          gate_counts$receiver_n,
+          gate_counts$condition_pair_cell_n
+        )
+        gate <- c(gate_counts, gate_eval[c("gate_status", "min_sender_cells", "min_receiver_cells", "min_cells_per_condition")])
+        if (!isTRUE(gate_eval$pass)) {
+          status <- "skipped_low_cells"
+          reason <- gate_eval$reason
+        }
+      }
+
+      if (identical(status, "ok")) {
+        obj <- split_item$object
         meta <- obj@meta.data
         sender_cells <- rownames(meta)[as.character(meta[[cell_type_col]]) %in% roles$sender]
         receiver_cells <- rownames(meta)[as.character(meta[[cell_type_col]]) %in% roles$receiver]
@@ -438,7 +513,7 @@ for (layer_idx in seq_len(nrow(layers))) {
         formal_status <- deg$formal_status %||% ""
         result_level <- deg$result_level %||% ""
         if (length(geneset) == 0) {
-          status <- deg_status
+          status <- if (communication_pair_auto_gate(pair_row)) "skipped_missing_receiver_program" else deg_status
           reason <- normalize_scalar_value(deg$reason, "No receiver gene program genes were available from gene_program_registry.tsv")
         }
       }
@@ -489,12 +564,15 @@ for (layer_idx in seq_len(nrow(layers))) {
         deg_status, status, reason, paths,
         gene_program_comparison_id = gene_program_comparison_id,
         formal_status = formal_status,
-        result_level = result_level
+        result_level = result_level,
+        gate = gate
       )
       suffix <- paste(safe_id_07(layer_id), safe_id_07(pair_id), safe_id_07(condition_value), sep = "_")
       dynamic_outputs[[paste0("ligand_activity_", suffix)]] <- build_output_entry(paths$ligand_activity_tsv, "tsv", module_name, "NicheNet ligand activity table", base_dir = cfg$project_root)
       dynamic_outputs[[paste0("ligand_target_links_", suffix)]] <- build_output_entry(paths$ligand_target_links_tsv, "tsv", module_name, "NicheNet ligand-target links", base_dir = cfg$project_root)
-      dynamic_outputs[[paste0("nichenet_rds_", suffix)]] <- build_output_entry(paths$nichenet_rds, "rds", module_name, "NicheNet task object", base_dir = cfg$project_root)
+      if (file.exists(paths$nichenet_rds)) {
+        dynamic_outputs[[paste0("nichenet_rds_", suffix)]] <- build_output_entry(paths$nichenet_rds, "rds", module_name, "NicheNet task object", base_dir = cfg$project_root)
+      }
       dynamic_outputs[[paste0("ligand_activity_heatmap_png_", suffix)]] <- build_output_entry(paths$ligand_activity_heatmap_png, "png", module_name, "NicheNet ligand activity plot", base_dir = cfg$project_root)
       dynamic_outputs[[paste0("ligand_target_heatmap_png_", suffix)]] <- build_output_entry(paths$ligand_target_heatmap_png, "png", module_name, "NicheNet ligand-target heatmap", base_dir = cfg$project_root)
       dynamic_outputs[[paste0("circos_png_", suffix)]] <- build_output_entry(paths$circos_png, "png", module_name, "NicheNet ligand-target circos plot", base_dir = cfg$project_root)

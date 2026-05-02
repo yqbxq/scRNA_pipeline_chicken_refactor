@@ -216,8 +216,14 @@ rename_ligand_target_matrix_human_to_chicken <- function(ligand_target_matrix, l
 empty_cellchat_index_07 <- function() {
   empty_df_07(c(
     "pair_id", "layer_id", "condition_value", "condition_split_var", "sender", "receiver", "cell_type_col",
-    "direction_filter", "requires_cell_subtype", "n_cells", "n_cell_types", "status", "reason", "cellchat_rds_path",
-    "lr_table_path", "pathway_table_path", "bubble_png", "network_png", "heatmap_png"
+    "direction_filter", "requires_cell_subtype", "activation_policy",
+    "min_sender_cells", "min_receiver_cells", "min_cells_per_condition",
+    "sender_n", "receiver_n", "condition_pair_cell_n", "gate_status",
+    "n_cells", "n_cell_types", "success", "status", "reason",
+    "fallback_pair_id", "fallback_used_in_report", "fallback_cellchat_rds_path",
+    "fallback_lr_table_path", "fallback_pathway_table_path", "result_copied",
+    "cellchat_rds_path", "lr_table_path", "pathway_table_path",
+    "bubble_png", "network_png", "heatmap_png"
   ))
 }
 
@@ -234,7 +240,13 @@ empty_nichenet_index_07 <- function() {
     "pair_id", "layer_id", "condition_value", "condition_split_var", "sender_set", "receiver_set",
     "sender_cell_types", "receiver_cell_types", "receiver_gene_program_source",
     "baseline_marker_comparison_id", "receiver_deg_comparison_id", "gene_program_comparison_id",
-    "formal_status", "result_level", "deg_source", "deg_status", "status", "reason",
+    "formal_status", "result_level", "deg_source", "deg_status",
+    "activation_policy", "min_sender_cells", "min_receiver_cells",
+    "min_cells_per_condition", "sender_n", "receiver_n",
+    "condition_pair_cell_n", "gate_status", "success", "status", "reason",
+    "fallback_pair_id", "fallback_used_in_report", "fallback_nichenet_rds_path",
+    "fallback_ligand_activity_tsv", "fallback_ligand_target_links_tsv",
+    "result_copied",
     "ligand_activity_tsv", "ligand_target_links_tsv", "nichenet_rds",
     "ligand_activity_heatmap_png", "ligand_target_heatmap_png", "circos_png"
   ))
@@ -251,6 +263,33 @@ empty_cross_validation_07 <- function() {
   empty_df_07(c(
     "pair_id", "layer_id", "condition_value", "cellchat_lr_n",
     "nichenet_top_ligand_n", "intersect_ligand_n", "jaccard", "status"
+  ))
+}
+
+empty_gate_summary_07 <- function() {
+  empty_df_07(c(
+    "method", "pair_id", "layer_id", "condition_value", "sender", "receiver",
+    "activation_policy", "sender_n", "receiver_n", "condition_pair_cell_n",
+    "min_sender_cells", "min_receiver_cells", "min_cells_per_condition",
+    "gate_status", "status", "success", "fallback_pair_id",
+    "fallback_result_path", "fallback_used_in_report", "result_copied", "reason"
+  ))
+}
+
+empty_fallback_summary_07 <- function() {
+  empty_df_07(c(
+    "method", "pair_id", "layer_id", "condition_value", "status",
+    "fallback_pair_id", "fallback_result_path", "fallback_used_in_report",
+    "result_copied", "reason"
+  ))
+}
+
+empty_derived_eligibility_07 <- function() {
+  empty_df_07(c(
+    "derived_pair_id", "layer_id", "condition_values", "derived_from_pair_id",
+    "requires_all_derived_inputs_pass", "required_input_n", "passed_input_n",
+    "missing_or_failed_input_n", "eligibility_status", "conclusion_allowed",
+    "partial_split_available", "reason"
   ))
 }
 

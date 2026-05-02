@@ -177,7 +177,44 @@ condition_values_for_failed_pair_07a <- function(pair_row) {
   if (length(values) == 0) "all" else values
 }
 
-append_cellchat_row_07a <- function(rows, pair_row, layer_id, condition_value, cell_type_col, n_cells, n_cell_types, status, reason, paths) {
+cellchat_fallback_info_07a <- function(cfg, layer_id, pair_row, status) {
+  fallback_pair_id <- normalize_scalar_value(pair_row$fallback_pair_id[[1]])
+  use_fallback <- !identical(status, "ok") &&
+    communication_pair_auto_gate(pair_row) &&
+    nzchar(fallback_pair_id) &&
+    communication_pair_run_baseline_if_split_fails(pair_row)
+  out <- list(
+    fallback_pair_id = fallback_pair_id,
+    fallback_used_in_report = ifelse(use_fallback, "yes", "no"),
+    fallback_cellchat_rds_path = "",
+    fallback_lr_table_path = "",
+    fallback_pathway_table_path = "",
+    result_copied = "no"
+  )
+  if (use_fallback) {
+    fallback_paths <- cellchat_paths_07(cfg, layer_id, fallback_pair_id, "all")
+    out$fallback_cellchat_rds_path <- if (file.exists(fallback_paths$cellchat_rds)) normalize_path_07(fallback_paths$cellchat_rds) else ""
+    out$fallback_lr_table_path <- if (file.exists(fallback_paths$lr_table_tsv)) normalize_path_07(fallback_paths$lr_table_tsv) else ""
+    out$fallback_pathway_table_path <- if (file.exists(fallback_paths$pathway_table_tsv)) normalize_path_07(fallback_paths$pathway_table_tsv) else ""
+  }
+  out
+}
+
+empty_gate_info_07a <- function(pair_row) {
+  list(
+    sender_n = NA_integer_,
+    receiver_n = NA_integer_,
+    condition_pair_cell_n = NA_integer_,
+    gate_status = ifelse(communication_pair_auto_gate(pair_row), "not_evaluated", "not_applicable"),
+    min_sender_cells = communication_pair_min_int(pair_row, "min_sender_cells"),
+    min_receiver_cells = communication_pair_min_int(pair_row, "min_receiver_cells"),
+    min_cells_per_condition = communication_pair_min_int(pair_row, "min_cells_per_condition")
+  )
+}
+
+append_cellchat_row_07a <- function(rows, pair_row, layer_id, condition_value, cell_type_col, n_cells, n_cell_types, status, reason, paths, gate = NULL, fallback = NULL) {
+  gate <- gate %||% empty_gate_info_07a(pair_row)
+  fallback <- fallback %||% cellchat_fallback_info_07a(cfg, layer_id, pair_row, status)
   rows[[length(rows) + 1L]] <- data.frame(
     pair_id = pair_row$pair_id[[1]],
     layer_id = layer_id,
@@ -188,10 +225,25 @@ append_cellchat_row_07a <- function(rows, pair_row, layer_id, condition_value, c
     cell_type_col = cell_type_col,
     direction_filter = normalize_scalar_value(pair_row$direction_filter[[1]], "yes"),
     requires_cell_subtype = normalize_scalar_value(pair_row$requires_cell_subtype[[1]], "no"),
+    activation_policy = communication_pair_activation_policy(pair_row),
+    min_sender_cells = gate$min_sender_cells,
+    min_receiver_cells = gate$min_receiver_cells,
+    min_cells_per_condition = gate$min_cells_per_condition,
+    sender_n = gate$sender_n,
+    receiver_n = gate$receiver_n,
+    condition_pair_cell_n = gate$condition_pair_cell_n,
+    gate_status = gate$gate_status,
     n_cells = n_cells,
     n_cell_types = n_cell_types,
+    success = ifelse(identical(status, "ok"), "true", "false"),
     status = status,
     reason = reason,
+    fallback_pair_id = fallback$fallback_pair_id,
+    fallback_used_in_report = fallback$fallback_used_in_report,
+    fallback_cellchat_rds_path = fallback$fallback_cellchat_rds_path,
+    fallback_lr_table_path = fallback$fallback_lr_table_path,
+    fallback_pathway_table_path = fallback$fallback_pathway_table_path,
+    result_copied = fallback$result_copied,
     cellchat_rds_path = if (file.exists(paths$cellchat_rds)) normalize_path_07(paths$cellchat_rds) else "",
     lr_table_path = normalize_path_07(paths$lr_table_tsv),
     pathway_table_path = normalize_path_07(paths$pathway_table_tsv),
@@ -280,11 +332,26 @@ for (layer_idx in seq_len(nrow(layers))) {
 
       n_cells <- ncol(obj)
       n_cell_types <- length(unique(as.character(obj@meta.data[[cell_type_col]])))
+      gate <- empty_gate_info_07a(pair_row)
       status <- "ok"
       reason <- ""
       if (isTRUE(col_result$strict) && !identical(role_check$status, "ok")) {
         status <- role_check$status
         reason <- role_check$reason
+      }
+      if (identical(status, "ok")) {
+        gate_counts <- communication_gate_counts_07(obj, cell_type_col, roles)
+        gate_eval <- evaluate_communication_min_cell_gate_07(
+          pair_row,
+          gate_counts$sender_n,
+          gate_counts$receiver_n,
+          gate_counts$condition_pair_cell_n
+        )
+        gate <- c(gate_counts, gate_eval[c("gate_status", "min_sender_cells", "min_receiver_cells", "min_cells_per_condition")])
+        if (!isTRUE(gate_eval$pass)) {
+          status <- "skipped_low_cells"
+          reason <- gate_eval$reason
+        }
       }
       if (identical(status, "ok") && n_cells < cfg$cellchat_min_cells_per_group) {
         status <- "skipped_low_n"
@@ -344,7 +411,7 @@ for (layer_idx in seq_len(nrow(layers))) {
       if (!identical(status, "ok")) {
         write_cellchat_empty_outputs_07a(paths, reason)
       }
-      index_rows <- append_cellchat_row_07a(index_rows, pair_row, layer_id, condition_value, cell_type_col, n_cells, n_cell_types, status, reason, paths)
+      index_rows <- append_cellchat_row_07a(index_rows, pair_row, layer_id, condition_value, cell_type_col, n_cells, n_cell_types, status, reason, paths, gate = gate)
 
       suffix <- paste(safe_id_07(layer_id), safe_id_07(pair_id), safe_id_07(condition_value), sep = "_")
       if (file.exists(paths$cellchat_rds)) {

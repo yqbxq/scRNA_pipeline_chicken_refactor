@@ -33,6 +33,10 @@ get_single_script_config_07 <- function() {
   base$communication_cross_validation_tsv <- file.path(base$communication_table_dir, "cross_validation.tsv")
   base$communication_consensus_lr_tsv <- file.path(base$communication_table_dir, "consensus_lr.tsv")
   base$communication_triage_tsv <- file.path(base$communication_table_dir, "triage.tsv")
+  base$communication_gate_summary_tsv <- file.path(base$communication_table_dir, "communication_gate_summary.tsv")
+  base$communication_skipped_low_cells_tsv <- file.path(base$communication_table_dir, "skipped_low_cells.tsv")
+  base$communication_fallback_summary_tsv <- file.path(base$communication_table_dir, "communication_fallback_summary.tsv")
+  base$derived_communication_eligibility_tsv <- file.path(base$communication_table_dir, "derived_communication_eligibility.tsv")
   base$communication_summary_plot_png <- file.path(base$communication_figure_dir, "summary_jaccard.png")
   base$communication_report_md <- file.path(base$communication_report_dir, "report.md")
 
@@ -74,6 +78,10 @@ prepare_dirs_07 <- function(cfg) {
     dirname(cfg$communication_cross_validation_tsv),
     dirname(cfg$communication_consensus_lr_tsv),
     dirname(cfg$communication_triage_tsv),
+    dirname(cfg$communication_gate_summary_tsv),
+    dirname(cfg$communication_skipped_low_cells_tsv),
+    dirname(cfg$communication_fallback_summary_tsv),
+    dirname(cfg$derived_communication_eligibility_tsv),
     dirname(cfg$communication_summary_plot_png),
     dirname(cfg$communication_report_md)
   )

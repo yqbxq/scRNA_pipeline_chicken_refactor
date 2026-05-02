@@ -112,12 +112,15 @@ split_dependency_ids <- function(x) {
 required_cols <- c(
   "question_id", "question_zh", "scope", "sender_groups", "receiver_groups",
   "condition_split", "contrast_axis", "tools_to_run", "priority", "status",
-  "depends_on", "notes"
+  "depends_on", "notes", "activation_policy", "min_sender_cells",
+  "min_receiver_cells", "min_cells_per_condition", "fallback_pair_id",
+  "derived_from_pair_id", "run_baseline_if_split_fails"
 )
 
 allowed_scopes <- c("panorama", "GC_subcluster", "TC_subcluster", "ST_section")
 allowed_priorities <- c("P0", "P1", "P2", "P3")
 allowed_status <- c("active", "planned")
+allowed_activation_policy <- c("always", "auto_if_min_cells", "derived_from_split")
 axis_targets <- c(
   cluster_marker = "comparisons.tsv",
   directional_DEG = "comparisons.tsv",
@@ -237,6 +240,11 @@ tools_for_axis_ok <- function(axis, tools_to_run) {
   }
   tools <- tolower(split_list(tools_to_run, sep = "+"))
   any(tools %in% allow)
+}
+
+positive_int_value <- function(x) {
+  value <- suppressWarnings(as.integer(trim(x)))
+  if (is.na(value) || value <= 0L) NA_integer_ else value
 }
 
 find_dependency_cycle <- function(df) {
@@ -428,6 +436,40 @@ if (nrow(questions) > 0 && length(missing_cols) == 0) {
         qid,
         sprintf("Use one of: %s", paste(axis_tool_allow[[row$contrast_axis[[1]]]], collapse = ", "))
       )
+    }
+    policy <- tolower(trim(row$activation_policy[[1]]))
+    if (!nzchar(policy)) {
+      policy <- "always"
+    }
+    if (!policy %in% allowed_activation_policy) {
+      fail(
+        "questions.activation_policy",
+        sprintf("%s has unsupported activation_policy=%s", qid, policy),
+        qid,
+        sprintf("Allowed values: %s", paste(allowed_activation_policy, collapse = ", "))
+      )
+    }
+    if (identical(policy, "auto_if_min_cells")) {
+      min_values <- c(
+        min_sender_cells = positive_int_value(row$min_sender_cells[[1]]),
+        min_receiver_cells = positive_int_value(row$min_receiver_cells[[1]]),
+        min_cells_per_condition = positive_int_value(row$min_cells_per_condition[[1]])
+      )
+      if (any(is.na(min_values))) {
+        fail(
+          "questions.activation_policy.min_cells",
+          sprintf("%s auto_if_min_cells requires positive integer min_* fields", qid),
+          qid
+        )
+      }
+      run_baseline <- tolower(trim(row$run_baseline_if_split_fails[[1]])) %in% c("yes", "true", "1", "on")
+      if (run_baseline && !nzchar(trim(row$fallback_pair_id[[1]]))) {
+        fail(
+          "questions.activation_policy.fallback",
+          sprintf("%s run_baseline_if_split_fails=yes requires fallback_pair_id", qid),
+          qid
+        )
+      }
     }
   }
 
@@ -697,11 +739,104 @@ if (!is.null(loaded_generated$communication_pairs)) {
   communication_schema <- c(
     "pair_id", "source_question_id", "layer_scope", "sender", "receiver",
     "condition_split_var", "condition_split_values", "tool", "communication_mode",
+    "activation_policy", "min_sender_cells", "min_receiver_cells",
+    "min_cells_per_condition", "fallback_pair_id", "derived_from_pair_id",
+    "run_baseline_if_split_fails", "requires_all_derived_inputs_pass",
     "receiver_gene_program_source", "baseline_marker_comparison_id",
     "receiver_deg_comparison_id", "direction_filter", "requires_cell_subtype",
-    "enabled", "notes"
+    "notes", "enabled"
   )
   if (require_generated_cols("communication_pairs.tsv", communication_pairs, communication_schema) && nrow(communication_pairs) > 0) {
+    communication_pairs$activation_policy <- tolower(vapply(communication_pairs$activation_policy, trim, character(1)))
+    communication_pairs$activation_policy[!nzchar(communication_pairs$activation_policy)] <- "always"
+    communication_pair_ids <- unique(communication_pairs$pair_id)
+    policy_fail_n <- 0L
+    bad_policy <- unique(communication_pairs$activation_policy[!communication_pairs$activation_policy %in% allowed_activation_policy])
+    bad_policy <- bad_policy[nzchar(bad_policy)]
+    if (length(bad_policy) > 0) {
+      fail("tier2.communication.activation_policy", sprintf("unsupported activation_policy values: %s", paste(bad_policy, collapse = ", ")))
+      policy_fail_n <- policy_fail_n + length(bad_policy)
+    }
+    auto_pairs <- communication_pairs[communication_pairs$activation_policy == "auto_if_min_cells", , drop = FALSE]
+    if (nrow(auto_pairs) > 0) {
+      for (idx in seq_len(nrow(auto_pairs))) {
+        row <- auto_pairs[idx, , drop = FALSE]
+        pair_id <- row$pair_id[[1]]
+        min_values <- c(
+          min_sender_cells = positive_int_value(row$min_sender_cells[[1]]),
+          min_receiver_cells = positive_int_value(row$min_receiver_cells[[1]]),
+          min_cells_per_condition = positive_int_value(row$min_cells_per_condition[[1]])
+        )
+        if (any(is.na(min_values))) {
+          fail("tier2.communication.auto_min_cells", sprintf("%s auto_if_min_cells requires positive integer min_* fields", pair_id))
+          policy_fail_n <- policy_fail_n + 1L
+        }
+        run_baseline <- tolower(trim(row$run_baseline_if_split_fails[[1]])) %in% c("yes", "true", "1", "on")
+        fallback_id <- trim(row$fallback_pair_id[[1]])
+        if (run_baseline && !nzchar(fallback_id)) {
+          fail("tier2.communication.fallback_pair_id", sprintf("%s run_baseline_if_split_fails=yes requires fallback_pair_id", pair_id))
+          policy_fail_n <- policy_fail_n + 1L
+        }
+        if (nzchar(fallback_id)) {
+          fallback <- communication_pairs[communication_pairs$pair_id == fallback_id, , drop = FALSE]
+          if (nrow(fallback) == 0) {
+            fail("tier2.communication.fallback_pair_id", sprintf("%s fallback_pair_id not found: %s", pair_id, fallback_id))
+            policy_fail_n <- policy_fail_n + 1L
+          } else if (!identical(fallback$activation_policy[[1]], "always") || !identical(fallback$communication_mode[[1]], "baseline")) {
+            fail("tier2.communication.fallback_pair_id", sprintf("%s fallback_pair_id=%s must point to activation_policy=always baseline", pair_id, fallback_id))
+            policy_fail_n <- policy_fail_n + 1L
+          }
+        }
+      }
+    }
+    derived_pairs <- communication_pairs[communication_pairs$activation_policy == "derived_from_split", , drop = FALSE]
+    if (nrow(derived_pairs) > 0) {
+      executable_derived <- derived_pairs[tolower(derived_pairs$tool) %in% c("both", "cellchat", "cellchat_only", "nichenet", "nichenet_only"), , drop = FALSE]
+      if (nrow(executable_derived) > 0) {
+        fail("tier2.communication.derived_not_executable", sprintf("derived rows cannot be executable by 07a/07b: %s", paste(executable_derived$pair_id, collapse = ", ")))
+        policy_fail_n <- policy_fail_n + nrow(executable_derived)
+      }
+      for (idx in seq_len(nrow(derived_pairs))) {
+        row <- derived_pairs[idx, , drop = FALSE]
+        source_ids <- split_comm_tokens(row$derived_from_pair_id[[1]])
+        missing_source <- source_ids[!source_ids %in% communication_pair_ids]
+        if (length(missing_source) > 0) {
+          fail("tier2.communication.derived_from_pair_id", sprintf("%s derived_from_pair_id not found: %s", row$pair_id[[1]], paste(missing_source, collapse = ", ")))
+          policy_fail_n <- policy_fail_n + length(missing_source)
+        }
+      }
+    }
+    f08_rows <- communication_pairs[
+      communication_pairs$source_question_id == "F08_GC_dev_seq_split" &
+        startsWith(communication_pairs$pair_id, "F08_GC_dev_seq_split__"),
+      ,
+      drop = FALSE
+    ]
+    if (nrow(f08_rows) > 0 && any(f08_rows$activation_policy != "auto_if_min_cells")) {
+      fail("tier2.communication.A1_F08_policy", "F08 expanded rows must use activation_policy=auto_if_min_cells")
+      policy_fail_n <- policy_fail_n + 1L
+    }
+    f17_rows <- communication_pairs[communication_pairs$source_question_id == "F17_GC_screen_split", , drop = FALSE]
+    if (nrow(f17_rows) > 0 && any(f17_rows$activation_policy != "auto_if_min_cells")) {
+      fail("tier2.communication.A1_F17_policy", "F17 expanded rows must use activation_policy=auto_if_min_cells")
+      policy_fail_n <- policy_fail_n + 1L
+    }
+    f25 <- communication_pairs[communication_pairs$pair_id == "F25_GC_internal_diff", , drop = FALSE]
+    if (nrow(f25) == 1L) {
+      f25_sources <- split_comm_tokens(f25$derived_from_pair_id[[1]])
+      if (length(f25_sources) == 0 || any(!startsWith(f25_sources, "F08_GC_dev_seq_split__"))) {
+        fail("tier2.communication.F25_sources", "F25_GC_internal_diff must derive from expanded F08 split rows")
+        policy_fail_n <- policy_fail_n + 1L
+      }
+      if (!tolower(trim(f25$requires_all_derived_inputs_pass[[1]])) %in% c("yes", "true", "1", "on")) {
+        fail("tier2.communication.F25_requires_all", "F25_GC_internal_diff must require all derived inputs to pass")
+        policy_fail_n <- policy_fail_n + 1L
+      }
+    }
+    if (policy_fail_n == 0L) {
+      pass("tier2.communication.activation_policy", "communication activation policies, fallbacks, and derived inputs are valid")
+    }
+
     gene_targets <- loaded_generated$gene_program_targets
     gene_target_ids <- if (!is.null(gene_targets) && "comparison_id" %in% colnames(gene_targets)) unique(gene_targets$comparison_id) else character(0)
     comparison_ids <- if (exists("comparisons") && "comparison_id" %in% colnames(comparisons)) unique(comparisons$comparison_id) else character(0)

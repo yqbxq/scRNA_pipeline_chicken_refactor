@@ -1,9 +1,12 @@
 m3_communication_cols <- c(
   "pair_id", "source_question_id", "layer_scope", "sender", "receiver",
   "condition_split_var", "condition_split_values", "tool", "communication_mode",
+  "activation_policy", "min_sender_cells", "min_receiver_cells",
+  "min_cells_per_condition", "fallback_pair_id", "derived_from_pair_id",
+  "run_baseline_if_split_fails", "requires_all_derived_inputs_pass",
   "receiver_gene_program_source", "baseline_marker_comparison_id",
   "receiver_deg_comparison_id", "direction_filter", "requires_cell_subtype",
-  "enabled", "notes"
+  "notes", "enabled"
 )
 
 m3_gc_subtypes <- c("pGC", "eGC", "rgGC", "lGC")
@@ -23,6 +26,40 @@ m3_comm_mode <- function(q, tool = "") {
   }
   split <- m3_condition_fields(q$condition_split)
   if (nzchar(split$var)) "condition_split" else "baseline"
+}
+
+m3_comm_question_field <- function(q, col, default = "") {
+  if (col %in% colnames(q)) {
+    return(m3_trim(q[[col]][[1]], default))
+  }
+  default
+}
+
+m3_comm_activation_policy <- function(q, tool = "", default = NULL) {
+  if (!is.null(default) && nzchar(default)) {
+    return(default)
+  }
+  if (identical(tool, "differential")) {
+    return("derived_from_split")
+  }
+  policy <- m3_comm_question_field(q, "activation_policy", "always")
+  if (nzchar(policy)) policy else "always"
+}
+
+m3_comm_resolve_fallback_pair_id <- function(q, pair_id, fallback_pair_id) {
+  fallback_pair_id <- m3_trim(fallback_pair_id)
+  if (!nzchar(fallback_pair_id)) {
+    return("")
+  }
+  if (grepl("__", fallback_pair_id, fixed = TRUE)) {
+    return(fallback_pair_id)
+  }
+  qid <- q$question_id[[1]]
+  if (startsWith(pair_id, paste0(qid, "__"))) {
+    suffix <- sub(paste0("^", qid, "__"), "", pair_id)
+    return(paste(fallback_pair_id, suffix, sep = "__"))
+  }
+  fallback_pair_id
 }
 
 m3_comm_requires_cell_subtype <- function(q, sender, receiver) {
@@ -99,9 +136,26 @@ m3_comm_row <- function(q, pair_id, sender, receiver, tool, notes = "",
                         receiver_deg_comparison_id = NULL,
                         receiver_gene_program_source = NULL,
                         direction_filter = NULL,
-                        requires_cell_subtype = NULL) {
+                        requires_cell_subtype = NULL,
+                        activation_policy = NULL,
+                        fallback_pair_id = NULL,
+                        derived_from_pair_id = NULL,
+                        requires_all_derived_inputs_pass = NULL) {
   split <- m3_condition_fields(q$condition_split)
   mode <- m3_comm_mode(q, tool)
+  policy <- m3_comm_activation_policy(q, tool, activation_policy)
+  fallback <- fallback_pair_id %||% m3_comm_question_field(q, "fallback_pair_id")
+  fallback <- m3_comm_resolve_fallback_pair_id(q, pair_id, fallback)
+  run_baseline_if_split_fails <- m3_comm_question_field(q, "run_baseline_if_split_fails")
+  if (!nzchar(run_baseline_if_split_fails) && nzchar(fallback)) {
+    run_baseline_if_split_fails <- "yes"
+  }
+  if (identical(policy, "derived_from_split")) {
+    run_baseline_if_split_fails <- "no"
+  }
+  min_sender <- if (identical(policy, "derived_from_split")) "" else m3_comm_question_field(q, "min_sender_cells")
+  min_receiver <- if (identical(policy, "derived_from_split")) "" else m3_comm_question_field(q, "min_receiver_cells")
+  min_condition <- if (identical(policy, "derived_from_split")) "" else m3_comm_question_field(q, "min_cells_per_condition")
   baseline <- baseline_marker_comparison_id %||% m3_marker_for_receiver(receiver)
   deg <- receiver_deg_comparison_id %||% if (identical(mode, "condition_split")) m3_condition_deg_for_receiver(receiver) else ""
   source <- receiver_gene_program_source %||% if (identical(mode, "condition_split") && nzchar(deg)) {
@@ -121,6 +175,14 @@ m3_comm_row <- function(q, pair_id, sender, receiver, tool, notes = "",
     condition_split_values = split$values,
     tool = tool,
     communication_mode = mode,
+    activation_policy = policy,
+    min_sender_cells = min_sender,
+    min_receiver_cells = min_receiver,
+    min_cells_per_condition = min_condition,
+    fallback_pair_id = fallback,
+    derived_from_pair_id = derived_from_pair_id %||% m3_comm_question_field(q, "derived_from_pair_id"),
+    run_baseline_if_split_fails = run_baseline_if_split_fails,
+    requires_all_derived_inputs_pass = requires_all_derived_inputs_pass %||% "no",
     receiver_gene_program_source = source,
     baseline_marker_comparison_id = baseline,
     receiver_deg_comparison_id = deg,
@@ -147,6 +209,8 @@ m3_add_differential_comm <- function(rows, q) {
   if (is.null(derived)) {
     return(rows)
   }
+  source_pair_ids <- vapply(rows, function(row) m3_trim(row$pair_id), character(1))
+  source_pair_ids <- source_pair_ids[nzchar(source_pair_ids)]
   rows[[length(rows) + 1L]] <- m3_comm_row(
     q, derived$id, derived$sender, derived$receiver, "differential",
     notes = derived$notes,
@@ -154,7 +218,11 @@ m3_add_differential_comm <- function(rows, q) {
     receiver_deg_comparison_id = "",
     receiver_gene_program_source = "none",
     direction_filter = derived$direction,
-    requires_cell_subtype = "yes"
+    requires_cell_subtype = "yes",
+    activation_policy = "derived_from_split",
+    fallback_pair_id = "",
+    derived_from_pair_id = paste(source_pair_ids, collapse = ","),
+    requires_all_derived_inputs_pass = ifelse(identical(derived$id, "F25_GC_internal_diff"), "yes", "no")
   )
   rows
 }

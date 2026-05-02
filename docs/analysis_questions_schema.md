@@ -25,6 +25,13 @@ than hand-maintained.
 | `status` | enum | `active` | One of `active`, `planned`. Planned rows are skipped by semantic checks. |
 | `depends_on` | ID list | `H01_GC_trajectory_baseline` | Optional `;` separated upstream question IDs. |
 | `notes` | text | `wait_TC_subcluster` | Free text, no tab characters; blank is allowed. |
+| `activation_policy` | enum | `auto_if_min_cells` | Tier1 default policy; Tier2 resolved rows are authoritative at runtime. |
+| `min_sender_cells` | positive integer | `20` | Minimum sender cells for `auto_if_min_cells`. |
+| `min_receiver_cells` | positive integer | `20` | Minimum receiver cells for `auto_if_min_cells`. |
+| `min_cells_per_condition` | positive integer | `40` | Minimum `sender_n + receiver_n` after pair subset and condition split. |
+| `fallback_pair_id` | ID | `F07_GC_dev_seq_baseline` | Tier1 fallback parent; M3 resolves concrete Tier2 fallback task IDs. |
+| `derived_from_pair_id` | ID list | `F08...__pGC_to_eGC` | Tier2 derived rows list concrete split input pair IDs. |
+| `run_baseline_if_split_fails` | boolean | `yes` | Report baseline fallback when an auto-gated split is skipped. |
 
 ## Scope Semantics
 
@@ -124,7 +131,7 @@ Current generated columns:
 | File | Columns |
 |---|---|
 | `comparisons.tsv` | `comparison_id`, `source_question_id`, `layer_scope`, `contrast_axis`, `analysis_mode`, `analysis_unit`, `stat_level`, `group_var`, `ident_1`, `ident_2`, `subset_column`, `subset_value`, `aggregation_group_var`, `composition_group_var`, `batch_var`, `enabled`, `min_biological_replicates`, `force_exploratory`, `min_cells_per_group`, `logfc_threshold`, `produces_gene_program`, `gene_program_role`, `notes` |
-| `communication_pairs.tsv` | `pair_id`, `source_question_id`, `layer_scope`, `sender`, `receiver`, `condition_split_var`, `condition_split_values`, `tool`, `communication_mode`, `receiver_gene_program_source`, `baseline_marker_comparison_id`, `receiver_deg_comparison_id`, `direction_filter`, `requires_cell_subtype`, `enabled`, `notes` |
+| `communication_pairs.tsv` | `pair_id`, `source_question_id`, `layer_scope`, `sender`, `receiver`, `condition_split_var`, `condition_split_values`, `tool`, `communication_mode`, `activation_policy`, `min_sender_cells`, `min_receiver_cells`, `min_cells_per_condition`, `fallback_pair_id`, `derived_from_pair_id`, `run_baseline_if_split_fails`, `requires_all_derived_inputs_pass`, `receiver_gene_program_source`, `baseline_marker_comparison_id`, `receiver_deg_comparison_id`, `direction_filter`, `requires_cell_subtype`, `notes`, `enabled` |
 | `trajectory_pairs.tsv` | `trajectory_id`, `source_question_id`, `layer_scope`, `root_group`, `terminal_group`, `condition_split_var`, `condition_split_values`, `method`, `enabled`, `notes` |
 | `scenic_targets.tsv` | `target_id`, `source_question_id`, `layer_scope`, `cell_subset`, `contrast_axis`, `condition_split_var`, `condition_split_values`, `method`, `enabled`, `notes` |
 | `enrichment_targets.tsv` | `target_id`, `source_question_id`, `comparison_id`, `layer_scope`, `analysis_mode`, `gene_program_role`, `organism`, `database`, `min_genes`, `enabled`, `notes` |
@@ -174,6 +181,15 @@ For 05 and 07, generated schemas are runtime contracts:
 - `direction_filter=no` keeps full CellChat networks; `direction_filter=yes`
   keeps sender-to-receiver LR rows for consensus.
 - `requires_cell_subtype=yes` is strict and cannot fall back to broad labels.
+- 07 runtime consumes only resolved Tier2 `communication_pairs.tsv` policy
+  fields. Tier1 policy fields are defaults for M3 fan-out and are never
+  interpreted directly by `07a_cellchat.R` or `07b_nichenet.R`.
+- `auto_if_min_cells` gates use pair-specific cells after subset, condition
+  split, and sender/receiver resolution: `condition_pair_cell_n = sender_n +
+  receiver_n`.
+- Split fallback is by reference only. Skipped split rows keep method result
+  RDS paths empty, set `success=false`, `result_copied=no`, and report the
+  baseline through separate fallback fields.
 
 ## Derived Communication Rows
 
@@ -188,7 +204,10 @@ The following conceptual rows are not written to
 | `F26_panorama_screen_diff` | Derived from `F15_panorama_screen_split`. |
 
 M3 should create these downstream differential summaries automatically for split
-communication questions.
+communication questions. `F25_GC_internal_diff` uses
+`requires_all_derived_inputs_pass=yes`: partial `F08` split evidence may be
+reported as partial, but it cannot produce a GC internal differential
+conclusion.
 
 ## M2 Validation Contract
 
