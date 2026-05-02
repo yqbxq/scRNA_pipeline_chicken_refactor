@@ -568,17 +568,27 @@ communication_triage_row_07 <- function(layer_id, comparison_id, severity, signa
   row
 }
 
-empty_gene_program_07 <- function(source = "none", status = "missing", reason = "") {
+empty_gene_program_07 <- function(source = "none", status = "missing_gene_program", deg_status = "missing", reason = "") {
   list(
     genes = character(0),
     source = source,
     status = status,
+    deg_status = deg_status,
     reason = reason,
     comparison_id = "",
-    formal_status = status,
+    formal_status = "missing",
     result_level = "",
     warning = "",
     table = data.frame(stringsAsFactors = FALSE)
+  )
+}
+
+missing_gene_program_07 <- function(source = "none", deg_status = "missing_gene_program", reason = "") {
+  empty_gene_program_07(
+    source = source,
+    status = "missing_gene_program",
+    deg_status = deg_status,
+    reason = reason
   )
 }
 
@@ -621,44 +631,35 @@ read_gene_program_registry_07 <- function(cfg) {
   registry[, expected, drop = FALSE]
 }
 
-gene_program_path_for_registry_row_07 <- function(row, preferred = c("top", "formal", "marker")) {
-  preferred <- match.arg(preferred)
-  candidates <- switch(
-    preferred,
-    formal = c("deg_tsv", "top_gene_tsv", "marker_tsv"),
-    marker = c("marker_tsv", "top_gene_tsv", "deg_tsv"),
-    top = c("top_gene_tsv", "deg_tsv", "marker_tsv")
-  )
-  for (col in candidates) {
-    path <- normalize_scalar_value(row[[col]][[1]])
-    if (nzchar(path) && file.exists(path)) {
-      return(list(path = path, source_col = col))
-    }
+gene_program_path_for_registry_row_07 <- function(row) {
+  path <- normalize_scalar_value(row$top_gene_tsv[[1]])
+  if (nzchar(path) && file.exists(path)) {
+    return(list(path = path, source_col = "top_gene_tsv"))
   }
-  list(path = "", source_col = "")
+  list(path = "", source_col = "top_gene_tsv")
 }
 
-read_gene_program_by_comparison_id_07 <- function(cfg, layer_id, comparison_id, preferred = "top",
+read_gene_program_by_comparison_id_07 <- function(cfg, layer_id, comparison_id,
                                                   expected_analysis_mode = "",
                                                   expected_gene_program_role = "",
                                                   expected_nichenet_usage = "") {
   comparison_id <- normalize_scalar_value(comparison_id)
   if (!nzchar(comparison_id)) {
-    return(empty_gene_program_07(status = "missing_comparison_id", reason = "empty comparison_id"))
+    return(missing_gene_program_07(deg_status = "missing_comparison_id", reason = "empty comparison_id"))
   }
   registry <- read_gene_program_registry_07(cfg)
   if (nrow(registry) == 0) {
-    return(empty_gene_program_07(
+    return(missing_gene_program_07(
       source = sprintf("gene_program_registry:%s", comparison_id),
-      status = "missing_gene_program_registry",
+      deg_status = "missing_gene_program_registry",
       reason = "gene_program_registry.tsv is empty or absent"
     ))
   }
   hit <- registry[registry$comparison_id == comparison_id, , drop = FALSE]
   if (nrow(hit) == 0) {
-    return(empty_gene_program_07(
+    return(missing_gene_program_07(
       source = sprintf("gene_program_registry:%s", comparison_id),
-      status = "missing_registry_row",
+      deg_status = "missing_registry_row",
       reason = sprintf("comparison_id not found in gene_program_registry.tsv: %s", comparison_id)
     ))
   }
@@ -672,39 +673,39 @@ read_gene_program_by_comparison_id_07 <- function(cfg, layer_id, comparison_id, 
   actual_usage <- normalize_scalar_value(row$nichenet_usage[[1]], "none")
   nichenet_eligible <- normalize_scalar_value(row$nichenet_eligible[[1]], "no")
   if (nzchar(expected_analysis_mode) && !identical(actual_mode, expected_analysis_mode)) {
-    return(empty_gene_program_07(
+    return(missing_gene_program_07(
       source = sprintf("gene_program_registry:%s", comparison_id),
-      status = "invalid_gene_program_analysis_mode",
+      deg_status = "invalid_gene_program_analysis_mode",
       reason = sprintf("expected analysis_mode=%s but registry has %s", expected_analysis_mode, actual_mode)
     ))
   }
   if (nzchar(expected_gene_program_role) && !identical(actual_role, expected_gene_program_role)) {
-    return(empty_gene_program_07(
+    return(missing_gene_program_07(
       source = sprintf("gene_program_registry:%s", comparison_id),
-      status = "invalid_gene_program_role",
+      deg_status = "invalid_gene_program_role",
       reason = sprintf("expected gene_program_role=%s but registry has %s", expected_gene_program_role, actual_role)
     ))
   }
   if (!identical(nichenet_eligible, "yes")) {
-    return(empty_gene_program_07(
+    return(missing_gene_program_07(
       source = sprintf("gene_program_registry:%s", comparison_id),
-      status = "nichenet_ineligible_gene_program",
+      deg_status = "nichenet_ineligible_gene_program",
       reason = sprintf("registry nichenet_eligible=%s; %s", nichenet_eligible, normalize_scalar_value(row$ineligible_reason[[1]]))
     ))
   }
   if (nzchar(expected_nichenet_usage) && !identical(actual_usage, expected_nichenet_usage)) {
-    return(empty_gene_program_07(
+    return(missing_gene_program_07(
       source = sprintf("gene_program_registry:%s", comparison_id),
-      status = "invalid_nichenet_usage",
+      deg_status = "invalid_nichenet_usage",
       reason = sprintf("expected nichenet_usage=%s but registry has %s", expected_nichenet_usage, actual_usage)
     ))
   }
-  path_info <- gene_program_path_for_registry_row_07(row, preferred = preferred)
+  path_info <- gene_program_path_for_registry_row_07(row)
   if (!nzchar(path_info$path)) {
-    return(empty_gene_program_07(
+    return(missing_gene_program_07(
       source = sprintf("gene_program_registry:%s", comparison_id),
-      status = "missing_gene_program_file",
-      reason = sprintf("registry row has no existing DEG/marker table for %s", comparison_id)
+      deg_status = "missing_gene_program_file",
+      reason = sprintf("registry top_gene_tsv is empty or missing for %s", comparison_id)
     ))
   }
 
@@ -712,12 +713,17 @@ read_gene_program_by_comparison_id_07 <- function(cfg, layer_id, comparison_id, 
   prep <- prepare_deg_gene_list_from_df_06(gp_df, cfg, cluster_id = NULL)
   status <- gene_program_downstream_status_07(row)
   if (length(prep$up$genes) == 0) {
-    status <- paste(status, prep$up$status, sep = ":")
+    return(missing_gene_program_07(
+      source = sprintf("gene_program_registry:%s:%s", comparison_id, path_info$source_col),
+      deg_status = paste("empty_gene_set", status, prep$up$status, sep = ":"),
+      reason = prep$up$reason %||% "registry gene program table has no usable genes"
+    ))
   }
   list(
     genes = prep$up$genes,
     source = sprintf("gene_program_registry:%s:%s", comparison_id, path_info$source_col),
     status = status,
+    deg_status = status,
     reason = prep$up$reason %||% "",
     comparison_id = comparison_id,
     formal_status = normalize_scalar_value(row$formal_status[[1]], "missing"),
@@ -735,9 +741,9 @@ read_gene_program_for_nichenet_07 <- function(
     receiver_gene_program_source = "none") {
   source_kind <- tolower(normalize_scalar_value(receiver_gene_program_source, "none"))
   if (identical(source_kind, "none")) {
-    return(empty_gene_program_07(
+    return(missing_gene_program_07(
       source = "communication_pairs:receiver_gene_program_source=none",
-      status = "skipped_no_gene_program_source",
+      deg_status = "skipped_no_gene_program_source",
       reason = "communication pair explicitly does not request a receiver gene program"
     ))
   }
@@ -747,22 +753,21 @@ read_gene_program_for_nichenet_07 <- function(
   } else if (identical(source_kind, "receiver_marker")) {
     split_csv_local(baseline_marker_comparison_id)
   } else {
-    return(empty_gene_program_07(
+    return(missing_gene_program_07(
       source = sprintf("communication_pairs:%s", source_kind),
-      status = "unsupported_receiver_gene_program_source",
+      deg_status = "unsupported_receiver_gene_program_source",
       reason = sprintf("receiver_gene_program_source must be condition_deg, receiver_marker, or none; got %s", source_kind)
     ))
   }
   ids <- ids[nzchar(ids)]
   if (length(ids) == 0) {
-    return(empty_gene_program_07(
+    return(missing_gene_program_07(
       source = sprintf("communication_pairs:%s", source_kind),
-      status = "missing_explicit_gene_program_id",
+      deg_status = "missing_explicit_gene_program_id",
       reason = sprintf("receiver_gene_program_source=%s but no comparison ID was provided", source_kind)
     ))
   }
 
-  preferred <- if (identical(source_kind, "condition_deg")) "formal" else "marker"
   expected_mode <- if (identical(source_kind, "condition_deg")) "condition_within_type" else "subtype_marker"
   expected_role <- if (identical(source_kind, "condition_deg")) "condition_deg" else "receiver_marker"
   expected_usage <- if (identical(source_kind, "condition_deg")) "receiver_condition_deg" else "baseline_receiver_marker"
@@ -771,7 +776,6 @@ read_gene_program_for_nichenet_07 <- function(
       cfg,
       layer_id,
       id,
-      preferred = preferred,
       expected_analysis_mode = expected_mode,
       expected_gene_program_role = expected_role,
       expected_nichenet_usage = expected_usage
@@ -781,12 +785,15 @@ read_gene_program_for_nichenet_07 <- function(
   tables <- lapply(programs, `[[`, "table")
   tables <- tables[vapply(tables, nrow, integer(1)) > 0]
   status <- unique(vapply(programs, function(x) normalize_scalar_value(x$status, "missing"), character(1)))
+  deg_status <- unique(vapply(programs, function(x) normalize_scalar_value(x$deg_status, normalize_scalar_value(x$status, "missing")), character(1)))
   reasons <- unique(vapply(programs, function(x) normalize_scalar_value(x$reason), character(1)))
   warnings <- unique(vapply(programs, function(x) normalize_scalar_value(x$warning), character(1)))
+  combined_status <- if (any(status == "missing_gene_program") || length(genes) == 0) "missing_gene_program" else paste(status[nzchar(status)], collapse = ";")
   list(
     genes = genes,
     source = sprintf("communication_pairs:%s:%s", source_kind, paste(ids, collapse = ",")),
-    status = paste(status[nzchar(status)], collapse = ";"),
+    status = combined_status,
+    deg_status = paste(deg_status[nzchar(deg_status)], collapse = ";"),
     reason = paste(reasons[nzchar(reasons)], collapse = "; "),
     comparison_id = paste(ids, collapse = ","),
     formal_status = paste(unique(vapply(programs, function(x) normalize_scalar_value(x$formal_status, "missing"), character(1))), collapse = ";"),
@@ -804,53 +811,6 @@ read_gene_program_for_pair_07 <- function(cfg, layer_id, pair_row) {
     baseline_marker_comparison_id = normalize_scalar_value(pair_row$baseline_marker_comparison_id[[1]]),
     receiver_gene_program_source = normalize_scalar_value(pair_row$receiver_gene_program_source[[1]], "none")
   )
-}
-
-read_deg_for_nichenet_07 <- function(cfg, layer_id, comparison_id) {
-  comparison_id <- normalize_scalar_value(comparison_id)
-  if (!nzchar(comparison_id)) {
-    return(empty_gene_program_07(status = "missing_comparison_id", reason = "empty comparison_id"))
-  }
-  read_gene_program_by_comparison_id_07(cfg, layer_id, comparison_id, preferred = "formal")
-}
-
-inline_findmarkers_for_nichenet_07 <- function(seu, vars, receiver_cells, alpha = 0.05) {
-  if (length(receiver_cells) == 0) {
-    return(list(genes = character(0), status = "empty_receiver", table = data.frame(stringsAsFactors = FALSE)))
-  }
-  obj <- subset(seu, cells = receiver_cells)
-  if (exists("maybe_join_layers", mode = "function")) {
-    obj <- maybe_join_layers(obj)
-  }
-  groups <- as.character(obj@meta.data[[vars$group_var]])
-  n1 <- sum(groups == vars$ident_1, na.rm = TRUE)
-  n2 <- sum(groups == vars$ident_2, na.rm = TRUE)
-  if (n1 < vars$min_cells_per_group || n2 < vars$min_cells_per_group) {
-    return(list(
-      genes = character(0),
-      status = "too_few_cells_inline_findmarkers",
-      table = data.frame(stringsAsFactors = FALSE)
-    ))
-  }
-  Seurat::Idents(obj) <- vars$group_var
-  res <- tryCatch(
-    Seurat::FindMarkers(
-      obj,
-      ident.1 = vars$ident_1,
-      ident.2 = vars$ident_2,
-      logfc.threshold = vars$logfc_threshold,
-      test.use = "wilcox",
-      verbose = FALSE
-    ),
-    error = function(e) e
-  )
-  if (inherits(res, "error") || is.null(res) || nrow(res) == 0) {
-    return(list(genes = character(0), status = "findmarkers_error", table = data.frame(stringsAsFactors = FALSE)))
-  }
-  out <- tibble::rownames_to_column(as.data.frame(res), "gene")
-  std <- standardize_deg_table_06(out, alpha = alpha)
-  genes <- unique(std$.gene[std$.significant & (!is.finite(std$.logfc) | std$.logfc > 0)])
-  list(genes = genes, status = "inline_findmarkers", table = out)
 }
 
 write_empty_png_07 <- function(path, title = "No plot available") {

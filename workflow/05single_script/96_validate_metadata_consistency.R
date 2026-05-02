@@ -1012,6 +1012,43 @@ if (!is.null(loaded_generated$enrichment_targets)) {
     } else {
       pass("tier2.enrichment_targets.D05_contextual", "D05 enrichment targets are contextual global context targets")
     }
+    if (!is.null(loaded_generated$gene_program_targets)) {
+      gp_targets <- loaded_generated$gene_program_targets
+      for (col in c("comparison_id", "layer_scope", "produces_gene_program", "enrichment_eligible")) {
+        if (!col %in% colnames(gp_targets)) gp_targets[[col]] <- character(nrow(gp_targets))
+      }
+      for (col in c("target_id", "comparison_id", "layer_scope", "enrichment_eligible", "enabled")) {
+        if (!col %in% colnames(enrichment_targets)) enrichment_targets[[col]] <- character(nrow(enrichment_targets))
+      }
+      enabled_enrichment <- enrichment_targets[
+        tolower(trim(enrichment_targets$enabled)) %in% c("", "yes", "true", "1", "on"),
+        ,
+        drop = FALSE
+      ]
+      enrichment_fail_n <- 0L
+      for (idx in seq_len(nrow(enabled_enrichment))) {
+        row <- enabled_enrichment[idx, , drop = FALSE]
+        hit <- gp_targets[
+          gp_targets$comparison_id == row$comparison_id[[1]] &
+            gp_targets$layer_scope == row$layer_scope[[1]],
+          ,
+          drop = FALSE
+        ]
+        if (nrow(hit) == 0) {
+          fail("tier2.enrichment_targets.registry_join", sprintf("%s comparison_id/layer_scope is absent from gene_program_targets.tsv: %s/%s", row$target_id[[1]], row$comparison_id[[1]], row$layer_scope[[1]]))
+          enrichment_fail_n <- enrichment_fail_n + 1L
+          next
+        }
+        eligible <- trim(row$enrichment_eligible[[1]])
+        if (eligible %in% c("yes", "contextual") && !identical(hit$produces_gene_program[[1]], "yes")) {
+          fail("tier2.enrichment_targets.registry_join", sprintf("%s is enrichment eligible but registry target does not produce a gene program: %s", row$target_id[[1]], row$comparison_id[[1]]))
+          enrichment_fail_n <- enrichment_fail_n + 1L
+        }
+      }
+      if (enrichment_fail_n == 0L) {
+        pass("tier2.enrichment_targets.registry_join", sprintf("%s enabled enrichment targets join gene_program_targets.tsv", nrow(enabled_enrichment)))
+      }
+    }
   }
 }
 
@@ -1172,6 +1209,20 @@ if (!is.null(loaded_generated$communication_pairs)) {
       source <- tolower(row$receiver_gene_program_source[[1]])
       if (!source %in% c("condition_deg", "receiver_marker", "none")) {
         fail("tier2.communication.gene_program_source", sprintf("%s has unsupported receiver_gene_program_source=%s", pair_id, source))
+        comm_fail_n <- comm_fail_n + 1L
+      }
+      if (identical(source, "none")) {
+        fail("tier2.communication.gene_program_source", sprintf("%s is NicheNet-capable but receiver_gene_program_source=none", pair_id))
+        comm_fail_n <- comm_fail_n + 1L
+      }
+      mode <- tolower(trim(row$communication_mode[[1]]))
+      split_requested <- nzchar(trim(row$condition_split_var[[1]])) || grepl("split", mode, fixed = TRUE)
+      if (split_requested && !identical(source, "condition_deg")) {
+        fail("tier2.communication.gene_program_source", sprintf("%s split NicheNet rows must use receiver_gene_program_source=condition_deg", pair_id))
+        comm_fail_n <- comm_fail_n + 1L
+      }
+      if (!split_requested && identical(mode, "baseline") && !identical(source, "receiver_marker")) {
+        fail("tier2.communication.gene_program_source", sprintf("%s baseline NicheNet rows must use receiver_gene_program_source=receiver_marker", pair_id))
         comm_fail_n <- comm_fail_n + 1L
       }
       baseline_id <- trim(row$baseline_marker_comparison_id[[1]])

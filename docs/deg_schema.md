@@ -58,3 +58,9 @@ must be empty. `composition_tsv` may point to the QC mirror table.
 06c must place `global_context` rows such as D05 in the Global Context
 Enrichment section, not Core Mechanism Enrichment. 07 must reject any
 `receiver_deg_comparison_id` that points to `global_context`.
+
+A5 hardens the registry-only contract: 06 and 07 must not run inline
+`FindMarkers`, scan result directories, infer paths from IDs, or fall back across
+registry path columns. They may consume only the explicit `top_gene_tsv` selected
+by `gene_program_registry.tsv`; missing registry rows or missing files are
+reported as `missing_gene_program`.

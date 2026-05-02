@@ -119,35 +119,6 @@ expressed_genes_for_cells_07b <- function(seu, cells, pct = 0.1) {
   names(frac)[is.finite(frac) & frac >= pct]
 }
 
-receiver_marker_genes_for_nichenet_07b <- function(seu, receiver_cells, alpha = 0.05) {
-  receiver_cells <- intersect(receiver_cells, colnames(seu))
-  other_cells <- setdiff(colnames(seu), receiver_cells)
-  if (length(receiver_cells) < 3L || length(other_cells) < 3L) {
-    return(list(genes = character(0), status = "too_few_receiver_marker_cells", table = data.frame(stringsAsFactors = FALSE)))
-  }
-  obj <- subset(seu, cells = c(receiver_cells, other_cells))
-  obj$nichenet_receiver_status <- ifelse(colnames(obj) %in% receiver_cells, "receiver", "other")
-  Seurat::Idents(obj) <- "nichenet_receiver_status"
-  res <- tryCatch(
-    Seurat::FindMarkers(
-      obj,
-      ident.1 = "receiver",
-      ident.2 = "other",
-      logfc.threshold = 0,
-      test.use = "wilcox",
-      verbose = FALSE
-    ),
-    error = function(e) e
-  )
-  if (inherits(res, "error") || is.null(res) || nrow(res) == 0) {
-    return(list(genes = character(0), status = "receiver_findmarkers_error", table = data.frame(stringsAsFactors = FALSE)))
-  }
-  out <- tibble::rownames_to_column(as.data.frame(res), "gene")
-  std <- standardize_deg_table_06(out, alpha = alpha)
-  genes <- unique(std$.gene[std$.significant & (!is.finite(std$.logfc) | std$.logfc > 0)])
-  list(genes = genes, status = "receiver_marker_findmarkers", table = out)
-}
-
 condition_values_for_failed_pair_07b <- function(pair_row) {
   values <- split_csv_local(pair_row$condition_split_values[[1]])
   if (length(values) == 0) "all" else values
@@ -508,12 +479,12 @@ for (layer_idx in seq_len(nrow(layers))) {
         deg <- read_gene_program_for_pair_07(cfg, layer_id, pair_row)
         geneset <- deg$genes
         deg_source <- deg$source
-        deg_status <- deg$status
+        deg_status <- deg$deg_status %||% deg$status
         gene_program_comparison_id <- deg$comparison_id %||% ""
         formal_status <- deg$formal_status %||% ""
         result_level <- deg$result_level %||% ""
         if (length(geneset) == 0) {
-          status <- if (communication_pair_auto_gate(pair_row)) "skipped_missing_receiver_program" else deg_status
+          status <- "missing_gene_program"
           reason <- normalize_scalar_value(deg$reason, "No receiver gene program genes were available from gene_program_registry.tsv")
         }
       }
