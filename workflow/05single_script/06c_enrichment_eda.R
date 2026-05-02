@@ -32,10 +32,12 @@ module_name <- "06c_enrichment_eda"
 prepare_dirs_06(cfg)
 
 paths <- enrichment_report_paths_06(cfg)
+deg_paths <- deg_report_paths_05(cfg)
+gene_program_registry_tsv <- cfg$gene_program_registry_tsv %||% deg_paths$gene_program_registry_tsv
 go_manifest <- read_tsv_optional(cfg$go_enrichment_manifest_tsv)
 kegg_manifest <- read_tsv_optional(cfg$kegg_enrichment_manifest_tsv)
 enrichment_targets <- read_tsv_optional(cfg$enrichment_targets_sheet)
-gene_program_registry <- read_tsv_optional(cfg$gene_program_registry_tsv %||% deg_report_paths_05(cfg)$gene_program_registry_tsv)
+gene_program_registry <- read_tsv_optional(gene_program_registry_tsv)
 all_manifest <- dplyr::bind_rows(go_manifest, kegg_manifest)
 if (nrow(all_manifest) == 0) {
   all_manifest <- empty_enrichment_manifest_06()
@@ -376,7 +378,7 @@ metadata_join_status <- metadata_join_status_06c(section_metadata)
 section_summary <- build_section_summary_06c(section_metadata, all_manifest)
 write_tsv_local(section_summary, paths$section_summary_tsv)
 
-deg_status_matrix <- read_tsv_optional(deg_report_paths_05(cfg)$status_matrix_tsv)
+deg_status_matrix <- read_tsv_optional(deg_paths$status_matrix_tsv)
 exploratory_rows <- deg_status_matrix
 if (nrow(exploratory_rows) > 0) {
   for (col in c("pseudobulk_status", "composition_status")) {
@@ -460,7 +462,9 @@ write_manifest_local(
   inputs = list(
     go_enrichment_manifest_tsv = cfg$go_enrichment_manifest_tsv,
     kegg_enrichment_manifest_tsv = cfg$kegg_enrichment_manifest_tsv,
-    deg_status_matrix_tsv = deg_report_paths_05(cfg)$status_matrix_tsv
+    enrichment_targets_tsv = cfg$enrichment_targets_sheet,
+    gene_program_registry_tsv = gene_program_registry_tsv,
+    deg_status_matrix_tsv = deg_paths$status_matrix_tsv
   ),
   version = cfg$module_version,
   depends_on = list(
