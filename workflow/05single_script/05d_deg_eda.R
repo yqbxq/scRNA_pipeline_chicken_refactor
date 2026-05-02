@@ -38,6 +38,44 @@ pb_df <- read_tsv_optional(pseudobulk_manifest_tsv)
 comp_df <- read_tsv_optional(composition_manifest_tsv)
 gene_program_targets <- read_tsv_optional(cfg$gene_program_targets_sheet)
 
+resolve_manifest_output_05d <- function(manifest_path, keys) {
+  if (!file.exists(manifest_path)) {
+    return("")
+  }
+  manifest <- read_manifest_local(manifest_path)
+  for (key in keys) {
+    entry <- manifest$outputs[[key]]
+    if (!is.null(entry) && !is.null(entry$path) && nzchar(as.character(entry$path))) {
+      return(resolve_output_local(manifest, key))
+    }
+  }
+  ""
+}
+
+annotation_cluster_marker_path_05d <- function(cfg, layer_id) {
+  layer_id <- normalize_scalar_value(layer_id)
+  if (layer_id %in% c("panorama", cfg$panorama_layer_id)) {
+    hit <- resolve_manifest_output_05d(cfg$module_03d_manifest_path, c("annotation_cluster_markers_tsv"))
+    if (nzchar(hit)) return(hit)
+    return(file.path(cfg$annotation_table_dir_layer, "annotation_cluster_markers.tsv"))
+  }
+  hit <- resolve_manifest_output_05d(cfg$module_04b_manifest_path, c(paste0("annotation_cluster_markers_tsv_", layer_id)))
+  if (nzchar(hit)) return(hit)
+  file.path(layer_annotation_table_dir_04(cfg, layer_id), sprintf("annotation_cluster_markers_%s.tsv", layer_id))
+}
+
+annotation_evidence_path_05d <- function(cfg, layer_id) {
+  layer_id <- normalize_scalar_value(layer_id)
+  if (layer_id %in% c("panorama", cfg$panorama_layer_id)) {
+    hit <- resolve_manifest_output_05d(cfg$module_03d_manifest_path, c("annotation_evidence_tsv"))
+    if (nzchar(hit)) return(hit)
+    return(file.path(cfg$annotation_table_dir_layer, "annotation_evidence.tsv"))
+  }
+  hit <- resolve_manifest_output_05d(cfg$module_04b_manifest_path, c(paste0("annotation_evidence_tsv_", layer_id)))
+  if (nzchar(hit)) return(hit)
+  file.path(layer_annotation_table_dir_04(cfg, layer_id), sprintf("annotation_evidence_%s.tsv", layer_id))
+}
+
 key_cols <- c("layer_id", "comparison_id")
 empty_keyed <- empty_df_05(key_cols)
 key_subset_05d <- function(df) {
@@ -116,8 +154,12 @@ write_tsv_local(summary_df, paths$summary_tsv)
 
 registry_cols <- c(
   "comparison_id", "source_question_id", "layer_id", "analysis_mode",
-  "gene_program_role", "result_level", "preferred_for_downstream",
-  "formal_status", "deg_tsv", "marker_tsv", "top_gene_tsv",
+  "gene_program_role", "produces_gene_program", "annotation_only", "qc_only",
+  "global_context_only", "nichenet_eligible", "nichenet_usage",
+  "enrichment_eligible", "enrichment_usage", "preferred_for_downstream",
+  "result_level", "formal_status", "result_status", "skip_reason",
+  "eligible_reason", "ineligible_reason", "deg_tsv", "marker_tsv",
+  "annotation_evidence_tsv", "composition_tsv", "top_gene_tsv",
   "n_significant", "warning"
 )
 
@@ -126,7 +168,11 @@ if (nrow(gene_program_targets) == 0) {
 } else {
   for (col in c(
     "comparison_id", "source_question_id", "layer_scope", "analysis_mode",
-    "gene_program_role", "preferred_for_downstream", "formal_preferred"
+    "gene_program_role", "produces_gene_program", "annotation_only", "qc_only",
+    "global_context_only", "nichenet_eligible", "nichenet_usage",
+    "enrichment_eligible", "enrichment_usage", "preferred_for_downstream",
+    "formal_preferred", "formal_status", "result_status", "skip_reason",
+    "eligible_reason", "ineligible_reason"
   )) {
     if (!col %in% colnames(gene_program_targets)) {
       gene_program_targets[[col]] <- ""
@@ -139,40 +185,95 @@ if (nrow(gene_program_targets) == 0) {
     layer_id <- normalize_scalar_value(target$layer_scope[[1]])
     marker_hit <- marker_df[marker_df$layer_id == layer_id & marker_df$comparison_id == comparison_id, , drop = FALSE]
     pb_hit <- pb_df[pb_df$layer_id == layer_id & pb_df$comparison_id == comparison_id, , drop = FALSE]
+    comp_hit <- comp_df[comp_df$layer_id == layer_id & comp_df$comparison_id == comparison_id, , drop = FALSE]
 
     marker_path <- if (nrow(marker_hit) > 0 && "exploratory_results_tsv" %in% colnames(marker_hit)) normalize_scalar_value(marker_hit$exploratory_results_tsv[[1]]) else ""
     deg_path <- if (nrow(pb_hit) > 0 && "ds_results_tsv" %in% colnames(pb_hit)) normalize_scalar_value(pb_hit$ds_results_tsv[[1]]) else ""
-    formal_status <- if (nrow(pb_hit) > 0 && "inference_status" %in% colnames(pb_hit)) normalize_scalar_value(pb_hit$inference_status[[1]], "missing") else "missing"
+    composition_path <- if (nrow(comp_hit) > 0 && "formal_results_tsv" %in% colnames(comp_hit)) normalize_scalar_value(comp_hit$formal_results_tsv[[1]]) else ""
+    formal_status <- if (nrow(pb_hit) > 0 && "inference_status" %in% colnames(pb_hit)) normalize_scalar_value(pb_hit$inference_status[[1]], "missing") else normalize_scalar_value(target$formal_status[[1]], "missing")
     marker_status <- if (nrow(marker_hit) > 0 && "status" %in% colnames(marker_hit)) normalize_scalar_value(marker_hit$status[[1]], "missing") else "missing"
+    composition_status <- if (nrow(comp_hit) > 0 && "inference_status" %in% colnames(comp_hit)) normalize_scalar_value(comp_hit$inference_status[[1]], "missing") else "missing"
+    analysis_mode <- normalize_scalar_value(target$analysis_mode[[1]])
+    gene_program_role <- normalize_scalar_value(target$gene_program_role[[1]])
+    annotation_evidence_tsv <- ""
+
+    if (identical(analysis_mode, "annotation_cluster_marker") || identical(gene_program_role, "annotation_marker")) {
+      marker_path <- annotation_cluster_marker_path_05d(cfg, layer_id)
+      annotation_evidence_tsv <- annotation_evidence_path_05d(cfg, layer_id)
+      deg_path <- ""
+      composition_path <- ""
+      formal_status <- "annotation_only"
+    }
 
     formal_preferred <- normalize_scalar_value(target$formal_preferred[[1]], "no")
-    preferred_path <- if (formal_preferred == "yes" && nzchar(deg_path)) deg_path else marker_path
+    produces_gene_program <- normalize_scalar_value(target$produces_gene_program[[1]], "yes")
+    preferred_path <- if (identical(produces_gene_program, "yes") && formal_preferred == "yes" && nzchar(deg_path)) {
+      deg_path
+    } else if (identical(produces_gene_program, "yes") && nzchar(marker_path) && !identical(gene_program_role, "annotation_marker")) {
+      marker_path
+    } else if (identical(analysis_mode, "global_context") && nzchar(deg_path)) {
+      deg_path
+    } else {
+      ""
+    }
     result_level <- if (formal_preferred == "yes" && identical(formal_status, "formal")) {
       "pseudobulk_formal"
+    } else if (formal_preferred == "yes" && formal_status %in% c("exploratory_only", "exploratory_forced") && nzchar(deg_path)) {
+      "cell_level_exploratory"
     } else if (nzchar(marker_path)) {
       "cell_level_exploratory"
+    } else if (identical(gene_program_role, "annotation_marker")) {
+      "annotation_cluster_markers"
+    } else if (identical(gene_program_role, "qc_only")) {
+      "qc_composition"
+    } else if (identical(gene_program_role, "none")) {
+      "composition"
     } else {
       "unavailable"
     }
     counts <- count_significant_rows_05(preferred_path, alpha = cfg$deg_alpha)
+    result_status <- normalize_scalar_value(target$result_status[[1]], "target_defined")
+    if (identical(produces_gene_program, "no")) {
+      result_status <- normalize_scalar_value(target$skip_reason[[1]], "not_gene_program")
+    } else if (identical(gene_program_role, "annotation_marker")) {
+      result_status <- if (nzchar(marker_path) && file.exists(marker_path)) "annotation_only" else "missing_annotation_output"
+    } else if (nzchar(preferred_path) && file.exists(preferred_path)) {
+      result_status <- "available"
+    } else {
+      result_status <- "unavailable"
+    }
     warning <- ""
-    if (formal_preferred == "yes" && !identical(formal_status, "formal")) {
+    if (formal_preferred == "yes" && !formal_status %in% c("formal", "exploratory_only", "exploratory_forced") && identical(produces_gene_program, "yes")) {
       warning <- sprintf("formal preferred but pseudobulk status is %s; using exploratory marker fallback when available", formal_status)
-    } else if (!nzchar(preferred_path)) {
-      warning <- sprintf("gene program unavailable; marker status is %s and formal status is %s", marker_status, formal_status)
+    } else if (!nzchar(preferred_path) && identical(produces_gene_program, "yes") && !identical(gene_program_role, "annotation_marker")) {
+      warning <- sprintf("gene program unavailable; marker status is %s, formal status is %s, composition status is %s", marker_status, formal_status, composition_status)
     }
 
     registry_rows[[length(registry_rows) + 1]] <- data.frame(
       comparison_id = comparison_id,
       source_question_id = normalize_scalar_value(target$source_question_id[[1]]),
       layer_id = layer_id,
-      analysis_mode = normalize_scalar_value(target$analysis_mode[[1]]),
-      gene_program_role = normalize_scalar_value(target$gene_program_role[[1]]),
-      result_level = result_level,
+      analysis_mode = analysis_mode,
+      gene_program_role = gene_program_role,
+      produces_gene_program = produces_gene_program,
+      annotation_only = normalize_scalar_value(target$annotation_only[[1]], "no"),
+      qc_only = normalize_scalar_value(target$qc_only[[1]], "no"),
+      global_context_only = normalize_scalar_value(target$global_context_only[[1]], "no"),
+      nichenet_eligible = normalize_scalar_value(target$nichenet_eligible[[1]], "no"),
+      nichenet_usage = normalize_scalar_value(target$nichenet_usage[[1]], "none"),
+      enrichment_eligible = normalize_scalar_value(target$enrichment_eligible[[1]], "no"),
+      enrichment_usage = normalize_scalar_value(target$enrichment_usage[[1]], "none"),
       preferred_for_downstream = normalize_scalar_value(target$preferred_for_downstream[[1]]),
+      result_level = result_level,
       formal_status = formal_status,
+      result_status = result_status,
+      skip_reason = normalize_scalar_value(target$skip_reason[[1]]),
+      eligible_reason = normalize_scalar_value(target$eligible_reason[[1]]),
+      ineligible_reason = normalize_scalar_value(target$ineligible_reason[[1]]),
       deg_tsv = deg_path,
       marker_tsv = marker_path,
+      annotation_evidence_tsv = annotation_evidence_tsv,
+      composition_tsv = composition_path,
       top_gene_tsv = preferred_path,
       n_significant = counts$significant_n,
       warning = warning,

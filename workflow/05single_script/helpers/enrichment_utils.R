@@ -209,13 +209,16 @@ read_enrichment_input_grid_06 <- function(cfg) {
   target_cols <- c(
     "target_id", "source_question_id", "comparison_id", "layer_scope",
     "analysis_mode", "gene_program_role", "organism", "database",
-    "min_genes", "enabled", "notes"
+    "enrichment_eligible", "enrichment_usage", "min_genes", "enabled", "notes"
   )
   registry_cols <- c(
     "comparison_id", "source_question_id", "layer_id", "analysis_mode",
-    "gene_program_role", "result_level", "preferred_for_downstream",
-    "formal_status", "deg_tsv", "marker_tsv", "top_gene_tsv",
-    "n_significant", "warning"
+    "gene_program_role", "produces_gene_program", "annotation_only", "qc_only",
+    "global_context_only", "nichenet_eligible", "nichenet_usage",
+    "enrichment_eligible", "enrichment_usage", "result_level",
+    "preferred_for_downstream", "formal_status", "result_status",
+    "deg_tsv", "marker_tsv", "top_gene_tsv", "n_significant", "warning",
+    "ineligible_reason"
   )
   for (col in target_cols) {
     if (!col %in% colnames(targets)) targets[[col]] <- character(nrow(targets))
@@ -226,6 +229,7 @@ read_enrichment_input_grid_06 <- function(cfg) {
   if (nrow(targets) == 0) {
     return(empty_df_06(c(
       "target_id", "layer_id", "comparison_id", "database", "organism",
+      "analysis_mode", "gene_program_role", "enrichment_usage",
       "deg_tsv", "deg_source", "deg_inference_status", "formal_status",
       "result_level", "biological_replicates", "background_tsv",
       "background_gene_n", "marker_results_tsv", "pseudobulk_results_tsv",
@@ -239,6 +243,7 @@ read_enrichment_input_grid_06 <- function(cfg) {
   if (nrow(targets) == 0) {
     return(empty_df_06(c(
       "target_id", "layer_id", "comparison_id", "database", "organism",
+      "analysis_mode", "gene_program_role", "enrichment_usage",
       "deg_tsv", "deg_source", "deg_inference_status", "formal_status",
       "result_level", "biological_replicates", "background_tsv",
       "background_gene_n", "marker_results_tsv", "pseudobulk_results_tsv",
@@ -260,9 +265,13 @@ read_enrichment_input_grid_06 <- function(cfg) {
     marker_path <- if (nrow(hit) > 0) normalize_scalar_value(hit$marker_tsv[[1]]) else ""
     deg_path <- if (nrow(hit) > 0) normalize_scalar_value(hit$deg_tsv[[1]]) else ""
     top_path <- if (nrow(hit) > 0) normalize_scalar_value(hit$top_gene_tsv[[1]]) else ""
+    enrichment_eligible <- if (nrow(hit) > 0) normalize_scalar_value(hit$enrichment_eligible[[1]], normalize_scalar_value(target$enrichment_eligible[[1]], "yes")) else normalize_scalar_value(target$enrichment_eligible[[1]], "yes")
+    enrichment_usage <- if (nrow(hit) > 0) normalize_scalar_value(hit$enrichment_usage[[1]], normalize_scalar_value(target$enrichment_usage[[1]], "mechanism_enrichment")) else normalize_scalar_value(target$enrichment_usage[[1]], "mechanism_enrichment")
     deg_tsv <- ""
     deg_source <- "none"
-    if (nzchar(top_path) && file.exists(top_path)) {
+    if (!enrichment_eligible %in% c("yes", "contextual")) {
+      deg_source <- "registry:enrichment_ineligible"
+    } else if (nzchar(top_path) && file.exists(top_path)) {
       deg_tsv <- top_path
       deg_source <- "gene_program_registry:top_gene_tsv"
     } else if (nzchar(deg_path) && file.exists(deg_path)) {
@@ -298,6 +307,7 @@ read_enrichment_input_grid_06 <- function(cfg) {
       organism = normalize_scalar_value(target$organism[[1]], "chicken_primary"),
       analysis_mode = normalize_scalar_value(target$analysis_mode[[1]], if (nrow(hit) > 0) hit$analysis_mode[[1]] else ""),
       gene_program_role = normalize_scalar_value(target$gene_program_role[[1]], if (nrow(hit) > 0) hit$gene_program_role[[1]] else ""),
+      enrichment_usage = enrichment_usage,
       min_genes = normalize_scalar_value(target$min_genes[[1]], as.character(cfg$enrichment_min_input_genes)),
       deg_tsv = deg_tsv,
       deg_source = deg_source,

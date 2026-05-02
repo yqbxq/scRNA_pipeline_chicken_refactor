@@ -81,11 +81,14 @@ present in object metadata. Planned rows are skipped.
 
 | Value | Generated target | Fan-out intent |
 |---|---|---|
-| `cluster_marker` | `comparisons.tsv` | Each group vs all others. |
+| `cluster_marker` | `annotation_marker_targets.tsv` | Raw cluster marker evidence for 03/04 annotation only. |
+| `identity_marker` | `comparisons.tsv` | Post-annotation cell type/subtype identity marker, such as A01/A02. |
 | `directional_DEG` | `comparisons.tsv` | Directed sender vs receiver DEG. |
 | `pairwise` | `comparisons.tsv` | All pairwise combinations in a group set. |
 | `contrast_only` | `comparisons.tsv` | Within-group condition contrast. |
+| `global_stage_context` | `comparisons.tsv` | Global syf/f5 context signature; not receiver DEG. |
 | `composition` | `comparisons.tsv` | Composition/proportion test rows. |
+| `qc_composition` | `comparisons.tsv` | QC-only composition/capture-balance rows. |
 | `bidirectional` | `communication_pairs.tsv` | Sender to receiver and receiver to sender. |
 | `directional` | `communication_pairs.tsv` | Directed sender to receiver tasks. |
 | `sequential` | `communication_pairs.tsv` | Adjacent transitions in an ordered chain. |
@@ -113,6 +116,7 @@ exists.
 | File | ID column | Purpose |
 |---|---|---|
 | `comparisons.tsv` | `comparison_id` | DEG, composition, and comparison-like tasks. |
+| `annotation_marker_targets.tsv` | `target_id` | 03/04 annotation-only raw cluster marker targets. |
 | `communication_pairs.tsv` | `pair_id` | CellChat/NicheNet tasks. |
 | `trajectory_pairs.tsv` | `trajectory_id` | Trajectory and velocity tasks. |
 | `scenic_targets.tsv` | `target_id` | SCENIC/decoupleR regulation tasks. |
@@ -131,13 +135,44 @@ Current generated columns:
 | File | Columns |
 |---|---|
 | `comparisons.tsv` | `comparison_id`, `source_question_id`, `layer_scope`, `contrast_axis`, `analysis_mode`, `analysis_unit`, `stat_level`, `group_var`, `ident_1`, `ident_2`, `subset_column`, `subset_value`, `aggregation_group_var`, `composition_group_var`, `batch_var`, `enabled`, `min_biological_replicates`, `force_exploratory`, `min_cells_per_group`, `logfc_threshold`, `produces_gene_program`, `gene_program_role`, `notes` |
+| `annotation_marker_targets.tsv` | `target_id`, `source_question_id`, `layer_scope`, `object_layer`, `cluster_column`, `annotation_label_column`, `group_var`, `ident_1`, `ident_2`, `analysis_mode`, `gene_program_role`, `output_dir`, `annotation_only`, `enabled`, `notes` |
 | `communication_pairs.tsv` | `pair_id`, `source_question_id`, `layer_scope`, `sender`, `receiver`, `condition_split_var`, `condition_split_values`, `tool`, `communication_mode`, `activation_policy`, `min_sender_cells`, `min_receiver_cells`, `min_cells_per_condition`, `fallback_pair_id`, `derived_from_pair_id`, `run_baseline_if_split_fails`, `requires_all_derived_inputs_pass`, `receiver_gene_program_source`, `baseline_marker_comparison_id`, `receiver_deg_comparison_id`, `direction_filter`, `requires_cell_subtype`, `notes`, `enabled` |
 | `trajectory_pairs.tsv` | `trajectory_id`, `source_question_id`, `layer_scope`, `root_group`, `terminal_group`, `condition_split_var`, `condition_split_values`, `method`, `enabled`, `notes` |
 | `scenic_targets.tsv` | `target_id`, `source_question_id`, `layer_scope`, `cell_subset`, `contrast_axis`, `condition_split_var`, `condition_split_values`, `method`, `enabled`, `notes` |
-| `enrichment_targets.tsv` | `target_id`, `source_question_id`, `comparison_id`, `layer_scope`, `analysis_mode`, `gene_program_role`, `organism`, `database`, `min_genes`, `enabled`, `notes` |
-| `gene_program_targets.tsv` | `comparison_id`, `source_question_id`, `layer_scope`, `analysis_mode`, `gene_program_role`, `preferred_for_downstream`, `expected_result_level`, `formal_preferred`, `nichenet_eligible`, `enrichment_eligible`, `notes` |
+| `enrichment_targets.tsv` | `target_id`, `source_question_id`, `comparison_id`, `layer_scope`, `analysis_mode`, `gene_program_role`, `organism`, `database`, `enrichment_eligible`, `enrichment_usage`, `min_genes`, `enabled`, `notes` |
+| `gene_program_targets.tsv` | `comparison_id`, `source_question_id`, `layer_scope`, `analysis_mode`, `gene_program_role`, `produces_gene_program`, `annotation_only`, `qc_only`, `global_context_only`, `nichenet_eligible`, `nichenet_usage`, `enrichment_eligible`, `enrichment_usage`, `preferred_for_downstream`, `expected_result_level`, `formal_preferred`, `formal_status`, `result_status`, `skip_reason`, `eligible_reason`, `ineligible_reason`, `notes` |
 | `deconv_pairs.tsv` | `deconv_id`, `source_question_id`, `st_scope`, `reference_scope`, `section_filter`, `condition_split_var`, `condition_split_values`, `tool`, `enabled`, `notes` |
 | `spatial_pairs.tsv` | `spatial_pair_id`, `source_question_id`, `st_scope`, `sender`, `receiver`, `contrast_axis`, `condition_split_var`, `condition_split_values`, `tool`, `enabled`, `notes` |
+
+## Marker / DEG Layering Contract
+
+`analysis_mode` and `gene_program_role` are the authoritative runtime contract.
+Modules must not infer downstream use from the presence of a TSV/RDS path.
+
+| `analysis_mode` | `gene_program_role` | Producer | Downstream use |
+|---|---|---|---|
+| `annotation_cluster_marker` | `annotation_marker` | 03/04 annotation | Annotation evidence only; no 06 mechanism enrichment or 07 NicheNet. |
+| `subtype_marker` | `receiver_marker` | 05a | Receiver identity/baseline marker only. |
+| `subtype_pairwise` | `subtype_pairwise_deg` | 05a | Subtype pairwise enrichment; not default NicheNet receiver DEG. |
+| `condition_within_type` | `condition_deg` | 05b | Only valid `receiver_deg_comparison_id` source for split NicheNet. |
+| `composition` | `none` | 05c | Composition result only; no gene program. |
+| `qc_composition` | `qc_only` | 05c | QC report only; no gene program or biological abundance conclusion. |
+| `global_context` | `global_context` | 05b/05d | Global context enrichment only; not cell-type-specific receiver DEG. |
+
+A01/A02 are post-annotation identity markers. They no longer use raw
+`cluster_marker` semantics. E03 is `qc_composition`; it must not be NicheNet or
+enrichment eligible. D05 is `global_context`; it must not be used as
+`receiver_deg_comparison_id`.
+
+07b NicheNet source rules:
+
+- Baseline communication uses `baseline_marker_comparison_id`, which must point
+  to `subtype_marker + receiver_marker` with `nichenet_usage=baseline_receiver_marker`.
+- Condition-split communication uses `receiver_deg_comparison_id`, which must
+  point to `condition_within_type + condition_deg` with
+  `nichenet_usage=receiver_condition_deg`.
+- `annotation_marker`, `subtype_pairwise_deg`, `qc_only`, `global_context`, and
+  `none` are forbidden as receiver DEG sources.
 
 ## M3 Fan-Out Contract
 
@@ -149,12 +184,13 @@ with valid headers until ST-H activates and implements ST fan-out.
 
 `contrast_axis` is the dispatch key:
 
-- `comparisons.tsv`: `cluster_marker`, `directional_DEG`, `pairwise`, `contrast_only`, `composition`
+- `annotation_marker_targets.tsv`: `cluster_marker`; raw cluster marker evidence is produced by 03/04 annotation modules
+- `comparisons.tsv`: `identity_marker`, `directional_DEG`, `pairwise`, `contrast_only`, `global_stage_context`, `composition`, `qc_composition`
 - `communication_pairs.tsv`: `bidirectional`, `directional`, `sequential`, `symmetric`, `pairwise_comm`
 - `scenic_targets.tsv`: `regulation_per`, `regulation_pair`, `regulation_stage`
 - `trajectory_pairs.tsv`: `lineage`, `velocity`
 - `enrichment_targets.tsv`: derived from generated comparisons whose source question has `tools_to_run` containing `enrichment`
-- `gene_program_targets.tsv`: derived from generated comparisons where `produces_gene_program=yes`
+- `gene_program_targets.tsv`: derived from generated comparisons and annotation targets; includes positive and explicitly ineligible rows so downstream modules do not infer usage from file paths
 - `deconv_pairs.tsv` / `spatial_pairs.tsv`: ST-H only; current implementation is schema-only
 
 Reserved tokens such as `all_cells`, `GC_subtypes`, `TC_subtypes`, `regions`,
@@ -220,9 +256,14 @@ conclusion.
 - every active `contrast_axis` has a known Tier 2 target mapping,
 - generated table ID uniqueness when those tables exist,
 - generated table schema checks for 05/06/07 Tier 2 contracts,
-- 05 `analysis_mode`, `__rest__`, condition, composition, and group-var semantic checks,
-- 07 explicit `baseline_marker_comparison_id` / `receiver_deg_comparison_id` checks,
+- 05 `analysis_mode`, `gene_program_role`, `__rest__`, condition, composition,
+  QC composition, global context, and group-var semantic checks,
+- gene program eligibility matrix checks for annotation-only, QC-only, global
+  context, NicheNet usage, and enrichment usage,
+- 07 explicit `baseline_marker_comparison_id` / `receiver_deg_comparison_id`
+  role checks,
 - optional semantic checks against annotated RDS metadata when available,
+- hard failure when `requires_cell_subtype=yes` rows lack `cell_subtype`,
 - NicheNet receiver/DEG consistency when generated comparisons exist.
 
 The validator writes a machine-readable report to:

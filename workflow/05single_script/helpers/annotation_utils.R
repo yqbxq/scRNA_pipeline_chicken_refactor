@@ -85,6 +85,59 @@ empty_marker_table_local <- function() {
   )
 }
 
+empty_annotation_marker_targets_local <- function() {
+  empty_df_05 <- function(cols) as.data.frame(setNames(replicate(length(cols), character(0), simplify = FALSE), cols), stringsAsFactors = FALSE)
+  empty_df_05(c(
+    "target_id", "source_question_id", "layer_scope", "object_layer",
+    "cluster_column", "annotation_label_column", "group_var",
+    "ident_1", "ident_2", "analysis_mode", "gene_program_role",
+    "output_dir", "annotation_only", "enabled", "notes"
+  ))
+}
+
+read_annotation_marker_targets <- function(cfg, object_layer = NULL, layer_scope = NULL) {
+  path <- cfg$annotation_marker_targets_sheet %||% file.path(cfg$metadata_dir, "annotation_marker_targets.tsv")
+  df <- read_tsv_optional(path)
+  cols <- colnames(empty_annotation_marker_targets_local())
+  for (col in cols) {
+    if (!col %in% colnames(df)) {
+      df[[col]] <- character(nrow(df))
+    }
+  }
+  if (nrow(df) == 0) {
+    return(empty_annotation_marker_targets_local())
+  }
+  df <- df[, cols, drop = FALSE]
+  for (col in cols) {
+    df[[col]] <- vapply(df[[col]], normalize_scalar_value, character(1))
+  }
+  df$enabled[!nzchar(df$enabled)] <- "yes"
+  df <- df[tolower(df$enabled) %in% c("yes", "true", "1", "on"), , drop = FALSE]
+  if (!is.null(object_layer) && nzchar(object_layer)) {
+    df <- df[df$object_layer %in% c(object_layer, "*", ""), , drop = FALSE]
+  }
+  if (!is.null(layer_scope) && nzchar(layer_scope)) {
+    df <- df[df$layer_scope %in% c(layer_scope, "*", ""), , drop = FALSE]
+  }
+  df
+}
+
+annotation_marker_target_for_layer <- function(cfg, layer_id, layer_scope = layer_id) {
+  targets <- read_annotation_marker_targets(cfg, object_layer = layer_id, layer_scope = layer_scope)
+  if (nrow(targets) == 0) {
+    return(NULL)
+  }
+  targets[1, , drop = FALSE]
+}
+
+annotation_target_value <- function(target, col, default = "") {
+  if (is.null(target) || nrow(target) == 0 || !col %in% colnames(target)) {
+    return(default)
+  }
+  value <- normalize_scalar_value(target[[col]][[1]], default)
+  if (nzchar(value)) value else default
+}
+
 run_cluster_marker_discovery <- function(seu, cluster_var, only_pos = TRUE, min_pct = 0.25, logfc_threshold = 0.25) {
   if (!cluster_var %in% colnames(seu@meta.data)) {
     stop(sprintf("对象缺少 cluster 列: %s", cluster_var), call. = FALSE)
@@ -361,7 +414,18 @@ annotate_one_layer <- function(seu, layer_id, marker_panels_df, cfg, paths_modul
   ensure_dir(paths_module$table_dir)
   ensure_dir(paths_module$figure_dir)
 
+  target <- paths_module$annotation_marker_target %||% NULL
+  target_id <- annotation_target_value(target, "target_id", paste0(layer_id, "_annotation_cluster_marker"))
+  analysis_mode <- annotation_target_value(target, "analysis_mode", "annotation_cluster_marker")
+  gene_program_role <- annotation_target_value(target, "gene_program_role", "annotation_marker")
+  annotation_only <- annotation_target_value(target, "annotation_only", "yes")
+
   marker_df <- run_cluster_marker_discovery(seu, cluster_var = cluster_var, only_pos = TRUE, min_pct = 0.25, logfc_threshold = 0.25)
+  marker_df$target_id <- rep(target_id, nrow(marker_df))
+  marker_df$analysis_mode <- rep(analysis_mode, nrow(marker_df))
+  marker_df$gene_program_role <- rep(gene_program_role, nrow(marker_df))
+  marker_df$annotation_only <- rep(annotation_only, nrow(marker_df))
+  marker_df$cluster_column <- rep(cluster_var, nrow(marker_df))
   write_tsv_local(marker_df, paths_module$cluster_markers_tsv)
 
   module_payload <- compute_module_score_summary(seu, cluster_var = cluster_var, panel_df = marker_panels_df, seed = cfg$random_seed)
@@ -379,9 +443,13 @@ annotate_one_layer <- function(seu, layer_id, marker_panels_df, cfg, paths_modul
     decision <- build_annotation_decision(cluster_id, cluster_markers, overlap_df, module_df, panel_present = nrow(marker_panels_df) > 0)
     annotation_rows[[length(annotation_rows) + 1]] <- data.frame(
       layer_id = layer_id,
+      target_id = target_id,
       cluster = cluster_id,
       cluster_id = cluster_id,
       cluster_column = cluster_var,
+      analysis_mode = analysis_mode,
+      gene_program_role = gene_program_role,
+      annotation_only = annotation_only,
       candidate_celltype = decision$candidate_celltype,
       final_annotation = decision$candidate_celltype,
       data_driven_candidate = decision$data_candidate,
@@ -399,7 +467,11 @@ annotate_one_layer <- function(seu, layer_id, marker_panels_df, cfg, paths_modul
     if (nrow(overlap_df) == 0) {
       evidence_rows[[length(evidence_rows) + 1]] <- data.frame(
         layer_id = layer_id,
+        target_id = target_id,
         cluster_id = cluster_id,
+        analysis_mode = analysis_mode,
+        gene_program_role = gene_program_role,
+        annotation_only = annotation_only,
         celltype = "",
         overlap_n = 0,
         overlap_genes = "",
@@ -410,8 +482,12 @@ annotate_one_layer <- function(seu, layer_id, marker_panels_df, cfg, paths_modul
       )
     } else {
       overlap_df$layer_id <- layer_id
+      overlap_df$target_id <- target_id
       overlap_df$cluster_id <- cluster_id
-      evidence_rows[[length(evidence_rows) + 1]] <- overlap_df[, c("layer_id", "cluster_id", "celltype", "overlap_n", "overlap_genes", "evidence_source", "confidence_ceiling", "panel_files")]
+      overlap_df$analysis_mode <- analysis_mode
+      overlap_df$gene_program_role <- gene_program_role
+      overlap_df$annotation_only <- annotation_only
+      evidence_rows[[length(evidence_rows) + 1]] <- overlap_df[, c("layer_id", "target_id", "cluster_id", "analysis_mode", "gene_program_role", "annotation_only", "celltype", "overlap_n", "overlap_genes", "evidence_source", "confidence_ceiling", "panel_files")]
     }
   }
 

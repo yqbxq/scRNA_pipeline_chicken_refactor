@@ -1,0 +1,4 @@
+# AUTO-GENERATED. Edit metadata/analysis_questions.tsv instead.
+target_id	source_question_id	layer_scope	object_layer	cluster_column	annotation_label_column	group_var	ident_1	ident_2	analysis_mode	gene_program_role	output_dir	annotation_only	enabled	notes
+ANN01_panorama_cluster_marker	A01_panorama_marker	panorama	panorama	panorama_cluster	cell_type	panorama_cluster	__cluster__	__rest__	annotation_cluster_marker	annotation_marker	annotation/layers/panorama	yes	yes	03d raw panorama cluster marker evidence for annotation only
+ANN02_GC_subcluster_cluster_marker	A02_GC_subtype_marker	GC_subcluster	GC_subcluster	GC_subcluster_cluster	cell_subtype	GC_subcluster_cluster	__cluster__	__rest__	annotation_cluster_marker	annotation_marker	annotation/layers/GC_subcluster	yes	yes	04b raw GC subcluster marker evidence for annotation only

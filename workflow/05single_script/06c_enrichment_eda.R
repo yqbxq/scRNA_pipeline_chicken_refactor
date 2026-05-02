@@ -34,6 +34,7 @@ prepare_dirs_06(cfg)
 paths <- enrichment_report_paths_06(cfg)
 go_manifest <- read_tsv_optional(cfg$go_enrichment_manifest_tsv)
 kegg_manifest <- read_tsv_optional(cfg$kegg_enrichment_manifest_tsv)
+enrichment_targets <- read_tsv_optional(cfg$enrichment_targets_sheet)
 all_manifest <- dplyr::bind_rows(go_manifest, kegg_manifest)
 if (nrow(all_manifest) == 0) {
   all_manifest <- empty_enrichment_manifest_06()
@@ -141,6 +142,11 @@ low_mapping <- all_manifest[
 no_significant <- summary_df[suppressWarnings(as.numeric(summary_df$total_significant_n)) == 0, , drop = FALSE]
 status_summary <- if ("status" %in% colnames(all_manifest)) as.data.frame(table(all_manifest$status), stringsAsFactors = FALSE) else data.frame(stringsAsFactors = FALSE)
 colnames(status_summary) <- if (ncol(status_summary) == 2) c("status", "row_n") else colnames(status_summary)
+usage_summary <- if (nrow(enrichment_targets) > 0 && all(c("enrichment_usage", "comparison_id") %in% colnames(enrichment_targets))) {
+  enrichment_targets %>% dplyr::count(enrichment_usage, name = "target_n")
+} else {
+  empty_df_05(c("enrichment_usage", "target_n"))
+}
 
 deg_status_matrix <- read_tsv_optional(deg_report_paths_05(cfg)$status_matrix_tsv)
 exploratory_rows <- deg_status_matrix
@@ -170,6 +176,9 @@ report_lines <- c(
   "",
   "## Status Summary",
   render_markdown_table_local(status_summary),
+  "",
+  "## Enrichment Usage Targets",
+  render_markdown_table_local(usage_summary),
   "",
   "## Cluster Summary",
   render_markdown_table_local(head(summary_df, 100)),

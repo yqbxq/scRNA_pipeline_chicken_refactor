@@ -131,7 +131,7 @@ for (idx in seq_len(nrow(layer_status_df))) {
     cmp_paths <- composition_paths_05(cfg, layer_id, vars$comparison_id)
     subset_result <- subset_cells_for_comparison(obj, vars)
 
-    if (!identical(vars$analysis_mode, "composition")) {
+    if (!vars$analysis_mode %in% c("composition", "qc_composition")) {
       write_tsv_local(empty_gate_summary_05(), cmp_paths$gate_summary_tsv)
       write_tsv_local(
         data.frame(
@@ -140,7 +140,7 @@ for (idx in seq_len(nrow(layer_status_df))) {
           analysis_mode = vars$analysis_mode,
           composition_group_var = vars$composition_group_var,
           inference_status = "skipped_non_composition",
-          reason = "05c composition is only run for composition rows",
+          reason = "05c composition is only run for composition or qc_composition rows",
           warning_banner = "",
           stringsAsFactors = FALSE
         ),
