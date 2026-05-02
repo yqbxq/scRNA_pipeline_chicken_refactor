@@ -61,7 +61,9 @@ for (col in c(
   "min_sender_cells", "min_receiver_cells", "min_cells_per_condition",
   "gate_status", "success", "fallback_pair_id", "fallback_used_in_report",
   "result_copied", "reason", "sender_set", "receiver_set", "fallback_nichenet_rds_path",
-  "fallback_ligand_activity_tsv"
+  "fallback_ligand_activity_tsv", "receiver_gene_program_source",
+  "baseline_marker_comparison_id", "receiver_deg_comparison_id",
+  "gene_program_comparison_id", "deg_status", "formal_status", "result_level"
 )) {
   if (!col %in% colnames(nichenet_index)) nichenet_index[[col]] <- character(nrow(nichenet_index))
 }
@@ -163,6 +165,19 @@ gate_summary <- dplyr::bind_rows(
 skipped_low_cells <- gate_summary[
   gate_summary$status == "skipped_low_cells" | gate_summary$gate_status == "fail",
   ,
+  drop = FALSE
+]
+missing_receiver_gene_programs <- nichenet_index[
+  nichenet_index$status == "missing_gene_program",
+  intersect(
+    c(
+      "pair_id", "layer_id", "condition_value",
+      "receiver_gene_program_source", "baseline_marker_comparison_id",
+      "receiver_deg_comparison_id", "gene_program_comparison_id",
+      "deg_status", "reason", "formal_status", "result_level"
+    ),
+    colnames(nichenet_index)
+  ),
   drop = FALSE
 ]
 fallback_summary <- gate_summary[
@@ -575,6 +590,17 @@ report_lines <- c(
   "",
   "## Skipped Low Cells",
   if (nrow(skipped_low_cells) == 0) "No min-cell gate failures." else render_markdown_table_local(skipped_low_cells),
+  "",
+  "## Missing Receiver Gene Programs",
+  if (nrow(missing_receiver_gene_programs) == 0) {
+    "No NicheNet task was skipped because of a missing receiver gene program."
+  } else {
+    c(
+      "These NicheNet tasks did not run because `gene_program_registry.tsv` did not provide a qualified receiver gene program. This is not evidence of absent communication.",
+      "",
+      render_markdown_table_local(missing_receiver_gene_programs)
+    )
+  },
   "",
   "## Fallback Baseline",
   if (nrow(fallback_summary) == 0) "No split task used fallback baseline." else render_markdown_table_local(fallback_summary),
