@@ -15,10 +15,12 @@ MODULE_08B_MANIFEST="${MANIFEST_DIR}/08b_scenic_grn/_manifest.json"
 MODULE_08C_MANIFEST="${MANIFEST_DIR}/08c_scenic_regulons/_manifest.json"
 MODULE_08D_MANIFEST="${MANIFEST_DIR}/08d_scenic_downstream/_manifest.json"
 MODULE_08E_MANIFEST="${MANIFEST_DIR}/08e_decoupler/_manifest.json"
+MODULE_08F_MANIFEST="${MANIFEST_DIR}/08f_regulation_eda/_manifest.json"
 
 RUN_SCENIC="${RUN_SCENIC:-yes}"
 RUN_SCENIC_GRN="${RUN_SCENIC_GRN:-yes}"
 RUN_DECOUPLER="${RUN_DECOUPLER:-yes}"
+RUN_REGULATION_EDA="${RUN_REGULATION_EDA:-yes}"
 
 download_if_missing_08() {
   local url="$1"
@@ -145,11 +147,13 @@ fi
 REGULATION_RERAN=0
 REGULATION_SCENIC_INDEX=""
 REGULATION_DECOUPLER_INDEX=""
+REGULATION_REPORT=""
 STATUS_08A="skipped_by_config"
 STATUS_08B="skipped_by_config"
 STATUS_08C="skipped_by_config"
 STATUS_08D="skipped_by_config"
 STATUS_08E="skipped_by_config"
+STATUS_08F="skipped_by_config"
 
 run_reg_r_main_if_stale() {
   local script_path="$1"
@@ -265,24 +269,52 @@ if [[ "${RUN_DECOUPLER}" == "yes" ]]; then
   STATUS_08E="completed"
 fi
 
+if [[ "${RUN_REGULATION_EDA}" == "yes" ]]; then
+  REGULATION_EDA_DEPS=()
+  for dep_path in \
+    "${MODULE_08A_MANIFEST}" \
+    "${MODULE_08B_MANIFEST}" \
+    "${MODULE_08C_MANIFEST}" \
+    "${MODULE_08D_MANIFEST}" \
+    "${MODULE_08E_MANIFEST}" \
+    "${MANIFEST_DIR}/05d_deg_eda/_manifest.json" \
+    "${MANIFEST_DIR}/06c_enrichment_eda/_manifest.json" \
+    "${MANIFEST_DIR}/07c_communication_eda/_manifest.json"; do
+    if [[ -e "${dep_path}" ]]; then
+      REGULATION_EDA_DEPS+=("${dep_path}")
+    fi
+  done
+  run_reg_r_main_if_stale \
+    "${WORKFLOW_ROOT}/05single_script/08f_regulation_eda.R" \
+    "${MODULE_08F_MANIFEST}" \
+    "${REGULATION_EDA_DEPS[@]}"
+  REGULATION_REPORT="$(require_manifest_output "${MODULE_08F_MANIFEST}" "report_md")"
+  if [[ "${STATUS_08D}" == "completed" && "${STATUS_08E}" == "completed" ]]; then
+    STATUS_08F="completed"
+  else
+    STATUS_08F="completed_partial"
+  fi
+fi
+
 if [[ "${REGULATION_RERAN}" == "1" ]]; then
   set_eda_gate_status \
     "regulation" \
     "pending" \
     "" \
-    "08 regulation modules updated; review SCENIC index ${REGULATION_SCENIC_INDEX:-NA} and decoupleR index ${REGULATION_DECOUPLER_INDEX:-NA}."
+    "08 regulation modules updated; review report ${REGULATION_REPORT:-NA}, SCENIC index ${REGULATION_SCENIC_INDEX:-NA}, and decoupleR index ${REGULATION_DECOUPLER_INDEX:-NA}."
 fi
 
 sync_workflow_gate_statuses
 update_workflow_status \
-  "08_regulation_activity_completed" \
-  "review SCENIC index ${REGULATION_SCENIC_INDEX:-NA} and decoupleR index ${REGULATION_DECOUPLER_INDEX:-NA}; next v08 work: regulation EDA summary" \
+  "08_regulation_completed" \
+  "review ${REGULATION_REPORT:-NA}" \
   "status.08a_scenic_export_status=${STATUS_08A}" \
   "status.08b_scenic_grn_status=${STATUS_08B}" \
   "status.08c_scenic_regulons_status=${STATUS_08C}" \
   "status.08d_scenic_downstream_status=${STATUS_08D}" \
   "status.08e_decoupler_status=${STATUS_08E}" \
+  "status.08f_regulation_eda_status=${STATUS_08F}" \
   "status.08_regulation_scenic_completed=$([[ "${STATUS_08D}" == "completed" ]] && echo true || echo false)" \
   "status.08_regulation_decoupler_completed=$([[ "${STATUS_08E}" == "completed" ]] && echo true || echo false)" \
-  "status.08_regulation_completed=false" \
+  "status.08_regulation_completed=$([[ "${STATUS_08F}" == completed* ]] && echo true || echo false)" \
   "status.regulation_gate_passed=$(eda_gate_passed regulation && echo true || echo false)"
