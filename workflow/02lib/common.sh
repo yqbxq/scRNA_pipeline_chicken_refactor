@@ -255,7 +255,11 @@ warn() {
 }
 
 ensure_dir() {
-  mkdir -p "$@"
+  local path
+  for path in "$@"; do
+    [[ -n "${path}" ]] || continue
+    mkdir -p "${path}"
+  done
 }
 
 ensure_eda_control_files() {
