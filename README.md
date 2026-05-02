@@ -228,6 +228,7 @@ Tier 2 表为自动生成文件，不应手工编辑。后续新增 ST 或联合
     - `r_main`
     - `r_legacy`
     - `r_scenic`
+    - `r_decoupler`
     - `velocity`
     - `pyscenic`
   - 并下载 SCENIC 资源
@@ -371,18 +372,34 @@ gate 规则采用 Option B：
   - 先准备参考对象
   - 再跑 `scVelo`
 
-### 5.15 SCENIC
+### 5.15 Regulation / SCENIC / decoupleR
 
 - `workflow/03stages/00_ortholog.sh`
   - 构建同源映射缓存
 
 - `workflow/03stages/08_regulation.sh`
-  - 下载或检查 SCENIC 资源
+  - `08a-08d`：SCENIC export、pySCENIC GRN、regulon/AUCell、RSS/CSI 下游
+  - `08e`：decoupleR TF activity 和 pathway activity
+  - `08f`：综合调控 EDA 报告，允许 SCENIC-only 或 decoupleR-only partial report
 
-- `workflow/03stages/08_regulation.sh`
-  - 导出同源基因表达矩阵
-  - 跑 pySCENIC
-  - 跑 RSS / CSI 下游
+SCENIC 和 decoupleR 是互补证据，不是完全等价的方法。SCENIC 把 chicken expression matrix 映射到 human symbol 后使用 human cisTarget/motif 资源；decoupleR 则把 human DoRothEA/PROGENy prior network 映射到 chicken symbol，表达矩阵保留 chicken gene。08 的 TF/pathway 活性不能替代 05 DEG、06 enrichment 或 07 communication。
+
+推荐先跑 panorama：
+
+```bash
+REGULATION_LAYERS=panorama bash workflow/03stages/08_regulation.sh
+```
+
+扩展到子层时显式指定：
+
+```bash
+REGULATION_LAYERS=panorama,GC_subcluster bash workflow/03stages/08_regulation.sh
+```
+
+详细 schema 见：
+
+- `docs/module_08_regulation.md`
+- `docs/regulation_schema.md`
 
 ## 6. 当你拿到原始数据后，实际怎么跑
 

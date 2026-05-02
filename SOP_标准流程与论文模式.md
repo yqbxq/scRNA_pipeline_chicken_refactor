@@ -45,6 +45,7 @@
 - 服务器环境拆分完成
   - `r_main`
   - `r_scenic`
+  - `r_decoupler`
   - `velocity`
   - `pyscenic`
 - 主流程可运行
@@ -65,6 +66,10 @@
   - `AUCell`
   - `RSS`
   - `CSI`
+- decoupleR 已进入 08 调控证据层
+  - DoRothEA TF activity
+  - PROGENy pathway activity
+  - SCENIC/decoupleR partial report
 - 轨迹推断已经固定为**双输出**
   - 粗粒度：`cell_type`
   - 细粒度：`seurat_clusters`
@@ -272,7 +277,7 @@
 - `ortholog_coverage.txt`
 - `ortholog_key_gene_hits.csv`
 
-### 5.6 SCENIC
+### 5.6 Regulation / SCENIC / decoupleR
 
 入口：
 
@@ -286,7 +291,29 @@
 4. 运行 `pySCENIC grnboost2`
 5. 运行 regulon / AUCell
 6. 运行 `RSS / CSI`
-7. 输出 `Figure 6A-6D`
+7. 运行 decoupleR TF activity / pathway activity
+8. 输出 `Figure 6A-6D` 和 `reports/eda/regulation/report.md`
+
+关键原则：
+
+- `08a-08d` 是 SCENIC。
+- `08e` 是 decoupleR。
+- `08f` 是综合报告层，只读取 08a-08e 与 05/06/07 已有 summary。
+- SCENIC 把 chicken expression matrix 映射到 human symbol。
+- decoupleR 把 human prior network 映射到 chicken symbol，表达矩阵保留 chicken gene。
+- 08 是调控证据，不能替代 05 DEG、06 enrichment 或 07 communication。
+
+推荐先跑：
+
+```bash
+REGULATION_LAYERS=panorama bash workflow/03stages/08_regulation.sh
+```
+
+扩展子层：
+
+```bash
+REGULATION_LAYERS=panorama,GC_subcluster bash workflow/03stages/08_regulation.sh
+```
 
 ---
 
