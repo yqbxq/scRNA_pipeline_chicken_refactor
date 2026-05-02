@@ -21,6 +21,7 @@ get_single_script_config_03 <- function() {
   base$module_00c_manifest_path <- base$ortholog_manifest_path
   base$object_layer_config_file <- env_or_default_03("OBJECT_LAYER_CONFIG_FILE", file.path(base$config_dir, "object_layers.tsv"))
   base$comparison_sheet <- env_or_default_03("COMPARISON_SHEET", file.path(base$metadata_dir, "comparisons.tsv"))
+  base$annotation_marker_targets_sheet <- env_or_default_03("ANNOTATION_MARKER_TARGETS_SHEET", file.path(base$metadata_dir, "annotation_marker_targets.tsv"))
   base$marker_panel_dir <- env_or_default_03("MARKER_PANEL_DIR", file.path(base$config_dir, "marker_panels"))
 
   base$module_03a1_manifest_path <- file.path(base$manifest_dir, "03a1_normalize_hvg", "_manifest.json")

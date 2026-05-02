@@ -606,9 +606,12 @@ read_gene_program_registry_07 <- function(cfg) {
   registry <- read_tsv_optional(registry_path)
   expected <- c(
     "comparison_id", "source_question_id", "layer_id", "analysis_mode",
-    "gene_program_role", "result_level", "preferred_for_downstream",
-    "formal_status", "deg_tsv", "marker_tsv", "top_gene_tsv",
-    "n_significant", "warning"
+    "gene_program_role", "produces_gene_program", "annotation_only", "qc_only",
+    "global_context_only", "nichenet_eligible", "nichenet_usage",
+    "enrichment_eligible", "enrichment_usage", "result_level",
+    "preferred_for_downstream", "formal_status", "result_status",
+    "deg_tsv", "marker_tsv", "top_gene_tsv", "n_significant",
+    "warning", "ineligible_reason"
   )
   for (col in expected) {
     if (!col %in% colnames(registry)) {
@@ -635,7 +638,10 @@ gene_program_path_for_registry_row_07 <- function(row, preferred = c("top", "for
   list(path = "", source_col = "")
 }
 
-read_gene_program_by_comparison_id_07 <- function(cfg, layer_id, comparison_id, preferred = "top") {
+read_gene_program_by_comparison_id_07 <- function(cfg, layer_id, comparison_id, preferred = "top",
+                                                  expected_analysis_mode = "",
+                                                  expected_gene_program_role = "",
+                                                  expected_nichenet_usage = "") {
   comparison_id <- normalize_scalar_value(comparison_id)
   if (!nzchar(comparison_id)) {
     return(empty_gene_program_07(status = "missing_comparison_id", reason = "empty comparison_id"))
@@ -661,6 +667,38 @@ read_gene_program_by_comparison_id_07 <- function(cfg, layer_id, comparison_id, 
     hit <- exact
   }
   row <- hit[1, , drop = FALSE]
+  actual_mode <- normalize_scalar_value(row$analysis_mode[[1]])
+  actual_role <- normalize_scalar_value(row$gene_program_role[[1]])
+  actual_usage <- normalize_scalar_value(row$nichenet_usage[[1]], "none")
+  nichenet_eligible <- normalize_scalar_value(row$nichenet_eligible[[1]], "no")
+  if (nzchar(expected_analysis_mode) && !identical(actual_mode, expected_analysis_mode)) {
+    return(empty_gene_program_07(
+      source = sprintf("gene_program_registry:%s", comparison_id),
+      status = "invalid_gene_program_analysis_mode",
+      reason = sprintf("expected analysis_mode=%s but registry has %s", expected_analysis_mode, actual_mode)
+    ))
+  }
+  if (nzchar(expected_gene_program_role) && !identical(actual_role, expected_gene_program_role)) {
+    return(empty_gene_program_07(
+      source = sprintf("gene_program_registry:%s", comparison_id),
+      status = "invalid_gene_program_role",
+      reason = sprintf("expected gene_program_role=%s but registry has %s", expected_gene_program_role, actual_role)
+    ))
+  }
+  if (!identical(nichenet_eligible, "yes")) {
+    return(empty_gene_program_07(
+      source = sprintf("gene_program_registry:%s", comparison_id),
+      status = "nichenet_ineligible_gene_program",
+      reason = sprintf("registry nichenet_eligible=%s; %s", nichenet_eligible, normalize_scalar_value(row$ineligible_reason[[1]]))
+    ))
+  }
+  if (nzchar(expected_nichenet_usage) && !identical(actual_usage, expected_nichenet_usage)) {
+    return(empty_gene_program_07(
+      source = sprintf("gene_program_registry:%s", comparison_id),
+      status = "invalid_nichenet_usage",
+      reason = sprintf("expected nichenet_usage=%s but registry has %s", expected_nichenet_usage, actual_usage)
+    ))
+  }
   path_info <- gene_program_path_for_registry_row_07(row, preferred = preferred)
   if (!nzchar(path_info$path)) {
     return(empty_gene_program_07(
@@ -709,7 +747,11 @@ read_gene_program_for_nichenet_07 <- function(
   } else if (identical(source_kind, "receiver_marker")) {
     split_csv_local(baseline_marker_comparison_id)
   } else {
-    unique(c(split_csv_local(receiver_deg_comparison_id), split_csv_local(baseline_marker_comparison_id)))
+    return(empty_gene_program_07(
+      source = sprintf("communication_pairs:%s", source_kind),
+      status = "unsupported_receiver_gene_program_source",
+      reason = sprintf("receiver_gene_program_source must be condition_deg, receiver_marker, or none; got %s", source_kind)
+    ))
   }
   ids <- ids[nzchar(ids)]
   if (length(ids) == 0) {
@@ -721,7 +763,20 @@ read_gene_program_for_nichenet_07 <- function(
   }
 
   preferred <- if (identical(source_kind, "condition_deg")) "formal" else "marker"
-  programs <- lapply(ids, function(id) read_gene_program_by_comparison_id_07(cfg, layer_id, id, preferred = preferred))
+  expected_mode <- if (identical(source_kind, "condition_deg")) "condition_within_type" else "subtype_marker"
+  expected_role <- if (identical(source_kind, "condition_deg")) "condition_deg" else "receiver_marker"
+  expected_usage <- if (identical(source_kind, "condition_deg")) "receiver_condition_deg" else "baseline_receiver_marker"
+  programs <- lapply(ids, function(id) {
+    read_gene_program_by_comparison_id_07(
+      cfg,
+      layer_id,
+      id,
+      preferred = preferred,
+      expected_analysis_mode = expected_mode,
+      expected_gene_program_role = expected_role,
+      expected_nichenet_usage = expected_usage
+    )
+  })
   genes <- unique(unlist(lapply(programs, `[[`, "genes"), use.names = FALSE))
   tables <- lapply(programs, `[[`, "table")
   tables <- tables[vapply(tables, nrow, integer(1)) > 0]

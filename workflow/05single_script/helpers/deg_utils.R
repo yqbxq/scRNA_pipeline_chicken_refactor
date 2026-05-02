@@ -150,17 +150,33 @@ read_deg_comparison_sheet <- function(cfg) {
   df$group_var[!nzchar(df$group_var)] <- "group_id"
   df$batch_var[!nzchar(df$batch_var)] <- "batch"
   df$layer_scope[!nzchar(df$layer_scope)] <- "*"
-  df$analysis_mode[!nzchar(df$analysis_mode)] <- ifelse(df$contrast_axis %in% "composition", "composition", "subtype_pairwise")
-  df$analysis_unit[!nzchar(df$analysis_unit)] <- ifelse(df$analysis_mode == "composition", "sample_level", "whole_layer")
+  df$analysis_mode[!nzchar(df$analysis_mode)] <- ifelse(
+    df$contrast_axis %in% c("composition"), "composition",
+    ifelse(df$contrast_axis %in% c("qc_composition"), "qc_composition",
+      ifelse(df$contrast_axis %in% c("global_stage_context"), "global_context",
+        ifelse(df$contrast_axis %in% c("identity_marker", "cluster_marker"), "subtype_marker", "subtype_pairwise")
+      )
+    )
+  )
+  df$analysis_unit[!nzchar(df$analysis_unit)] <- ifelse(df$analysis_mode %in% c("composition", "qc_composition"), "sample_level", "whole_layer")
   df$stat_level[!nzchar(df$stat_level)] <- ifelse(
-    df$analysis_mode == "condition_within_type",
+    df$analysis_mode %in% c("condition_within_type", "global_context"),
     "pseudobulk_formal_if_replicates",
-    ifelse(df$analysis_mode == "composition", "composition_formal_if_replicates", "cell_level_exploratory")
+    ifelse(df$analysis_mode %in% c("composition", "qc_composition"), "composition_formal_if_replicates", "cell_level_exploratory")
   )
   df$aggregation_group_var[is.na(df$aggregation_group_var)] <- ""
   df$composition_group_var[is.na(df$composition_group_var)] <- ""
   df$produces_gene_program <- normalize_flag(df$produces_gene_program, "yes")
-  df$gene_program_role[!nzchar(df$gene_program_role)] <- ifelse(df$analysis_mode == "composition", "none", "subtype_pairwise_deg")
+  df$gene_program_role[!nzchar(df$gene_program_role)] <- ifelse(
+    df$analysis_mode == "composition", "none",
+    ifelse(df$analysis_mode == "qc_composition", "qc_only",
+      ifelse(df$analysis_mode == "global_context", "global_context",
+        ifelse(df$analysis_mode == "condition_within_type", "condition_deg",
+          ifelse(df$analysis_mode == "subtype_marker", "receiver_marker", "subtype_pairwise_deg")
+        )
+      )
+    )
+  )
   df$force_exploratory <- normalize_flag(df$force_exploratory, "no")
   df$min_biological_replicates <- suppressWarnings(as.integer(df$min_biological_replicates))
   df$min_biological_replicates[is.na(df$min_biological_replicates)] <- cfg$min_biological_replicates
@@ -307,6 +323,58 @@ prepare_comparison_group_05 <- function(seu, vars) {
   values <- ifelse(as.character(meta[[group_var]]) == vars$ident_1, vars$ident_1, "__rest__")
   seu[[rest_col]] <- values
   list(object = seu, group_var = rest_col)
+}
+
+run_exploratory_findmarkers_05 <- function(seu, vars, cluster_id = "", annotation_label = "") {
+  prepared <- prepare_comparison_group_05(seu, vars)
+  obj <- maybe_join_layers(prepared$object)
+  group_var <- prepared$group_var
+  meta <- obj@meta.data
+  groups <- as.character(meta[[group_var]])
+  n1 <- sum(groups == vars$ident_1, na.rm = TRUE)
+  n2 <- sum(groups == vars$ident_2, na.rm = TRUE)
+  if (n1 < vars$min_cells_per_group || n2 < vars$min_cells_per_group) {
+    return(list(
+      result = NULL,
+      status = "too_few_cells",
+      reason = sprintf("min_cells_per_group=%s; %s=%s; %s=%s", vars$min_cells_per_group, vars$ident_1, n1, vars$ident_2, n2),
+      n1 = n1,
+      n2 = n2
+    ))
+  }
+
+  Seurat::Idents(obj) <- group_var
+  res <- tryCatch(
+    Seurat::FindMarkers(
+      obj,
+      ident.1 = vars$ident_1,
+      ident.2 = vars$ident_2,
+      logfc.threshold = vars$logfc_threshold,
+      test.use = "wilcox",
+      verbose = FALSE
+    ),
+    error = function(e) {
+      attr(e, "deg_status") <- "findmarkers_error"
+      e
+    }
+  )
+  if (inherits(res, "error")) {
+    return(list(result = NULL, status = "findmarkers_error", reason = conditionMessage(res), n1 = n1, n2 = n2))
+  }
+  if (is.null(res) || nrow(res) == 0) {
+    return(list(result = NULL, status = "empty_result", reason = "FindMarkers returned 0 rows", n1 = n1, n2 = n2))
+  }
+  out <- tibble::rownames_to_column(as.data.frame(res), "gene")
+  out$cluster_id <- cluster_id
+  out$annotation_label <- annotation_label
+  out$comparison_id <- vars$comparison_id
+  out$analysis_mode <- vars$analysis_mode
+  out$analysis_unit <- vars$analysis_unit
+  out$gene_program_role <- vars$gene_program_role
+  out$inference_scope <- "cell_level_exploratory"
+  out$subset_column <- vars$subset_column
+  out$subset_value <- vars$subset_value
+  list(result = out, status = "ok", reason = "", n1 = n1, n2 = n2)
 }
 
 resolve_aggregation_group_var_05 <- function(seu, vars) {

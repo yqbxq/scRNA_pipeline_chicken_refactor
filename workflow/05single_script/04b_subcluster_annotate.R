@@ -107,6 +107,11 @@ for (clustered_key in clustered_keys) {
     layer_id = layer_id,
     tissue = if (length(tissue_values) == 1) tissue_values[[1]] else NULL
   )
+  annotation_target <- annotation_marker_target_for_layer(cfg, layer_id, layer_id)
+  target_cluster_col <- annotation_target_value(annotation_target, "cluster_column", cluster_col)
+  if (target_cluster_col %in% colnames(seu@meta.data)) {
+    cluster_col <- target_cluster_col
+  }
 
   table_dir <- layer_annotation_table_dir_04(cfg, layer_id)
   report_dir <- layer_annotation_report_dir_04(cfg, layer_id)
@@ -117,9 +122,10 @@ for (clustered_key in clustered_keys) {
 
   paths_module <- list(
     cluster_var = cluster_col,
+    annotation_marker_target = annotation_target,
     table_dir = table_dir,
     figure_dir = report_dir,
-    cluster_markers_tsv = file.path(table_dir, sprintf("cluster_markers_%s.tsv", layer_id)),
+    cluster_markers_tsv = file.path(table_dir, sprintf("annotation_cluster_markers_%s.tsv", layer_id)),
     annotation_table_tsv = file.path(table_dir, sprintf("annotation_table_%s.tsv", layer_id)),
     annotation_evidence_tsv = file.path(table_dir, sprintf("annotation_evidence_%s.tsv", layer_id)),
     module_score_summary_tsv = file.path(table_dir, sprintf("module_score_summary_%s.tsv", layer_id)),
@@ -200,6 +206,7 @@ for (clustered_key in clustered_keys) {
   )
 
   output_entries[[paste0("annotated_", layer_id)]] <- build_output_entry(annotated_rds, "rds", module_name, sprintf("annotated subcluster layer %s", layer_id), base_dir = cfg$project_root)
+  output_entries[[paste0("annotation_cluster_markers_tsv_", layer_id)]] <- build_output_entry(paths_module$cluster_markers_tsv, "tsv", module_name, sprintf("raw cluster marker evidence for annotation-only layer %s", layer_id), base_dir = cfg$project_root, schema = infer_schema_from_df(result$marker_table))
   output_entries[[paste0("annotation_table_tsv_", layer_id)]] <- build_output_entry(paths_module$annotation_table_tsv, "tsv", module_name, sprintf("annotation table for %s", layer_id), base_dir = cfg$project_root, schema = infer_schema_from_df(annotation_table))
   output_entries[[paste0("annotation_evidence_tsv_", layer_id)]] <- build_output_entry(paths_module$annotation_evidence_tsv, "tsv", module_name, sprintf("annotation evidence for %s", layer_id), base_dir = cfg$project_root, schema = infer_schema_from_df(evidence_table))
   output_entries[[paste0("module_score_summary_tsv_", layer_id)]] <- build_output_entry(paths_module$module_score_summary_tsv, "tsv", module_name, sprintf("module score summary for %s", layer_id), base_dir = cfg$project_root, schema = infer_schema_from_df(result$module_score_summary))
@@ -238,6 +245,7 @@ write_manifest_local(
   inputs = list(
     module_04a_manifest = cfg$module_04a_manifest_path,
     module_03d_manifest = cfg$module_03d_manifest_path,
+    annotation_marker_targets_tsv = cfg$annotation_marker_targets_sheet,
     marker_panel_dir = cfg$marker_panel_dir,
     layer_status_tsv = cfg$layer_status_file
   ),

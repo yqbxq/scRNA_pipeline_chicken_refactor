@@ -102,8 +102,10 @@ for (idx in seq_len(nrow(layer_status_df))) {
     summary_rows <- list()
     inference_status <- if (vars$force_exploratory) "exploratory_forced" else "exploratory_cell_level"
 
-    if (identical(vars$analysis_mode, "composition")) {
+    if (!vars$analysis_mode %in% c("subtype_marker", "subtype_pairwise")) {
       write_tsv_local(empty_marker_result_05(), out_paths$exploratory_tsv)
+      skip_status <- "skipped_non_marker_discovery"
+      skip_reason <- "05a runs only post-annotation subtype_marker/subtype_pairwise rows; annotation_cluster_marker is produced by 03/04, condition/global DEG by 05b, and composition/QC by 05c"
       summary_rows[[1]] <- data.frame(
         comparison_id = vars$comparison_id,
         layer_id = layer_id,
@@ -115,8 +117,8 @@ for (idx in seq_len(nrow(layer_status_df))) {
         ident_2_n = NA_integer_,
         min_cells_per_group = vars$min_cells_per_group,
         result_available = "no",
-        status = "skipped_composition",
-        reason = "composition rows are handled by 05c",
+        status = skip_status,
+        reason = skip_reason,
         stringsAsFactors = FALSE
       )
       write_tsv_local(dplyr::bind_rows(summary_rows), out_paths$exploratory_summary_tsv)
@@ -133,7 +135,7 @@ for (idx in seq_len(nrow(layer_status_df))) {
         min_cells_per_group = vars$min_cells_per_group,
         logfc_threshold = vars$logfc_threshold,
         inference_status = "skipped",
-        status = "skipped_composition",
+        status = skip_status,
         exploratory_results_tsv = normalizePath(out_paths$exploratory_tsv, winslash = "/", mustWork = FALSE),
         exploratory_summary_tsv = normalizePath(out_paths$exploratory_summary_tsv, winslash = "/", mustWork = FALSE),
         stringsAsFactors = FALSE

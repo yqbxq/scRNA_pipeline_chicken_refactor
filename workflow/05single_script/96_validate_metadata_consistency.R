@@ -122,11 +122,14 @@ allowed_priorities <- c("P0", "P1", "P2", "P3")
 allowed_status <- c("active", "planned")
 allowed_activation_policy <- c("always", "auto_if_min_cells", "derived_from_split")
 axis_targets <- c(
-  cluster_marker = "comparisons.tsv",
+  cluster_marker = "annotation_marker_targets.tsv",
+  identity_marker = "comparisons.tsv",
   directional_DEG = "comparisons.tsv",
   pairwise = "comparisons.tsv",
   contrast_only = "comparisons.tsv",
+  global_stage_context = "comparisons.tsv",
   composition = "comparisons.tsv",
+  qc_composition = "comparisons.tsv",
   bidirectional = "communication_pairs.tsv",
   directional = "communication_pairs.tsv",
   sequential = "communication_pairs.tsv",
@@ -148,11 +151,14 @@ axis_targets <- c(
 )
 
 axis_tool_allow <- list(
-  cluster_marker = c("deg", "enrichment"),
+  cluster_marker = c("annotation", "deg", "enrichment"),
+  identity_marker = c("deg", "enrichment"),
   directional_DEG = c("deg", "enrichment"),
   pairwise = c("deg", "enrichment"),
   contrast_only = c("deg", "enrichment"),
+  global_stage_context = c("deg", "enrichment"),
   composition = c("composition_test"),
+  qc_composition = c("composition_qc", "composition_test"),
   bidirectional = c("cellchat", "nichenet"),
   directional = c("cellchat", "nichenet"),
   sequential = c("cellchat", "nichenet"),
@@ -569,6 +575,7 @@ if (nrow(questions) > 0 && length(missing_cols) == 0) {
 
 generated_tables <- list(
   comparisons = list(path = file.path(metadata_dir, "comparisons.tsv"), id = "comparison_id"),
+  annotation_marker_targets = list(path = file.path(metadata_dir, "annotation_marker_targets.tsv"), id = "target_id"),
   communication_pairs = list(path = file.path(metadata_dir, "communication_pairs.tsv"), id = "pair_id"),
   trajectory_pairs = list(path = file.path(metadata_dir, "trajectory_pairs.tsv"), id = "trajectory_id"),
   scenic_targets = list(path = file.path(metadata_dir, "scenic_targets.tsv"), id = "target_id"),
@@ -628,6 +635,48 @@ split_comm_tokens <- function(x) {
   unique(out)
 }
 
+allowed_analysis_modes <- c(
+  "annotation_cluster_marker", "subtype_marker", "subtype_pairwise",
+  "condition_within_type", "composition", "qc_composition", "global_context"
+)
+allowed_gene_program_roles <- c(
+  "annotation_marker", "receiver_marker", "subtype_pairwise_deg",
+  "condition_deg", "global_context", "qc_only", "none"
+)
+allowed_yes_no_contextual <- c("yes", "no", "contextual")
+allowed_nichenet_usage <- c("none", "baseline_receiver_marker", "receiver_condition_deg")
+allowed_enrichment_usage <- c(
+  "none", "identity_baseline_enrichment", "subtype_pairwise_enrichment",
+  "mechanism_enrichment", "global_context_enrichment"
+)
+
+if (!is.null(loaded_generated$annotation_marker_targets)) {
+  annotation_marker_targets <- loaded_generated$annotation_marker_targets
+  annotation_marker_schema <- c(
+    "target_id", "source_question_id", "layer_scope", "object_layer",
+    "cluster_column", "annotation_label_column", "group_var",
+    "ident_1", "ident_2", "analysis_mode", "gene_program_role",
+    "output_dir", "annotation_only", "enabled", "notes"
+  )
+  if (require_generated_cols("annotation_marker_targets.tsv", annotation_marker_targets, annotation_marker_schema) && nrow(annotation_marker_targets) > 0) {
+    bad_mode <- annotation_marker_targets[annotation_marker_targets$analysis_mode != "annotation_cluster_marker", , drop = FALSE]
+    bad_role <- annotation_marker_targets[annotation_marker_targets$gene_program_role != "annotation_marker", , drop = FALSE]
+    bad_flag <- annotation_marker_targets[tolower(annotation_marker_targets$annotation_only) != "yes", , drop = FALSE]
+    if (nrow(bad_mode) > 0) {
+      fail("tier2.annotation_marker_targets.analysis_mode", sprintf("annotation targets must use annotation_cluster_marker: %s", paste(bad_mode$target_id, collapse = ", ")))
+    }
+    if (nrow(bad_role) > 0) {
+      fail("tier2.annotation_marker_targets.gene_program_role", sprintf("annotation targets must use annotation_marker: %s", paste(bad_role$target_id, collapse = ", ")))
+    }
+    if (nrow(bad_flag) > 0) {
+      fail("tier2.annotation_marker_targets.annotation_only", sprintf("annotation targets must set annotation_only=yes: %s", paste(bad_flag$target_id, collapse = ", ")))
+    }
+    if (nrow(bad_mode) == 0 && nrow(bad_role) == 0 && nrow(bad_flag) == 0) {
+      pass("tier2.annotation_marker_targets.contract", "annotation marker targets are annotation-only 03/04 inputs")
+    }
+  }
+}
+
 if (!is.null(loaded_generated$comparisons)) {
   comparisons <- loaded_generated$comparisons
   comparison_schema <- c(
@@ -640,13 +689,20 @@ if (!is.null(loaded_generated$comparisons)) {
     "gene_program_role", "notes"
   )
   if (require_generated_cols("comparisons.tsv", comparisons, comparison_schema) && nrow(comparisons) > 0) {
-    allowed_modes <- c("annotation_cluster_marker", "subtype_marker", "subtype_pairwise", "condition_within_type", "composition")
-    bad_modes <- unique(comparisons$analysis_mode[!comparisons$analysis_mode %in% allowed_modes])
+    bad_modes <- unique(comparisons$analysis_mode[!comparisons$analysis_mode %in% allowed_analysis_modes])
     bad_modes <- bad_modes[nzchar(bad_modes)]
     if (length(bad_modes) > 0) {
       fail("tier2.comparisons.analysis_mode", sprintf("unsupported analysis_mode values: %s", paste(bad_modes, collapse = ", ")))
     } else {
       pass("tier2.comparisons.analysis_mode", "analysis_mode values are valid")
+    }
+
+    bad_roles <- unique(comparisons$gene_program_role[!comparisons$gene_program_role %in% allowed_gene_program_roles])
+    bad_roles <- bad_roles[nzchar(bad_roles)]
+    if (length(bad_roles) > 0) {
+      fail("tier2.comparisons.gene_program_role", sprintf("unsupported gene_program_role values: %s", paste(bad_roles, collapse = ", ")))
+    } else {
+      pass("tier2.comparisons.gene_program_role", "gene_program_role values are valid")
     }
 
     rest_bad <- comparisons[
@@ -683,7 +739,7 @@ if (!is.null(loaded_generated$comparisons)) {
     }
 
     composition_bad <- comparisons[
-      comparisons$analysis_mode == "composition" &
+      comparisons$analysis_mode %in% c("composition", "qc_composition") &
         (!nzchar(comparisons$composition_group_var) | comparisons$produces_gene_program == "yes"),
       ,
       drop = FALSE
@@ -691,11 +747,34 @@ if (!is.null(loaded_generated$comparisons)) {
     if (nrow(composition_bad) > 0) {
       fail(
         "tier2.comparisons.composition_mode",
-        sprintf("composition rows missing composition_group_var or producing gene programs: %s", paste(composition_bad$comparison_id, collapse = ", ")),
-        fix = "composition rows must set composition_group_var and produces_gene_program=no."
+        sprintf("composition/qc_composition rows missing composition_group_var or producing gene programs: %s", paste(composition_bad$comparison_id, collapse = ", ")),
+        fix = "composition and qc_composition rows must set composition_group_var and produces_gene_program=no."
       )
     } else {
-      pass("tier2.comparisons.composition_mode", "composition rows are sample-level targets, not gene programs")
+      pass("tier2.comparisons.composition_mode", "composition and qc_composition rows are sample-level targets, not gene programs")
+    }
+
+    qc_bad <- comparisons[
+      comparisons$analysis_mode == "qc_composition" &
+        (comparisons$gene_program_role != "qc_only" | comparisons$produces_gene_program == "yes"),
+      ,
+      drop = FALSE
+    ]
+    if (nrow(qc_bad) > 0) {
+      fail("tier2.comparisons.qc_composition", sprintf("qc_composition rows must be qc_only and produce no gene program: %s", paste(qc_bad$comparison_id, collapse = ", ")))
+    } else {
+      pass("tier2.comparisons.qc_composition", "qc_composition rows are qc_only")
+    }
+
+    global_bad <- comparisons[
+      comparisons$analysis_mode == "global_context" & comparisons$gene_program_role != "global_context",
+      ,
+      drop = FALSE
+    ]
+    if (nrow(global_bad) > 0) {
+      fail("tier2.comparisons.global_context", sprintf("global_context rows must use gene_program_role=global_context: %s", paste(global_bad$comparison_id, collapse = ", ")))
+    } else {
+      pass("tier2.comparisons.global_context", "global_context rows use global_context role")
     }
 
     if (exists("scope_meta")) {
@@ -730,6 +809,120 @@ if (!is.null(loaded_generated$comparisons)) {
           }
         }
       }
+    }
+  }
+}
+
+if (!is.null(loaded_generated$gene_program_targets)) {
+  gene_program_targets <- loaded_generated$gene_program_targets
+  gene_program_schema <- c(
+    "comparison_id", "source_question_id", "layer_scope", "analysis_mode",
+    "gene_program_role", "produces_gene_program", "annotation_only", "qc_only",
+    "global_context_only", "nichenet_eligible", "nichenet_usage",
+    "enrichment_eligible", "enrichment_usage", "preferred_for_downstream",
+    "expected_result_level", "formal_preferred", "formal_status",
+    "result_status", "skip_reason", "eligible_reason", "ineligible_reason",
+    "notes"
+  )
+  if (require_generated_cols("gene_program_targets.tsv", gene_program_targets, gene_program_schema) && nrow(gene_program_targets) > 0) {
+    gp_fail_n <- 0L
+    bad_modes <- unique(gene_program_targets$analysis_mode[!gene_program_targets$analysis_mode %in% allowed_analysis_modes])
+    bad_modes <- bad_modes[nzchar(bad_modes)]
+    if (length(bad_modes) > 0) {
+      fail("tier2.gene_program_targets.analysis_mode", sprintf("unsupported analysis_mode values: %s", paste(bad_modes, collapse = ", ")))
+      gp_fail_n <- gp_fail_n + length(bad_modes)
+    }
+    bad_roles <- unique(gene_program_targets$gene_program_role[!gene_program_targets$gene_program_role %in% allowed_gene_program_roles])
+    bad_roles <- bad_roles[nzchar(bad_roles)]
+    if (length(bad_roles) > 0) {
+      fail("tier2.gene_program_targets.gene_program_role", sprintf("unsupported gene_program_role values: %s", paste(bad_roles, collapse = ", ")))
+      gp_fail_n <- gp_fail_n + length(bad_roles)
+    }
+    bad_nichenet <- unique(gene_program_targets$nichenet_eligible[!gene_program_targets$nichenet_eligible %in% c("yes", "no")])
+    bad_nichenet <- bad_nichenet[nzchar(bad_nichenet)]
+    if (length(bad_nichenet) > 0) {
+      fail("tier2.gene_program_targets.nichenet_eligible", sprintf("nichenet_eligible must be yes/no: %s", paste(bad_nichenet, collapse = ", ")))
+      gp_fail_n <- gp_fail_n + length(bad_nichenet)
+    }
+    bad_enrichment <- unique(gene_program_targets$enrichment_eligible[!gene_program_targets$enrichment_eligible %in% allowed_yes_no_contextual])
+    bad_enrichment <- bad_enrichment[nzchar(bad_enrichment)]
+    if (length(bad_enrichment) > 0) {
+      fail("tier2.gene_program_targets.enrichment_eligible", sprintf("enrichment_eligible must be yes/no/contextual: %s", paste(bad_enrichment, collapse = ", ")))
+      gp_fail_n <- gp_fail_n + length(bad_enrichment)
+    }
+    bad_usage <- gene_program_targets[
+      !gene_program_targets$nichenet_usage %in% allowed_nichenet_usage |
+        !gene_program_targets$enrichment_usage %in% allowed_enrichment_usage,
+      ,
+      drop = FALSE
+    ]
+    if (nrow(bad_usage) > 0) {
+      fail("tier2.gene_program_targets.usage", sprintf("unsupported nichenet/enrichment usage in: %s", paste(bad_usage$comparison_id, collapse = ", ")))
+      gp_fail_n <- gp_fail_n + nrow(bad_usage)
+    }
+    annotation_bad <- gene_program_targets[
+      gene_program_targets$analysis_mode == "annotation_cluster_marker" &
+        (gene_program_targets$gene_program_role != "annotation_marker" |
+           gene_program_targets$annotation_only != "yes" |
+           gene_program_targets$nichenet_eligible != "no" |
+           gene_program_targets$enrichment_eligible != "no"),
+      ,
+      drop = FALSE
+    ]
+    if (nrow(annotation_bad) > 0) {
+      fail("tier2.gene_program_targets.annotation_marker", sprintf("annotation_cluster_marker must be annotation_only and ineligible for NicheNet/mechanism enrichment: %s", paste(annotation_bad$comparison_id, collapse = ", ")))
+      gp_fail_n <- gp_fail_n + nrow(annotation_bad)
+    }
+    qc_bad <- gene_program_targets[
+      gene_program_targets$analysis_mode == "qc_composition" &
+        (gene_program_targets$produces_gene_program == "yes" |
+           gene_program_targets$gene_program_role != "qc_only" |
+           gene_program_targets$qc_only != "yes" |
+           gene_program_targets$nichenet_eligible != "no" |
+           gene_program_targets$enrichment_eligible != "no"),
+      ,
+      drop = FALSE
+    ]
+    if (nrow(qc_bad) > 0) {
+      fail("tier2.gene_program_targets.qc_composition", sprintf("qc_composition must be qc_only, no gene program, no NicheNet/enrichment: %s", paste(qc_bad$comparison_id, collapse = ", ")))
+      gp_fail_n <- gp_fail_n + nrow(qc_bad)
+    }
+    global_bad <- gene_program_targets[
+      gene_program_targets$analysis_mode == "global_context" &
+        (gene_program_targets$gene_program_role != "global_context" |
+           gene_program_targets$global_context_only != "yes" |
+           gene_program_targets$nichenet_eligible != "no"),
+      ,
+      drop = FALSE
+    ]
+    if (nrow(global_bad) > 0) {
+      fail("tier2.gene_program_targets.global_context", sprintf("global_context must be global_context_only and NicheNet-ineligible: %s", paste(global_bad$comparison_id, collapse = ", ")))
+      gp_fail_n <- gp_fail_n + nrow(global_bad)
+    }
+    e03_bad <- gene_program_targets[
+      gene_program_targets$source_question_id == "E03_layer_compo" &
+        (gene_program_targets$nichenet_eligible != "no" | gene_program_targets$enrichment_eligible != "no"),
+      ,
+      drop = FALSE
+    ]
+    if (nrow(e03_bad) > 0) {
+      fail("tier2.gene_program_targets.E03_qc_only", "E03 must not be NicheNet or enrichment eligible")
+      gp_fail_n <- gp_fail_n + nrow(e03_bad)
+    }
+    d05_bad <- gene_program_targets[
+      gene_program_targets$source_question_id == "D05_panorama_global_stage" &
+        (gene_program_targets$analysis_mode != "global_context" |
+           gene_program_targets$gene_program_role != "global_context" |
+           gene_program_targets$nichenet_eligible != "no"),
+      ,
+      drop = FALSE
+    ]
+    if (nrow(d05_bad) > 0) {
+      fail("tier2.gene_program_targets.D05_global_context", "D05 must be global_context and NicheNet-ineligible")
+      gp_fail_n <- gp_fail_n + nrow(d05_bad)
+    }
+    if (gp_fail_n == 0L) {
+      pass("tier2.gene_program_targets.contract", "gene program role and eligibility matrix is valid")
     }
   }
 }
@@ -838,6 +1031,13 @@ if (!is.null(loaded_generated$communication_pairs)) {
     }
 
     gene_targets <- loaded_generated$gene_program_targets
+    if (!is.null(gene_targets)) {
+      for (col in c("comparison_id", "analysis_mode", "gene_program_role", "nichenet_usage")) {
+        if (!col %in% colnames(gene_targets)) {
+          gene_targets[[col]] <- character(nrow(gene_targets))
+        }
+      }
+    }
     gene_target_ids <- if (!is.null(gene_targets) && "comparison_id" %in% colnames(gene_targets)) unique(gene_targets$comparison_id) else character(0)
     comparison_ids <- if (exists("comparisons") && "comparison_id" %in% colnames(comparisons)) unique(comparisons$comparison_id) else character(0)
     nichenet_requested <- tolower(communication_pairs$tool) %in% c("both", "nichenet", "nichenet_only")
@@ -863,6 +1063,20 @@ if (!is.null(loaded_generated$communication_pairs)) {
         fail("tier2.communication.baseline_marker_id", sprintf("%s baseline_marker_comparison_id not found in comparisons/gene_program_targets: %s", pair_id, paste(missing_baseline, collapse = ", ")))
         comm_fail_n <- comm_fail_n + length(missing_baseline)
       }
+      if (length(baseline_ids) > 0 && !is.null(gene_targets) && nrow(gene_targets) > 0) {
+        baseline_rows <- gene_targets[gene_targets$comparison_id %in% baseline_ids, , drop = FALSE]
+        bad_baseline <- baseline_rows[
+          baseline_rows$analysis_mode != "subtype_marker" |
+            baseline_rows$gene_program_role != "receiver_marker" |
+            baseline_rows$nichenet_usage != "baseline_receiver_marker",
+          ,
+          drop = FALSE
+        ]
+        if (nrow(bad_baseline) > 0) {
+          fail("tier2.communication.baseline_marker_role", sprintf("%s baseline_marker_comparison_id must point to subtype_marker + receiver_marker baseline usage: %s", pair_id, paste(bad_baseline$comparison_id, collapse = ", ")))
+          comm_fail_n <- comm_fail_n + nrow(bad_baseline)
+        }
+      }
       if (identical(source, "condition_deg") && !nzchar(receiver_id)) {
         fail("tier2.communication.receiver_deg_id", sprintf("%s source=condition_deg but receiver_deg_comparison_id is empty", pair_id))
         comm_fail_n <- comm_fail_n + 1L
@@ -872,6 +1086,20 @@ if (!is.null(loaded_generated$communication_pairs)) {
       if (length(missing_receiver) > 0) {
         fail("tier2.communication.receiver_deg_id", sprintf("%s receiver_deg_comparison_id not found in comparisons/gene_program_targets: %s", pair_id, paste(missing_receiver, collapse = ", ")))
         comm_fail_n <- comm_fail_n + length(missing_receiver)
+      }
+      if (length(receiver_ids) > 0 && !is.null(gene_targets) && nrow(gene_targets) > 0) {
+        receiver_rows <- gene_targets[gene_targets$comparison_id %in% receiver_ids, , drop = FALSE]
+        bad_receiver <- receiver_rows[
+          receiver_rows$analysis_mode != "condition_within_type" |
+            receiver_rows$gene_program_role != "condition_deg" |
+            receiver_rows$nichenet_usage != "receiver_condition_deg",
+          ,
+          drop = FALSE
+        ]
+        if (nrow(bad_receiver) > 0) {
+          fail("tier2.communication.receiver_deg_role", sprintf("%s receiver_deg_comparison_id must point to condition_within_type + condition_deg receiver usage: %s", pair_id, paste(bad_receiver$comparison_id, collapse = ", ")))
+          comm_fail_n <- comm_fail_n + nrow(bad_receiver)
+        }
       }
     }
     if (comm_fail_n == 0L) {
@@ -890,14 +1118,14 @@ if (!is.null(loaded_generated$communication_pairs)) {
           if (is.null(item) || is.null(item$meta)) next
           meta <- item$meta
           if (!"cell_subtype" %in% colnames(meta)) {
-            semantic_object_problem("semantic.communication_requires_cell_subtype", sprintf("%s requires cell_subtype but %s metadata lacks cell_subtype", row$pair_id[[1]], scope))
+            fail("semantic.communication_requires_cell_subtype", sprintf("%s requires_cell_subtype=yes but %s metadata lacks cell_subtype", row$pair_id[[1]], scope))
             next
           }
           observed <- unique(trimws(as.character(meta$cell_subtype)))
           observed <- observed[nzchar(observed)]
           missing_tokens <- setdiff(tokens, observed)
           if (length(missing_tokens) > 0) {
-            semantic_object_problem("semantic.communication_requires_cell_subtype", sprintf("%s strict roles absent from %s cell_subtype: %s", row$pair_id[[1]], scope, paste(missing_tokens, collapse = ", ")))
+            fail("semantic.communication_requires_cell_subtype", sprintf("%s requires_cell_subtype=yes but strict roles are absent from %s cell_subtype: %s", row$pair_id[[1]], scope, paste(missing_tokens, collapse = ", ")))
           }
         }
       }

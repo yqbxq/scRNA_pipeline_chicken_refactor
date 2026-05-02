@@ -1,8 +1,8 @@
 question_id	question_class	question_zh	scope	sender_groups	receiver_groups	condition_split	contrast_axis	tools_to_run	priority	status	depends_on	notes	activation_policy	min_sender_cells	min_receiver_cells	min_cells_per_condition	fallback_pair_id	derived_from_pair_id	run_baseline_if_split_fails
-A01_panorama_marker	marker	panorama大类marker(GC vs TC)	panorama	*	*	-	cluster_marker	deg+enrichment	P0	active		每个大类vs rest	always						no
-A02_GC_subtype_marker	marker	GC 4亚群marker	GC_subcluster	*	*	-	cluster_marker	deg+enrichment	P0	active		pGC/eGC/rgGC/lGC each vs rest	always						no
-A03_TC_subtype_marker	marker	TC亚群marker	TC_subcluster	*	*	-	cluster_marker	deg+enrichment	P0	planned		等TC注释	always						no
-A04_ST_region_marker	marker	ST region marker	ST_section	*	*	-	cluster_marker	deg+enrichment	P0	planned		等ST	always						no
+A01_panorama_marker	marker	panorama大类identity marker(GC vs TC)	panorama	*	*	-	identity_marker	deg+enrichment	P0	active		注释完成后的cell_type identity marker; raw cluster marker evidence由03/04 annotation输出	always						no
+A02_GC_subtype_marker	marker	GC 4亚群identity marker	GC_subcluster	*	*	-	identity_marker	deg+enrichment	P0	active		注释完成后的cell_subtype identity marker; pGC/eGC/rgGC/lGC each vs rest	always						no
+A03_TC_subtype_marker	marker	TC亚群identity marker	TC_subcluster	*	*	-	identity_marker	deg+enrichment	P0	planned		等TC注释	always						no
+A04_ST_region_marker	marker	ST region identity marker	ST_section	*	*	-	identity_marker	deg+enrichment	P0	planned		等ST	always						no
 B01_GC_vs_TC	deg	GC vs TC整体差异	panorama	[GC]	[TC]	-	directional_DEG	deg+enrichment	P0	active		whole_layer	always						no
 B02_GC_subtypes_pairwise	deg	GC 4亚群pairwise(6对)	GC_subcluster	[pGC,eGC,rgGC,lGC]	*	-	pairwise	deg+enrichment	P1	active		C(4,2)=6	always						no
 B03_TC_subtypes_pairwise	deg	TC亚群pairwise	TC_subcluster	[TC_*]	*	-	pairwise	deg+enrichment	P1	planned		等TC	always						no
@@ -16,11 +16,11 @@ D01_GC_stage_DEG	deg	GC大类syf vs f5	panorama	[GC]	-	group_id:syf,f5	contrast_
 D02_TC_stage_DEG	deg	TC大类syf vs f5	panorama	[TC]	-	group_id:syf,f5	contrast_only	deg+enrichment	P0	active		pseudobulk优先	always						no
 D03_GC_subtype_stage_DEG	deg	每个GC亚群syf vs f5	GC_subcluster	*	-	group_id:syf,f5	contrast_only	deg+enrichment	P0	active		展开4行	always						no
 D04_TC_subtype_stage_DEG	deg	每个TC亚群syf vs f5	TC_subcluster	*	-	group_id:syf,f5	contrast_only	deg+enrichment	P1	planned		等TC	always						no
-D05_panorama_global_stage	deg	panorama整体syf vs f5	panorama	all_cells	-	group_id:syf,f5	contrast_only	deg+enrichment	P2	active		全局signature	always						no
+D05_panorama_global_stage	global_context	panorama整体syf vs f5 global context	panorama	all_cells	-	group_id:syf,f5	global_stage_context	deg+enrichment	P2	active		全局signature; global_context_only; not receiver DEG	always						no
 D06_ST_region_stage	deg	每个region syf vs f5	ST_section	*	-	group_id:syf,f5	contrast_only	deg+enrichment	P1	planned		等ST	always						no
 E01_GC_subtype_compo	composition	GC 4亚群比例syf vs f5	panorama	GC_subtypes	-	group_id:syf,f5	composition	composition_test	P0	active		propeller	always						no
 E02_TC_subtype_compo	composition	TC亚群比例syf vs f5	panorama	TC_subtypes	-	group_id:syf,f5	composition	composition_test	P1	planned		等TC	always						no
-E03_layer_compo	composition	GC vs TC比例syf vs f5	panorama	[GC,TC]	-	group_id:syf,f5	composition	composition_test	P1	active		取样均衡控制	always						no
+E03_layer_compo	qc	GC vs TC capture balance QC	panorama	[GC,TC]	-	group_id:syf,f5	qc_composition	composition_qc	P1	active		取样均衡控制; qc_only; biological_conclusion_allowed=no	always						no
 E04_ST_region_compo	composition	ST region比例syf vs f5	ST_section	regions	-	section:syf,f5	composition	composition_test	P1	planned		等ST	always						no
 F01_TC_GC_bidir_baseline	communication	TC-GC双向baseline	panorama	[TC]	[GC]	-	bidirectional	cellchat+nichenet	P1	active			always						no
 F02_TC_GC_bidir_split	communication	TC-GC双向syf/f5 split	panorama	[TC]	[GC]	group_id:syf,f5	bidirectional	cellchat+nichenet	P0	active			always						no

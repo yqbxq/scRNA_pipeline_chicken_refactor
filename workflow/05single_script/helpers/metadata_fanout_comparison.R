@@ -8,6 +8,13 @@ m3_comparison_cols <- c(
   "produces_gene_program", "gene_program_role", "notes"
 )
 
+m3_annotation_marker_cols <- c(
+  "target_id", "source_question_id", "layer_scope", "object_layer",
+  "cluster_column", "annotation_label_column", "group_var",
+  "ident_1", "ident_2", "analysis_mode", "gene_program_role",
+  "output_dir", "annotation_only", "enabled", "notes"
+)
+
 m3_comparison_row <- function(q, suffix, ident_1, ident_2, group_var = "cell_subtype",
                               subset_column = "", subset_value = "",
                               analysis_mode = "subtype_pairwise",
@@ -57,9 +64,9 @@ m3_identity_group_var <- function(groups) {
 
 m3_marker_note <- function(group_var) {
   if (identical(group_var, "cell_type")) {
-    "broad cell-type marker; use cell_type, not cell_subtype"
+    "post-annotation broad cell-type identity marker; not raw cluster annotation evidence"
   } else {
-    "GC subtype one-vs-rest marker"
+    "post-annotation subtype identity marker; not raw cluster annotation evidence"
   }
 }
 
@@ -113,7 +120,7 @@ m3_composition_fields <- function(q, groups) {
       subset_column = "cell_type",
       subset_value = "GC,TC",
       composition_group_var = "cell_type",
-      notes = "broad GC-vs-TC composition; sample-level proportions"
+      notes = "QC-only broad GC-vs-TC capture balance; no biological abundance conclusion"
     ))
   }
   subset_column <- if (length(groups) == 0 || any(groups %in% c("all_cells"))) "" else m3_identity_group_var(groups)
@@ -127,12 +134,67 @@ m3_composition_fields <- function(q, groups) {
   )
 }
 
+m3_annotation_marker_target_row <- function(target_id, source_question_id, layer_scope, object_layer,
+                                            cluster_column, annotation_label_column,
+                                            output_dir, notes) {
+  list(
+    target_id = target_id,
+    source_question_id = source_question_id,
+    layer_scope = layer_scope,
+    object_layer = object_layer,
+    cluster_column = cluster_column,
+    annotation_label_column = annotation_label_column,
+    group_var = cluster_column,
+    ident_1 = "__cluster__",
+    ident_2 = "__rest__",
+    analysis_mode = "annotation_cluster_marker",
+    gene_program_role = "annotation_marker",
+    output_dir = output_dir,
+    annotation_only = "yes",
+    enabled = "yes",
+    notes = notes
+  )
+}
+
+m3_fanout_annotation_marker_targets <- function(questions) {
+  if (nrow(questions) == 0) {
+    return(m3_empty_df(m3_annotation_marker_cols))
+  }
+  active_ids <- questions$question_id[questions$status == "active"]
+  rows <- list()
+  if ("A01_panorama_marker" %in% active_ids) {
+    rows[[length(rows) + 1L]] <- m3_annotation_marker_target_row(
+      target_id = "ANN01_panorama_cluster_marker",
+      source_question_id = "A01_panorama_marker",
+      layer_scope = "panorama",
+      object_layer = "panorama",
+      cluster_column = "panorama_cluster",
+      annotation_label_column = "cell_type",
+      output_dir = "annotation/layers/panorama",
+      notes = "03d raw panorama cluster marker evidence for annotation only"
+    )
+  }
+  if ("A02_GC_subtype_marker" %in% active_ids) {
+    rows[[length(rows) + 1L]] <- m3_annotation_marker_target_row(
+      target_id = "ANN02_GC_subcluster_cluster_marker",
+      source_question_id = "A02_GC_subtype_marker",
+      layer_scope = "GC_subcluster",
+      object_layer = "GC_subcluster",
+      cluster_column = "GC_subcluster_cluster",
+      annotation_label_column = "cell_subtype",
+      output_dir = "annotation/layers/GC_subcluster",
+      notes = "04b raw GC subcluster marker evidence for annotation only"
+    )
+  }
+  m3_bind_rows(rows, m3_annotation_marker_cols)
+}
+
 m3_fanout_comparison <- function(q) {
   axis <- q$contrast_axis
   rows <- list()
   condition_subset <- m3_condition_subset(q$condition_split)
 
-  if (axis == "cluster_marker") {
+  if (axis %in% c("identity_marker", "cluster_marker")) {
     groups <- m3_flat_groups(q$sender_groups, q$scope)
     group_var <- m3_identity_group_var(groups)
     for (group in groups) {
@@ -195,7 +257,7 @@ m3_fanout_comparison <- function(q) {
         )
       }
     }
-  } else if (axis == "contrast_only") {
+  } else if (axis %in% c("contrast_only", "global_stage_context")) {
     groups <- m3_flat_groups(q$sender_groups, q$scope)
     condition <- m3_condition_pair(q$condition_split)
     if (length(groups) == 0) {
@@ -203,39 +265,41 @@ m3_fanout_comparison <- function(q) {
     }
     for (group in groups) {
       stage <- m3_stage_subset(group)
+      is_global_context <- identical(axis, "global_stage_context") || identical(q$question_class[[1]], "global_context")
       rows[[length(rows) + 1L]] <- m3_comparison_row(
         q, paste(group, condition$ident_1, "vs", condition$ident_2, sep = "_"),
         condition$ident_1, condition$ident_2,
         group_var = condition$group_var,
         subset_column = stage$subset_column,
         subset_value = stage$subset_value,
-        analysis_mode = "condition_within_type",
+        analysis_mode = ifelse(is_global_context, "global_context", "condition_within_type"),
         analysis_unit = stage$analysis_unit,
         stat_level = "pseudobulk_formal_if_replicates",
         aggregation_group_var = stage$aggregation_group_var,
         composition_group_var = "",
         produces_gene_program = "yes",
-        gene_program_role = "condition_deg",
+        gene_program_role = ifelse(is_global_context, "global_context", "condition_deg"),
         notes = stage$notes
       )
     }
-  } else if (axis == "composition") {
+  } else if (axis %in% c("composition", "qc_composition")) {
     groups <- m3_flat_groups(q$sender_groups, q$scope)
     condition <- m3_condition_pair(q$condition_split)
     fields <- m3_composition_fields(q, groups)
+    is_qc <- identical(axis, "qc_composition") || identical(q$question_class[[1]], "qc")
     rows[[length(rows) + 1L]] <- m3_comparison_row(
       q, fields$suffix,
       condition$ident_1, condition$ident_2,
       group_var = condition$group_var,
       subset_column = fields$subset_column,
       subset_value = fields$subset_value,
-      analysis_mode = "composition",
+      analysis_mode = ifelse(is_qc, "qc_composition", "composition"),
       analysis_unit = "sample_level",
       stat_level = "composition_formal_if_replicates",
       aggregation_group_var = "",
       composition_group_var = fields$composition_group_var,
       produces_gene_program = "no",
-      gene_program_role = "none",
+      gene_program_role = ifelse(is_qc, "qc_only", "none"),
       notes = fields$notes
     )
   }

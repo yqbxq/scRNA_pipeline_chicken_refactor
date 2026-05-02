@@ -13,6 +13,7 @@ metadata/*
 !metadata/
 !metadata/README.md
 !metadata/analysis_questions.tsv
+!metadata/annotation_marker_targets.tsv
 !metadata/samples.tsv
 !metadata/sections.tsv
 !metadata/comparisons.tsv

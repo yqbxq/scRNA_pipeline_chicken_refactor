@@ -135,9 +135,13 @@ for (idx in seq_len(nrow(layer_status_df))) {
     vars <- resolve_comparison_vars_05(obj, comparison_row)
     cmp_paths <- pseudobulk_paths_05(cfg, layer_id, vars$comparison_id)
     subset_result <- subset_cells_for_comparison(obj, vars)
-    marker_fallback <- marker_discovery_paths_05(cfg, layer_id, vars$comparison_id)$exploratory_tsv
+    marker_fallback <- if (vars$analysis_mode %in% c("subtype_marker", "subtype_pairwise")) {
+      marker_discovery_paths_05(cfg, layer_id, vars$comparison_id)$exploratory_tsv
+    } else {
+      ""
+    }
 
-    if (!identical(vars$analysis_mode, "condition_within_type")) {
+    if (!vars$analysis_mode %in% c("condition_within_type", "global_context")) {
       write_tsv_local(empty_gate_summary_05(), cmp_paths$gate_summary_tsv)
       write_tsv_local(
         data.frame(
@@ -146,7 +150,7 @@ for (idx in seq_len(nrow(layer_status_df))) {
           analysis_mode = vars$analysis_mode,
           aggregation_group_var = vars$aggregation_group_var,
           inference_status = "skipped_non_condition",
-          reason = "05b formal pseudobulk is only run for condition_within_type rows",
+          reason = "05b DEG is only run for condition_within_type or global_context rows",
           warning_banner = "",
           exploratory_marker_discovery = marker_fallback,
           stringsAsFactors = FALSE
@@ -250,6 +254,20 @@ for (idx in seq_len(nrow(layer_status_df))) {
     if (!gate$pass) {
       status <- if (vars$force_exploratory) "exploratory_forced" else "exploratory_only"
       warning_banner <- annotation_warning_banner_05(gate$summary, vars, forced = vars$force_exploratory)
+      exploratory_res <- run_exploratory_findmarkers_05(
+        obj_sub,
+        vars,
+        cluster_id = "",
+        annotation_label = vars$analysis_mode
+      )
+      exploratory_df <- if (!is.null(exploratory_res$result)) exploratory_res$result else empty_marker_result_05()
+      exploratory_df$layer_id <- rep(layer_id, nrow(exploratory_df))
+      exploratory_df$inference_status <- rep(status, nrow(exploratory_df))
+      write_tsv_local(exploratory_df, cmp_paths$ds_results_tsv)
+      exploratory_reason <- normalize_scalar_value(exploratory_res$reason)
+      if (nzchar(exploratory_reason)) {
+        exploratory_reason <- paste("exploratory_findmarkers:", exploratory_reason)
+      }
       write_tsv_local(
         data.frame(
           comparison_id = vars$comparison_id,
@@ -257,7 +275,7 @@ for (idx in seq_len(nrow(layer_status_df))) {
           analysis_mode = vars$analysis_mode,
           aggregation_group_var = vars$aggregation_group_var,
           inference_status = status,
-          reason = gate$reason,
+          reason = paste(c(gate$reason, exploratory_reason)[nzchar(c(gate$reason, exploratory_reason))], collapse = "; "),
           warning_banner = warning_banner,
           exploratory_marker_discovery = marker_fallback,
           stringsAsFactors = FALSE
@@ -272,7 +290,7 @@ for (idx in seq_len(nrow(layer_status_df))) {
         inference_status = status,
         aggregation_rds = normalizePath(cmp_paths$aggregation_rds, winslash = "/", mustWork = FALSE),
         aggregation_metadata_tsv = normalizePath(cmp_paths$aggregation_tsv, winslash = "/", mustWork = FALSE),
-        ds_results_tsv = "",
+        ds_results_tsv = normalizePath(cmp_paths$ds_results_tsv, winslash = "/", mustWork = FALSE),
         gate_summary_tsv = normalizePath(cmp_paths$gate_summary_tsv, winslash = "/", mustWork = FALSE),
         status_tsv = normalizePath(cmp_paths$status_tsv, winslash = "/", mustWork = FALSE),
         exploratory_marker_discovery = marker_fallback,
@@ -284,7 +302,7 @@ for (idx in seq_len(nrow(layer_status_df))) {
         warning_banner,
         sprintf("- status: %s", status),
         sprintf("- reason: %s", gate$reason),
-        sprintf("- exploratory_fallback: `%s`", marker_fallback)
+        sprintf("- exploratory_findmarkers: `%s`", cmp_paths$ds_results_tsv)
       )
       next
     }
