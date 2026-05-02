@@ -934,15 +934,20 @@ if (!is.null(loaded_generated$gene_program_targets)) {
       gp_fail_n <- gp_fail_n + nrow(qc_bad)
     }
     global_bad <- gene_program_targets[
-      gene_program_targets$analysis_mode == "global_context" &
-        (gene_program_targets$gene_program_role != "global_context" |
+      (gene_program_targets$analysis_mode == "global_context" |
+         gene_program_targets$gene_program_role == "global_context") &
+        (gene_program_targets$analysis_mode != "global_context" |
+           gene_program_targets$gene_program_role != "global_context" |
            gene_program_targets$global_context_only != "yes" |
-           gene_program_targets$nichenet_eligible != "no"),
+           gene_program_targets$nichenet_eligible != "no" |
+           gene_program_targets$nichenet_usage != "none" |
+           gene_program_targets$preferred_for_downstream != "contextual" |
+           !(gene_program_targets$enrichment_eligible %in% c("contextual", "no"))),
       ,
       drop = FALSE
     ]
     if (nrow(global_bad) > 0) {
-      fail("tier2.gene_program_targets.global_context", sprintf("global_context must be global_context_only and NicheNet-ineligible: %s", paste(global_bad$comparison_id, collapse = ", ")))
+      fail("tier2.gene_program_targets.global_context", sprintf("global_context rows must be contextual-only and NicheNet-ineligible: %s", paste(global_bad$comparison_id, collapse = ", ")))
       gp_fail_n <- gp_fail_n + nrow(global_bad)
     }
     e03_bad <- gene_program_targets[
@@ -968,12 +973,17 @@ if (!is.null(loaded_generated$gene_program_targets)) {
       gene_program_targets$source_question_id == "D05_panorama_global_stage" &
         (gene_program_targets$analysis_mode != "global_context" |
            gene_program_targets$gene_program_role != "global_context" |
-           gene_program_targets$nichenet_eligible != "no"),
+           gene_program_targets$global_context_only != "yes" |
+           gene_program_targets$nichenet_eligible != "no" |
+           gene_program_targets$nichenet_usage != "none" |
+           gene_program_targets$enrichment_eligible != "contextual" |
+           gene_program_targets$enrichment_usage != "global_context_enrichment" |
+           gene_program_targets$preferred_for_downstream != "contextual"),
       ,
       drop = FALSE
     ]
     if (nrow(d05_bad) > 0) {
-      fail("tier2.gene_program_targets.D05_global_context", "D05 must be global_context and NicheNet-ineligible")
+      fail("tier2.gene_program_targets.D05_global_context", "D05 must be contextual global_context and NicheNet-ineligible")
       gp_fail_n <- gp_fail_n + nrow(d05_bad)
     }
     if (gp_fail_n == 0L) {
@@ -990,6 +1000,54 @@ if (!is.null(loaded_generated$enrichment_targets)) {
       fail("tier2.enrichment_targets.E03_absent", "E03 qc_composition must not enter enrichment_targets.tsv")
     } else {
       pass("tier2.enrichment_targets.E03_absent", "E03 qc_composition is absent from enrichment targets")
+    }
+    d05_enrichment <- enrichment_targets[enrichment_targets$source_question_id == "D05_panorama_global_stage", , drop = FALSE]
+    if (nrow(d05_enrichment) == 0) {
+      fail("tier2.enrichment_targets.D05_contextual", "D05 must have contextual enrichment targets")
+    } else if (any(d05_enrichment$analysis_mode != "global_context" |
+        d05_enrichment$gene_program_role != "global_context" |
+        d05_enrichment$enrichment_eligible != "contextual" |
+        d05_enrichment$enrichment_usage != "global_context_enrichment")) {
+      fail("tier2.enrichment_targets.D05_contextual", "D05 enrichment targets must be global_context_enrichment and contextual")
+    } else {
+      pass("tier2.enrichment_targets.D05_contextual", "D05 enrichment targets are contextual global context targets")
+    }
+    if (!is.null(loaded_generated$gene_program_targets)) {
+      gp_targets <- loaded_generated$gene_program_targets
+      for (col in c("comparison_id", "layer_scope", "produces_gene_program", "enrichment_eligible")) {
+        if (!col %in% colnames(gp_targets)) gp_targets[[col]] <- character(nrow(gp_targets))
+      }
+      for (col in c("target_id", "comparison_id", "layer_scope", "enrichment_eligible", "enabled")) {
+        if (!col %in% colnames(enrichment_targets)) enrichment_targets[[col]] <- character(nrow(enrichment_targets))
+      }
+      enabled_enrichment <- enrichment_targets[
+        tolower(trim(enrichment_targets$enabled)) %in% c("", "yes", "true", "1", "on"),
+        ,
+        drop = FALSE
+      ]
+      enrichment_fail_n <- 0L
+      for (idx in seq_len(nrow(enabled_enrichment))) {
+        row <- enabled_enrichment[idx, , drop = FALSE]
+        hit <- gp_targets[
+          gp_targets$comparison_id == row$comparison_id[[1]] &
+            gp_targets$layer_scope == row$layer_scope[[1]],
+          ,
+          drop = FALSE
+        ]
+        if (nrow(hit) == 0) {
+          fail("tier2.enrichment_targets.registry_join", sprintf("%s comparison_id/layer_scope is absent from gene_program_targets.tsv: %s/%s", row$target_id[[1]], row$comparison_id[[1]], row$layer_scope[[1]]))
+          enrichment_fail_n <- enrichment_fail_n + 1L
+          next
+        }
+        eligible <- trim(row$enrichment_eligible[[1]])
+        if (eligible %in% c("yes", "contextual") && !identical(hit$produces_gene_program[[1]], "yes")) {
+          fail("tier2.enrichment_targets.registry_join", sprintf("%s is enrichment eligible but registry target does not produce a gene program: %s", row$target_id[[1]], row$comparison_id[[1]]))
+          enrichment_fail_n <- enrichment_fail_n + 1L
+        }
+      }
+      if (enrichment_fail_n == 0L) {
+        pass("tier2.enrichment_targets.registry_join", sprintf("%s enabled enrichment targets join gene_program_targets.tsv", nrow(enabled_enrichment)))
+      }
     }
   }
 }
@@ -1127,12 +1185,44 @@ if (!is.null(loaded_generated$communication_pairs)) {
         comm_fail_n <- comm_fail_n + nrow(e03_comm_refs)
       }
     }
+    global_context_ids <- if (!is.null(gene_targets) && all(c("comparison_id", "analysis_mode", "gene_program_role") %in% colnames(gene_targets))) {
+      gene_targets$comparison_id[
+        gene_targets$analysis_mode == "global_context" |
+          gene_targets$gene_program_role == "global_context"
+      ]
+    } else {
+      character(0)
+    }
+    if (length(global_context_ids) > 0) {
+      global_receiver_ref <- vapply(communication_pairs$receiver_deg_comparison_id, function(x) {
+        any(split_comm_tokens(x) %in% global_context_ids)
+      }, logical(1))
+      global_comm_refs <- communication_pairs[global_receiver_ref, , drop = FALSE]
+      if (nrow(global_comm_refs) > 0) {
+        fail("tier2.communication.global_context_receiver_deg", sprintf("receiver_deg_comparison_id must not point to global_context rows: %s", paste(global_comm_refs$pair_id, collapse = ", ")))
+        comm_fail_n <- comm_fail_n + nrow(global_comm_refs)
+      }
+    }
     for (idx in seq_len(nrow(nichenet_pairs))) {
       row <- nichenet_pairs[idx, , drop = FALSE]
       pair_id <- row$pair_id[[1]]
       source <- tolower(row$receiver_gene_program_source[[1]])
       if (!source %in% c("condition_deg", "receiver_marker", "none")) {
         fail("tier2.communication.gene_program_source", sprintf("%s has unsupported receiver_gene_program_source=%s", pair_id, source))
+        comm_fail_n <- comm_fail_n + 1L
+      }
+      if (identical(source, "none")) {
+        fail("tier2.communication.gene_program_source", sprintf("%s is NicheNet-capable but receiver_gene_program_source=none", pair_id))
+        comm_fail_n <- comm_fail_n + 1L
+      }
+      mode <- tolower(trim(row$communication_mode[[1]]))
+      split_requested <- nzchar(trim(row$condition_split_var[[1]])) || grepl("split", mode, fixed = TRUE)
+      if (split_requested && !identical(source, "condition_deg")) {
+        fail("tier2.communication.gene_program_source", sprintf("%s split NicheNet rows must use receiver_gene_program_source=condition_deg", pair_id))
+        comm_fail_n <- comm_fail_n + 1L
+      }
+      if (!split_requested && identical(mode, "baseline") && !identical(source, "receiver_marker")) {
+        fail("tier2.communication.gene_program_source", sprintf("%s baseline NicheNet rows must use receiver_gene_program_source=receiver_marker", pair_id))
         comm_fail_n <- comm_fail_n + 1L
       }
       baseline_id <- trim(row$baseline_marker_comparison_id[[1]])

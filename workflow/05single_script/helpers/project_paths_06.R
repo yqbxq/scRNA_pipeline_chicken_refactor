@@ -28,6 +28,7 @@ get_single_script_config_06 <- function() {
   base$go_enrichment_manifest_tsv <- file.path(base$go_table_dir, "go_enrichment_manifest.tsv")
   base$kegg_enrichment_manifest_tsv <- file.path(base$kegg_table_dir, "kegg_enrichment_manifest.tsv")
   base$enrichment_summary_tsv <- file.path(base$enrichment_table_dir, "enrichment_summary.tsv")
+  base$enrichment_section_summary_tsv <- file.path(base$enrichment_table_dir, "enrichment_section_summary.tsv")
   base$shared_pathways_tsv <- file.path(base$enrichment_report_dir, "shared_pathways.tsv")
   base$enrichment_report_md <- file.path(base$enrichment_report_dir, "report.md")
   base$cross_cluster_go_heatmap_png <- file.path(base$enrichment_figure_dir, "cross_cluster_go_bp_heatmap.png")
@@ -59,6 +60,7 @@ prepare_dirs_06 <- function(cfg) {
     dirname(cfg$module_06b_manifest_path),
     dirname(cfg$module_06c_manifest_path),
     dirname(cfg$enrichment_summary_tsv),
+    dirname(cfg$enrichment_section_summary_tsv),
     dirname(cfg$shared_pathways_tsv),
     dirname(cfg$cross_cluster_go_heatmap_png),
     dirname(cfg$cross_cluster_kegg_heatmap_png)
@@ -95,6 +97,7 @@ enrichment_report_paths_06 <- function(cfg) {
   list(
     report_md = cfg$enrichment_report_md,
     summary_tsv = cfg$enrichment_summary_tsv,
+    section_summary_tsv = cfg$enrichment_section_summary_tsv,
     shared_pathways_tsv = cfg$shared_pathways_tsv,
     cross_cluster_go_heatmap_png = cfg$cross_cluster_go_heatmap_png,
     cross_cluster_kegg_heatmap_png = cfg$cross_cluster_kegg_heatmap_png

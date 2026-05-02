@@ -262,8 +262,6 @@ read_enrichment_input_grid_06 <- function(cfg) {
       hit <- hit[1, , drop = FALSE]
     }
 
-    marker_path <- if (nrow(hit) > 0) normalize_scalar_value(hit$marker_tsv[[1]]) else ""
-    deg_path <- if (nrow(hit) > 0) normalize_scalar_value(hit$deg_tsv[[1]]) else ""
     top_path <- if (nrow(hit) > 0) normalize_scalar_value(hit$top_gene_tsv[[1]]) else ""
     enrichment_eligible <- if (nrow(hit) > 0) normalize_scalar_value(hit$enrichment_eligible[[1]], normalize_scalar_value(target$enrichment_eligible[[1]], "yes")) else normalize_scalar_value(target$enrichment_eligible[[1]], "yes")
     enrichment_usage <- if (nrow(hit) > 0) normalize_scalar_value(hit$enrichment_usage[[1]], normalize_scalar_value(target$enrichment_usage[[1]], "mechanism_enrichment")) else normalize_scalar_value(target$enrichment_usage[[1]], "mechanism_enrichment")
@@ -274,12 +272,10 @@ read_enrichment_input_grid_06 <- function(cfg) {
     } else if (nzchar(top_path) && file.exists(top_path)) {
       deg_tsv <- top_path
       deg_source <- "gene_program_registry:top_gene_tsv"
-    } else if (nzchar(deg_path) && file.exists(deg_path)) {
-      deg_tsv <- deg_path
-      deg_source <- "gene_program_registry:deg_tsv"
-    } else if (nzchar(marker_path) && file.exists(marker_path)) {
-      deg_tsv <- marker_path
-      deg_source <- "gene_program_registry:marker_tsv"
+    } else if (nrow(hit) > 0) {
+      deg_source <- "registry:missing_top_gene_tsv"
+    } else {
+      deg_source <- "registry:missing_registry_row"
     }
 
     result_level <- if (nrow(hit) > 0) normalize_scalar_value(hit$result_level[[1]], "unavailable") else "unavailable"
@@ -317,8 +313,8 @@ read_enrichment_input_grid_06 <- function(cfg) {
       biological_replicates = "unknown",
       background_tsv = bg$path,
       background_gene_n = length(bg$genes),
-      marker_results_tsv = marker_path,
-      pseudobulk_results_tsv = deg_path,
+      marker_results_tsv = if (nrow(hit) > 0) normalize_scalar_value(hit$marker_tsv[[1]]) else "",
+      pseudobulk_results_tsv = if (nrow(hit) > 0) normalize_scalar_value(hit$deg_tsv[[1]]) else "",
       registry_warning = warning,
       stringsAsFactors = FALSE
     )

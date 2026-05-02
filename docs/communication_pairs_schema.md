@@ -22,7 +22,7 @@ Required columns:
 | `requires_all_derived_inputs_pass` | Boolean; derived rows such as `F25` require all split inputs to pass. |
 | `receiver_gene_program_source` | `receiver_marker`, `condition_deg`, or `none`. |
 | `baseline_marker_comparison_id` | A01/A02 marker comparison ID for baseline receiver programs. |
-| `receiver_deg_comparison_id` | D01/D02/D03 condition DEG comparison ID for split receiver programs. |
+| `receiver_deg_comparison_id` | D01/D02/D03 condition DEG comparison ID for split receiver programs; must not point to D05 or any `global_context` row. |
 | `direction_filter` | `yes` keeps sender->receiver LR rows; `no` keeps full CellChat network. |
 | `requires_cell_subtype` | `yes` requires runtime `cell_subtype`; no fallback is allowed. |
 
@@ -31,11 +31,12 @@ Required columns:
 
 - `receiver_gene_program_source=condition_deg` uses `receiver_deg_comparison_id`.
 - `receiver_gene_program_source=receiver_marker` uses `baseline_marker_comparison_id`.
-- `receiver_gene_program_source=none` skips NicheNet gene-program analysis.
+- `receiver_gene_program_source=none` is not a valid executable NicheNet gene-program source.
 
-Missing registry rows or missing gene files are recorded as failed/skipped
-tasks. 07b no longer falls back to ad hoc `FindMarkers`, and it no longer treats
-`pair_id` as a DEG `comparison_id`.
+Missing registry rows, invalid roles, missing `top_gene_tsv`, or empty gene
+sets are recorded with top-level `status=missing_gene_program` and the specific
+cause in `deg_status`. 07b does not run inline `FindMarkers`, does not infer
+paths from `pair_id`, and does not fall back across registry path columns.
 
 07 runtime reads only this resolved Tier2 table. Tier1
 `metadata/analysis_questions.tsv` policy values are not reinterpreted by
