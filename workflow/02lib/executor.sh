@@ -41,6 +41,7 @@ BIND_PATHS=(
   "${CELLRANGER_OUT_DIR:-}"
   "${DNBC4TOOLS_OUT_DIR:-}"
   "${ORTHOLOG_CACHE_DIR:-}"
+  "${DECOUPLER_RESOURCE_DIR:-}"
   "${REFERENCE_DIR:-}"
   "${ENV_DIR:-}"
 )
@@ -139,6 +140,17 @@ run_r_interaction() {
   [[ -n "${CONDA_FRONTEND}" ]] || die "系统中找不到 micromamba/mamba/conda，无法运行通讯分析 R 环境。"
   [[ -d "${R_INTERACTION_ENV_PREFIX}" ]] || die "通讯分析 R 环境不存在: ${R_INTERACTION_ENV_PREFIX}"
   env "${ENV_ARGS[@]}" "${CONDA_FRONTEND}" run -p "${R_INTERACTION_ENV_PREFIX}" Rscript "${script_path}" "$@"
+}
+
+run_r_decoupler() {
+  local script_path="$1"
+  shift || true
+  local -a ENV_ARGS=()
+  append_env_vars "${ENV_SPECS_R_DECOUPLER[@]}"
+
+  [[ -n "${CONDA_FRONTEND}" ]] || die "系统中找不到 micromamba/mamba/conda，无法运行 decoupleR 环境。"
+  [[ -d "${R_DECOUPLER_ENV_PREFIX}" ]] || die "decoupleR R 环境不存在: ${R_DECOUPLER_ENV_PREFIX}"
+  env "${ENV_ARGS[@]}" "${CONDA_FRONTEND}" run -p "${R_DECOUPLER_ENV_PREFIX}" Rscript "${script_path}" "$@"
 }
 
 run_r_spatial() {

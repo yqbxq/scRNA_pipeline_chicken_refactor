@@ -1,0 +1,36 @@
+name: r_decoupler
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - r-base=4.4.3
+  - r-remotes
+  - r-biocmanager
+  - r-seurat=5.4.0
+  - r-seuratobject=5.3.0
+  - r-dplyr
+  - r-tibble
+  - r-tidyr
+  - r-readr
+  - r-ggplot2
+  - r-pheatmap
+  - r-data.table
+  - r-jsonlite
+  - r-matrix
+  - r-digest
+  - r-curl
+  - bioconductor-singlecellexperiment=1.28.0
+  - compilers
+  - make
+  - cmake
+  - pkg-config
+  - git
+  - curl
+  - libcurl
+  - openssl
+  - libxml2<2.14
+  - zlib
+  - bzip2
+  - xz
+  - pcre2
+  - cairo
