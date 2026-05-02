@@ -22,7 +22,7 @@ Required columns:
 | `requires_all_derived_inputs_pass` | Boolean; derived rows such as `F25` require all split inputs to pass. |
 | `receiver_gene_program_source` | `receiver_marker`, `condition_deg`, or `none`. |
 | `baseline_marker_comparison_id` | A01/A02 marker comparison ID for baseline receiver programs. |
-| `receiver_deg_comparison_id` | D01/D02/D03 condition DEG comparison ID for split receiver programs. |
+| `receiver_deg_comparison_id` | D01/D02/D03 condition DEG comparison ID for split receiver programs; must not point to D05 or any `global_context` row. |
 | `direction_filter` | `yes` keeps sender->receiver LR rows; `no` keeps full CellChat network. |
 | `requires_cell_subtype` | `yes` requires runtime `cell_subtype`; no fallback is allowed. |
 

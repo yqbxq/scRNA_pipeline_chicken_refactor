@@ -167,6 +167,10 @@ A01/A02 are post-annotation identity markers. They no longer use raw
 enrichment eligible. D05 is `global_context`; it must not be used as
 `receiver_deg_comparison_id`.
 
+D05 may produce enrichment results, but those results are contextual background
+only and must not be used as cell-type-specific mechanism evidence. D05 可以产生
+富集结果，但这些结果只能作为全局背景参考，不能作为具体细胞类型机制证据。
+
 E03 keeps canonical `question_id=E03_layer_compo` for compatibility, but its
 display/output alias is `E03_scRNA_GC_TC_capture_balance`. 05c keeps the normal
 composition manifest output and additionally writes:
@@ -189,6 +193,12 @@ ST deconvolution, or histology/image quantification.
   `nichenet_usage=receiver_condition_deg`.
 - `annotation_marker`, `subtype_pairwise_deg`, `qc_only`, `global_context`, and
   `none` are forbidden as receiver DEG sources.
+
+06 enrichment report sections are assigned from resolved metadata rather than
+from file presence: `condition_deg`/`mechanism_enrichment` rows enter Core
+Mechanism Enrichment, marker/pairwise rows enter Subtype / Identity Enrichment,
+`global_context`/`global_context_enrichment` rows enter Global Context
+Enrichment, and QC/non-gene-program rows enter QC / Non-gene-program.
 
 ## M3 Fan-Out Contract
 

@@ -13,6 +13,11 @@
 | `qc_composition` | QC-only capture/composition check. | Not a gene program. |
 | `global_context` | Whole-layer/global syf-vs-f5 context signature. | Contextual only; not NicheNet receiver DEG. |
 
+D05 is the canonical `global_context` row. It may produce enrichment results,
+but those results are contextual background only and must not be used as
+cell-type-specific mechanism evidence. D05 可以产生富集结果，但这些结果只能作为
+全局背景参考，不能作为具体细胞类型机制证据。
+
 E03 is the canonical QC composition row. It keeps `question_id=E03_layer_compo`
 but uses `output_alias=E03_scRNA_GC_TC_capture_balance` for the QC mirror table
 and report. E03 is a scRNA captured-cell balance QC result, not a spatial or
@@ -49,3 +54,7 @@ must be empty. `composition_tsv` may point to the QC mirror table.
 
 06, 07, and future 08 must propagate `formal`, `exploratory_only`, or
 `exploratory_forced` into manifests and plot/report labels.
+
+06c must place `global_context` rows such as D05 in the Global Context
+Enrichment section, not Core Mechanism Enrichment. 07 must reject any
+`receiver_deg_comparison_id` that points to `global_context`.
