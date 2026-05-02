@@ -36,13 +36,24 @@ composition_manifest_tsv <- file.path(cfg$composition_table_dir, "composition_ma
 marker_df <- read_tsv_optional(marker_manifest_tsv)
 pb_df <- read_tsv_optional(pseudobulk_manifest_tsv)
 comp_df <- read_tsv_optional(composition_manifest_tsv)
+gene_program_targets <- read_tsv_optional(cfg$gene_program_targets_sheet)
 
 key_cols <- c("layer_id", "comparison_id")
 empty_keyed <- empty_df_05(key_cols)
+key_subset_05d <- function(df) {
+  if (!all(key_cols %in% colnames(df))) {
+    return(empty_keyed)
+  }
+  out <- df[, key_cols, drop = FALSE]
+  for (col in key_cols) {
+    out[[col]] <- as.character(out[[col]])
+  }
+  out
+}
 keys <- dplyr::bind_rows(
-  if (all(key_cols %in% colnames(marker_df))) marker_df[, key_cols, drop = FALSE] else empty_keyed,
-  if (all(key_cols %in% colnames(pb_df))) pb_df[, key_cols, drop = FALSE] else empty_keyed,
-  if (all(key_cols %in% colnames(comp_df))) comp_df[, key_cols, drop = FALSE] else empty_keyed
+  key_subset_05d(marker_df),
+  key_subset_05d(pb_df),
+  key_subset_05d(comp_df)
 )
 keys <- unique(keys[nzchar(keys$layer_id) & nzchar(keys$comparison_id), , drop = FALSE])
 
@@ -103,6 +114,75 @@ paths <- deg_report_paths_05(cfg)
 write_tsv_local(status_df, paths$status_matrix_tsv)
 write_tsv_local(summary_df, paths$summary_tsv)
 
+registry_cols <- c(
+  "comparison_id", "source_question_id", "layer_id", "analysis_mode",
+  "gene_program_role", "result_level", "preferred_for_downstream",
+  "formal_status", "deg_tsv", "marker_tsv", "top_gene_tsv",
+  "n_significant", "warning"
+)
+
+if (nrow(gene_program_targets) == 0) {
+  registry_df <- empty_df_05(registry_cols)
+} else {
+  for (col in c(
+    "comparison_id", "source_question_id", "layer_scope", "analysis_mode",
+    "gene_program_role", "preferred_for_downstream", "formal_preferred"
+  )) {
+    if (!col %in% colnames(gene_program_targets)) {
+      gene_program_targets[[col]] <- ""
+    }
+  }
+  registry_rows <- list()
+  for (idx in seq_len(nrow(gene_program_targets))) {
+    target <- gene_program_targets[idx, , drop = FALSE]
+    comparison_id <- normalize_scalar_value(target$comparison_id[[1]])
+    layer_id <- normalize_scalar_value(target$layer_scope[[1]])
+    marker_hit <- marker_df[marker_df$layer_id == layer_id & marker_df$comparison_id == comparison_id, , drop = FALSE]
+    pb_hit <- pb_df[pb_df$layer_id == layer_id & pb_df$comparison_id == comparison_id, , drop = FALSE]
+
+    marker_path <- if (nrow(marker_hit) > 0 && "exploratory_results_tsv" %in% colnames(marker_hit)) normalize_scalar_value(marker_hit$exploratory_results_tsv[[1]]) else ""
+    deg_path <- if (nrow(pb_hit) > 0 && "ds_results_tsv" %in% colnames(pb_hit)) normalize_scalar_value(pb_hit$ds_results_tsv[[1]]) else ""
+    formal_status <- if (nrow(pb_hit) > 0 && "inference_status" %in% colnames(pb_hit)) normalize_scalar_value(pb_hit$inference_status[[1]], "missing") else "missing"
+    marker_status <- if (nrow(marker_hit) > 0 && "status" %in% colnames(marker_hit)) normalize_scalar_value(marker_hit$status[[1]], "missing") else "missing"
+
+    formal_preferred <- normalize_scalar_value(target$formal_preferred[[1]], "no")
+    preferred_path <- if (formal_preferred == "yes" && nzchar(deg_path)) deg_path else marker_path
+    result_level <- if (formal_preferred == "yes" && identical(formal_status, "formal")) {
+      "pseudobulk_formal"
+    } else if (nzchar(marker_path)) {
+      "cell_level_exploratory"
+    } else {
+      "unavailable"
+    }
+    counts <- count_significant_rows_05(preferred_path, alpha = cfg$deg_alpha)
+    warning <- ""
+    if (formal_preferred == "yes" && !identical(formal_status, "formal")) {
+      warning <- sprintf("formal preferred but pseudobulk status is %s; using exploratory marker fallback when available", formal_status)
+    } else if (!nzchar(preferred_path)) {
+      warning <- sprintf("gene program unavailable; marker status is %s and formal status is %s", marker_status, formal_status)
+    }
+
+    registry_rows[[length(registry_rows) + 1]] <- data.frame(
+      comparison_id = comparison_id,
+      source_question_id = normalize_scalar_value(target$source_question_id[[1]]),
+      layer_id = layer_id,
+      analysis_mode = normalize_scalar_value(target$analysis_mode[[1]]),
+      gene_program_role = normalize_scalar_value(target$gene_program_role[[1]]),
+      result_level = result_level,
+      preferred_for_downstream = normalize_scalar_value(target$preferred_for_downstream[[1]]),
+      formal_status = formal_status,
+      deg_tsv = deg_path,
+      marker_tsv = marker_path,
+      top_gene_tsv = preferred_path,
+      n_significant = counts$significant_n,
+      warning = warning,
+      stringsAsFactors = FALSE
+    )
+  }
+  registry_df <- dplyr::bind_rows(registry_rows)
+}
+write_tsv_local(registry_df, paths$gene_program_registry_tsv)
+
 forced_or_exploratory <- status_df[
   status_df$pseudobulk_status %in% c("exploratory_only", "exploratory_forced") |
     status_df$composition_status %in% c("exploratory_only", "exploratory_forced"),
@@ -118,6 +198,27 @@ report_lines <- c(
   sprintf("- composition_manifest: `%s`", composition_manifest_tsv),
   sprintf("- status_matrix: `%s`", paths$status_matrix_tsv),
   sprintf("- summary: `%s`", paths$summary_tsv),
+  sprintf("- gene_program_registry: `%s`", paths$gene_program_registry_tsv),
+  "",
+  "## Analysis Modes",
+  render_markdown_table_local(
+    if (nrow(status_df) == 0 || !"comparison_id" %in% colnames(status_df)) {
+      empty_df_05(c("analysis_mode", "comparison_n"))
+    } else {
+      mode_df <- status_df
+      if (!"marker_status" %in% colnames(mode_df)) mode_df$marker_status <- ""
+      target_modes <- if (all(c("comparison_id", "analysis_mode") %in% colnames(gene_program_targets))) {
+        gene_program_targets[, c("comparison_id", "analysis_mode"), drop = FALSE]
+      } else {
+        empty_df_05(c("comparison_id", "analysis_mode"))
+      }
+      unique(dplyr::left_join(mode_df[, "comparison_id", drop = FALSE], target_modes, by = "comparison_id")) %>%
+        dplyr::count(analysis_mode, name = "comparison_n")
+    }
+  ),
+  "",
+  "## Gene Program Registry",
+  render_markdown_table_local(registry_df),
   "",
   "## Inference Status Matrix",
   render_markdown_table_local(status_df),
@@ -138,14 +239,16 @@ write_manifest_local(
   new_outputs = list(
     report = build_output_entry(paths$report_md, "md", module_name, "DEG EDA report", base_dir = cfg$project_root),
     deg_status_matrix_tsv = build_output_entry(paths$status_matrix_tsv, "tsv", module_name, "one row per layer/comparison DEG status", base_dir = cfg$project_root, schema = infer_schema_from_df(status_df)),
-    deg_summary_tsv = build_output_entry(paths$summary_tsv, "tsv", module_name, "one row per layer/comparison DEG summary", base_dir = cfg$project_root, schema = infer_schema_from_df(summary_df))
+    deg_summary_tsv = build_output_entry(paths$summary_tsv, "tsv", module_name, "one row per layer/comparison DEG summary", base_dir = cfg$project_root, schema = infer_schema_from_df(summary_df)),
+    gene_program_registry_tsv = build_output_entry(paths$gene_program_registry_tsv, "tsv", module_name, "gene program availability for downstream 06/07/08", base_dir = cfg$project_root, schema = infer_schema_from_df(registry_df))
   ),
   module_name = module_name,
   base_dir = cfg$project_root,
   inputs = list(
     marker_manifest_tsv = marker_manifest_tsv,
     pseudobulk_manifest_tsv = pseudobulk_manifest_tsv,
-    composition_manifest_tsv = composition_manifest_tsv
+    composition_manifest_tsv = composition_manifest_tsv,
+    gene_program_targets_tsv = cfg$gene_program_targets_sheet
   ),
   version = cfg$module_version,
   depends_on = list(

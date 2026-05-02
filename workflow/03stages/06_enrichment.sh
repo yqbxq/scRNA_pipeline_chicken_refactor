@@ -7,6 +7,7 @@ PIPELINE_ROOT="${PIPELINE_ROOT:-$(cd "${WORKFLOW_ROOT}/.." && pwd)}"
 
 source "${WORKFLOW_ROOT}/02lib/common.sh"
 
+ensure_metadata_fresh
 check_stage_deps "06_enrichment"
 hold_for_gate deg
 

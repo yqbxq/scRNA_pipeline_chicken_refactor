@@ -1,7 +1,13 @@
 empty_communication_pairs_07 <- function() {
   empty_df_07(c(
-    "pair_id", "layer_scope", "sender", "receiver", "subset_column", "subset_value",
-    "condition_split_var", "condition_split_values", "tool", "enabled", "notes"
+    "pair_id", "source_question_id", "layer_scope", "sender", "receiver",
+    "subset_column", "subset_value", "condition_split_var", "condition_split_values",
+    "tool", "communication_mode", "receiver_gene_program_source",
+    "activation_policy", "min_sender_cells", "min_receiver_cells",
+    "min_cells_per_condition", "fallback_pair_id", "derived_from_pair_id",
+    "run_baseline_if_split_fails", "requires_all_derived_inputs_pass",
+    "baseline_marker_comparison_id", "receiver_deg_comparison_id",
+    "direction_filter", "requires_cell_subtype", "notes", "enabled"
   ))
 }
 
@@ -22,6 +28,19 @@ read_communication_pairs <- function(cfg) {
   }
   df$tool[!nzchar(df$tool)] <- "both"
   df$tool <- tolower(df$tool)
+  df$communication_mode[!nzchar(df$communication_mode)] <- "baseline"
+  df$activation_policy[!nzchar(df$activation_policy)] <- ifelse(df$communication_mode == "differential_summary", "derived_from_split", "always")
+  df$activation_policy <- tolower(df$activation_policy)
+  df$run_baseline_if_split_fails[!nzchar(df$run_baseline_if_split_fails)] <- "no"
+  df$run_baseline_if_split_fails <- tolower(df$run_baseline_if_split_fails)
+  df$requires_all_derived_inputs_pass[!nzchar(df$requires_all_derived_inputs_pass)] <- "no"
+  df$requires_all_derived_inputs_pass <- tolower(df$requires_all_derived_inputs_pass)
+  df$receiver_gene_program_source[!nzchar(df$receiver_gene_program_source)] <- "none"
+  df$receiver_gene_program_source <- tolower(df$receiver_gene_program_source)
+  df$direction_filter[!nzchar(df$direction_filter)] <- "yes"
+  df$direction_filter <- tolower(df$direction_filter)
+  df$requires_cell_subtype[!nzchar(df$requires_cell_subtype)] <- "no"
+  df$requires_cell_subtype <- tolower(df$requires_cell_subtype)
   df$enabled[!nzchar(df$enabled)] <- "yes"
   df$enabled <- tolower(df$enabled)
   df <- df[nzchar(df$pair_id), , drop = FALSE]
@@ -45,6 +64,97 @@ communication_pair_tool_enabled <- function(pair_row, tool) {
     return(requested %in% c("nichenet", "nichenet_only"))
   }
   FALSE
+}
+
+communication_pair_direction_filter <- function(pair_row) {
+  flag <- tolower(normalize_scalar_value(pair_row$direction_filter[[1]], "yes"))
+  flag %in% c("yes", "true", "1", "on")
+}
+
+communication_pair_requires_cell_subtype <- function(pair_row) {
+  flag <- tolower(normalize_scalar_value(pair_row$requires_cell_subtype[[1]], "no"))
+  flag %in% c("yes", "true", "1", "on")
+}
+
+communication_pair_activation_policy <- function(pair_row) {
+  tolower(normalize_scalar_value(pair_row$activation_policy[[1]], "always"))
+}
+
+communication_pair_auto_gate <- function(pair_row) {
+  identical(communication_pair_activation_policy(pair_row), "auto_if_min_cells")
+}
+
+communication_pair_derived <- function(pair_row) {
+  identical(communication_pair_activation_policy(pair_row), "derived_from_split")
+}
+
+communication_pair_run_baseline_if_split_fails <- function(pair_row) {
+  flag <- tolower(normalize_scalar_value(pair_row$run_baseline_if_split_fails[[1]], "no"))
+  flag %in% c("yes", "true", "1", "on")
+}
+
+communication_pair_requires_all_derived_inputs_pass <- function(pair_row) {
+  flag <- tolower(normalize_scalar_value(pair_row$requires_all_derived_inputs_pass[[1]], "no"))
+  flag %in% c("yes", "true", "1", "on")
+}
+
+communication_pair_min_int <- function(pair_row, col) {
+  if (!col %in% colnames(pair_row)) {
+    return(NA_integer_)
+  }
+  suppressWarnings(as.integer(normalize_scalar_value(pair_row[[col]][[1]])))
+}
+
+communication_gate_counts_07 <- function(obj, cell_type_col, roles) {
+  meta <- obj@meta.data
+  sender_n <- sum(as.character(meta[[cell_type_col]]) %in% roles$sender, na.rm = TRUE)
+  receiver_n <- sum(as.character(meta[[cell_type_col]]) %in% roles$receiver, na.rm = TRUE)
+  list(
+    sender_n = as.integer(sender_n),
+    receiver_n = as.integer(receiver_n),
+    condition_pair_cell_n = as.integer(sender_n + receiver_n)
+  )
+}
+
+evaluate_communication_min_cell_gate_07 <- function(pair_row, sender_n, receiver_n, condition_pair_cell_n) {
+  policy <- communication_pair_activation_policy(pair_row)
+  min_sender <- communication_pair_min_int(pair_row, "min_sender_cells")
+  min_receiver <- communication_pair_min_int(pair_row, "min_receiver_cells")
+  min_condition <- communication_pair_min_int(pair_row, "min_cells_per_condition")
+  if (!identical(policy, "auto_if_min_cells")) {
+    return(list(
+      gate_status = ifelse(identical(policy, "derived_from_split"), "derived_not_executable", "not_applicable"),
+      pass = TRUE,
+      reason = "",
+      min_sender_cells = min_sender,
+      min_receiver_cells = min_receiver,
+      min_cells_per_condition = min_condition
+    ))
+  }
+  missing_threshold <- any(is.na(c(min_sender, min_receiver, min_condition))) ||
+    any(c(min_sender, min_receiver, min_condition) <= 0)
+  if (missing_threshold) {
+    return(list(
+      gate_status = "fail",
+      pass = FALSE,
+      reason = "auto_if_min_cells requires positive min_sender_cells, min_receiver_cells, and min_cells_per_condition",
+      min_sender_cells = min_sender,
+      min_receiver_cells = min_receiver,
+      min_cells_per_condition = min_condition
+    ))
+  }
+  failures <- character(0)
+  if (sender_n < min_sender) failures <- c(failures, sprintf("sender_n=%s < min_sender_cells=%s", sender_n, min_sender))
+  if (receiver_n < min_receiver) failures <- c(failures, sprintf("receiver_n=%s < min_receiver_cells=%s", receiver_n, min_receiver))
+  if (condition_pair_cell_n < min_condition) failures <- c(failures, sprintf("condition_pair_cell_n=%s < min_cells_per_condition=%s", condition_pair_cell_n, min_condition))
+  list(
+    gate_status = ifelse(length(failures) == 0, "pass", "fail"),
+    pass = length(failures) == 0,
+    reason = paste(failures, collapse = "; "),
+    min_sender_cells = min_sender,
+    min_receiver_cells = min_receiver,
+    min_cells_per_condition = min_condition
+  )
 }
 
 pair_scope_applies_to_layer_07 <- function(pair_row, layer_id) {

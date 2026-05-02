@@ -192,6 +192,17 @@
   - `comparisons.tsv` 支持可选 `subset_column` / `subset_value`，两列必须同时填写或同时留空
   - 生成 canonical sample sheet
 
+### 5.3a 分析意图驱动 metadata
+
+`metadata/analysis_questions.tsv` 是分析问题的 Tier 1 单一真相。05/06/07
+stage 不直接维护模块输入表，而是在运行前调用 `ensure_metadata_fresh`：
+
+- 当 `analysis_questions.tsv` 比生成表更新，或任一 Tier 2 表缺失时，自动运行 `workflow/03stages/95_run_metadata_generator.sh`。
+- 随后运行 `workflow/03stages/96_validate_metadata.sh`，保证生成表和真实对象 metadata 的当前一致性。
+- 生成表包括 `comparisons.tsv`、`communication_pairs.tsv`、`trajectory_pairs.tsv`、`scenic_targets.tsv`、`enrichment_targets.tsv`、`gene_program_targets.tsv`、`deconv_pairs.tsv` 和 `spatial_pairs.tsv`。
+
+Tier 2 表为自动生成文件，不应手工编辑。后续新增 ST 或联合分析 stage 时，按 `docs/st_stage_metadata_hook_template.md` 在 `source common.sh` 后接入同一行 hook。
+
 ### 5.4 输入审计
 
 - `workflow/03stages/audit_inputs.sh`
@@ -251,7 +262,7 @@
 - `workflow/03stages/04_subcluster.sh`
   - `04a_subcluster_build.R`：按 `object_layers.tsv` 生成 subcluster 层；默认继承 panorama 选定的 normalization/integration，只有 layer 显式配置多候选时才进入候选模式。
   - `04a_review.R`：汇总 candidate diagnostics，写 `subcluster_review_summary.tsv` 和每层 `selected_integration.txt`。
-  - `04b_subcluster_annotate.R`：对已经 finalize 的 `clustered_<layer_id>` 复用 annotation helper，写 `annotated_<layer_id>` 和跨层注释汇总。
+  - `04b_subcluster_annotate.R`：对已经 finalize 的 `clustered_<layer_id>` 复用 annotation helper，写 `annotated_<layer_id>` 和跨层注释汇总，并把子层注释回填到 panorama 的 `cell_subtype` metadata。
   - `04c_subcluster_eda.R`：生成 subcluster review 报告，汇总 cluster count、注释置信度、condition split、panorama-vs-subcluster 对照。
 - `workflow/03stages/04d_cluster_robustness.sh`
   - `04d_cluster_robustness.R`：当前是 runnable placeholder，只写空 metrics schema 和报告；真实 scDesign3 robustness 留到后续里程碑。
@@ -285,14 +296,18 @@ gate 规则采用 Option B：
 05 DEG 走当前 workflow-native stage，底层脚本在 `workflow/05single_script/05*`：
 
 - `workflow/03stages/05_deg.sh`
-  - `05a_marker_discovery.R`：逐 layer / comparison / cluster 运行探索性 Wilcoxon marker discovery。
-  - `05b_pseudobulk_de.R`：复制门通过时运行 muscat pseudobulk DE；复制门失败时只写探索性状态和 05a fallback 路径。
-  - `05c_composition.R`：复制门通过时运行 propeller；复制门失败时只写探索性状态。
-  - `05d_deg_eda.R`：汇总 marker / pseudobulk / composition manifest，输出 `reports/eda/deg/report.md`。
+  - `05a_marker_discovery.R`：按 `analysis_mode` 运行 cell-level marker/DEG；`composition` 行跳过并交给 05c。
+  - `05b_pseudobulk_de.R`：仅对 `condition_within_type` 行按 `aggregation_group_var` 运行 muscat pseudobulk DE；复制门失败时只写探索性状态和 05a fallback 路径。
+  - `05c_composition.R`：仅对 `composition` 行按 `composition_group_var` 运行 sample-level proportion / propeller。
+  - `05d_deg_eda.R`：汇总 marker / pseudobulk / composition manifest，输出 `reports/eda/deg/report.md` 和 `results/tables/deg/gene_program_registry.tsv`。
 
 `comparisons.tsv` 支持 05 专用可选列：
 
 - `subset_column` / `subset_value`：先过滤细胞，再做组间比较；`subset_value` 支持 CSV。
+- `analysis_mode`：区分 `subtype_marker`、`subtype_pairwise`、`condition_within_type` 和 `composition`。
+- `aggregation_group_var`：05b pseudobulk 的样本内聚合单位，例如 `cell_type`、`cell_subtype` 或 `all_cells`。
+- `composition_group_var`：05c proportion 的分类单位，例如 `cell_subtype` 或 `cell_type`。
+- `produces_gene_program` / `gene_program_role`：控制 05d gene-program registry 和 06/07/08 下游可用性。
 - `force_exploratory`：默认 `no`；设为 `yes` 时 N=1 等复制门失败结果会标记为 `exploratory_forced`，仅供探索和下游富集预览。
 - `min_cells_per_group`：默认 `3`，控制 05a 的 FindMarkers 最小细胞数。
 - `logfc_threshold`：默认 `0`，控制 05a 的 FindMarkers logFC 阈值。
@@ -304,11 +319,15 @@ gate 规则采用 Option B：
 06 enrichment 依赖 05 DEG 完成且 `deg` gate 已批准：
 
 - `workflow/03stages/06_enrichment.sh`
-  - `06a_go_enrichment.R`：按 layer / comparison / cluster / up-down-all 运行 GO BP/CC/MF 富集。
-  - `06b_kegg_enrichment.R`：按相同粒度运行 KEGG 富集。
+  - `06a_go_enrichment.R`：只消费 `metadata/enrichment_targets.tsv` 中 `database=GO` 的目标，再通过 `results/tables/deg/gene_program_registry.tsv` 找对应 gene program。
+  - `06b_kegg_enrichment.R`：只消费 `metadata/enrichment_targets.tsv` 中 `database=KEGG` 的目标，再通过同一个 registry 找对应 gene program。
   - `06c_enrichment_eda.R`：汇总 GO/KEGG manifest，输出 `reports/eda/enrichment/report.md`、跨 cluster 热图和 shared pathways。
 
+06 不再从 05 manifest 自动膨胀所有 DEG。没有出现在 `enrichment_targets.tsv` 的 DEG/marker 不会自动富集。每个 layer 会尽量生成 `results/tables/enrichment/background/background_genes_<layer>.tsv`，clusterProfiler GO/KEGG 使用该 layer-specific expressed universe；如果对象不可用，manifest 会保留背景为空/不可用的状态信息。
+
 物种策略默认是 `ENRICHMENT_SPECIES_STRATEGY=chicken_primary`。如果设置为包含 `human`、`dual`、`both` 或 `mapped`，06 会额外使用 00 ortholog cache 将鸡基因映射到人类符号后跑辅助通道。运行后端优先使用可加载的 `clusterProfiler`；如果当前环境中 `clusterProfiler` 因 `DOSE` 等依赖不可加载，会回退到 `gprofiler2` 并在 manifest 的 `status` / `reason` 中记录。KEGG 在线查询默认 `ENRICHMENT_KEGG_TIMEOUT_SEC=60`，超时会记录为 `timeout` 状态。
+
+06 manifest 和图标题会携带 `formal_status` / `result_level` / `biological_replicates`，使 `formal`、`exploratory_only`、`exploratory_forced` 不会在下游报告中丢失。
 
 主要输出：
 
@@ -325,10 +344,10 @@ gate 规则采用 Option B：
 
 - `workflow/03stages/07_communication.sh`
   - `07a_cellchat.R`：按 layer / pair / condition 在 `r_interaction` 中运行 CellChat，并用 00 ortholog cache 将鸡表达矩阵映射到人类符号。
-  - `07b_nichenet.R`：按 sender→receiver 方向运行 NicheNet；优先读 05 DEG，缺失时使用 receiver marker fallback。
-  - `07c_communication_eda.R`：按 `pair_id + layer + condition` 汇总 CellChat / NicheNet 共识，输出审阅报告。
+  - `07b_nichenet.R`：按 sender→receiver 方向运行 NicheNet；通过 `communication_pairs.tsv` 的显式 `receiver_deg_comparison_id` / `baseline_marker_comparison_id` 到 `gene_program_registry.tsv` 查 gene program。
+  - `07c_communication_eda.R`：按 `pair_id + layer + condition` 汇总 CellChat / NicheNet 共识，并按 `direction_filter` 决定是否保留全网络。
 
-`communication_pairs.tsv` 支持 `sender` / `receiver` 精确 cell type、CSV、`*` 和 `prefix_*`。`condition_split_var` / `condition_split_values` 用于把 syf、f5 等阶段拆开分别跑。NicheNet 三件套资源可用 `workflow/06tools/download_nichenet_resources.sh` 准备。
+`communication_pairs.tsv` 支持 `sender` / `receiver` 精确 cell type、CSV、`*` 和 `prefix_*`。`condition_split_var` / `condition_split_values` 用于把 syf、f5 等阶段拆开分别跑。`requires_cell_subtype=yes` 时必须存在 `cell_subtype` 且 sender/receiver 必须能在该列解析，07 不允许 fallback 到 `cell_type` / `annotation_label` / `cluster_id`。NicheNet 缺失 gene program 会记录失败或跳过，不再临时跑 receiver FindMarkers，也不再用 `pair_id == comparison_id` 猜 DEG。NicheNet 三件套资源可用 `workflow/06tools/download_nichenet_resources.sh` 准备。
 
 主要输出：
 

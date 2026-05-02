@@ -33,16 +33,12 @@ module_name <- "05a_marker_discovery"
 prepare_dirs_05(cfg)
 set.seed(cfg$random_seed)
 
-run_exploratory_findmarkers_05 <- function(seu, cluster_id, vars) {
-  hit <- as.character(seu$cluster_id) == cluster_id
-  if (!any(hit)) {
-    return(list(result = NULL, status = "empty_cluster", reason = "cluster has 0 cells", n1 = 0L, n2 = 0L))
-  }
-
-  cluster_obj <- subset(seu, cells = colnames(seu)[hit])
-  cluster_obj <- maybe_join_layers(cluster_obj)
-  cluster_meta <- cluster_obj@meta.data
-  groups <- as.character(cluster_meta[[vars$group_var]])
+run_exploratory_findmarkers_05 <- function(seu, vars, cluster_id = "", annotation_label = "") {
+  prepared <- prepare_comparison_group_05(seu, vars)
+  obj <- maybe_join_layers(prepared$object)
+  group_var <- prepared$group_var
+  meta <- obj@meta.data
+  groups <- as.character(meta[[group_var]])
   n1 <- sum(groups == vars$ident_1, na.rm = TRUE)
   n2 <- sum(groups == vars$ident_2, na.rm = TRUE)
   if (n1 < vars$min_cells_per_group || n2 < vars$min_cells_per_group) {
@@ -55,10 +51,10 @@ run_exploratory_findmarkers_05 <- function(seu, cluster_id, vars) {
     ))
   }
 
-  Seurat::Idents(cluster_obj) <- vars$group_var
+  Seurat::Idents(obj) <- group_var
   res <- tryCatch(
     Seurat::FindMarkers(
-      cluster_obj,
+      obj,
       ident.1 = vars$ident_1,
       ident.2 = vars$ident_2,
       logfc.threshold = vars$logfc_threshold,
@@ -76,7 +72,10 @@ run_exploratory_findmarkers_05 <- function(seu, cluster_id, vars) {
   if (is.null(res) || nrow(res) == 0) {
     return(list(result = NULL, status = "empty_result", reason = "FindMarkers returned 0 rows", n1 = n1, n2 = n2))
   }
-  list(result = tibble::rownames_to_column(as.data.frame(res), "gene"), status = "ok", reason = "", n1 = n1, n2 = n2)
+  out <- tibble::rownames_to_column(as.data.frame(res), "gene")
+  out$cluster_id <- cluster_id
+  out$annotation_label <- annotation_label
+  list(result = out, status = "ok", reason = "", n1 = n1, n2 = n2)
 }
 
 layer_status_df <- deg_layer_status(cfg)
@@ -101,6 +100,46 @@ for (idx in seq_len(nrow(layer_status_df))) {
     subset_result <- subset_cells_for_comparison(obj, vars)
     result_rows <- list()
     summary_rows <- list()
+    inference_status <- if (vars$force_exploratory) "exploratory_forced" else "exploratory_cell_level"
+
+    if (identical(vars$analysis_mode, "composition")) {
+      write_tsv_local(empty_marker_result_05(), out_paths$exploratory_tsv)
+      summary_rows[[1]] <- data.frame(
+        comparison_id = vars$comparison_id,
+        layer_id = layer_id,
+        cluster_id = "",
+        annotation_label = "",
+        analysis_mode = vars$analysis_mode,
+        analysis_unit = vars$analysis_unit,
+        ident_1_n = NA_integer_,
+        ident_2_n = NA_integer_,
+        min_cells_per_group = vars$min_cells_per_group,
+        result_available = "no",
+        status = "skipped_composition",
+        reason = "composition rows are handled by 05c",
+        stringsAsFactors = FALSE
+      )
+      write_tsv_local(dplyr::bind_rows(summary_rows), out_paths$exploratory_summary_tsv)
+      manifest_rows[[length(manifest_rows) + 1]] <- data.frame(
+        layer_id = layer_id,
+        comparison_id = vars$comparison_id,
+        analysis_mode = vars$analysis_mode,
+        analysis_unit = vars$analysis_unit,
+        gene_program_role = vars$gene_program_role,
+        group_var = vars$group_var,
+        subset_column = vars$subset_column,
+        subset_value = vars$subset_value,
+        force_exploratory = ifelse(vars$force_exploratory, "yes", "no"),
+        min_cells_per_group = vars$min_cells_per_group,
+        logfc_threshold = vars$logfc_threshold,
+        inference_status = "skipped",
+        status = "skipped_composition",
+        exploratory_results_tsv = normalizePath(out_paths$exploratory_tsv, winslash = "/", mustWork = FALSE),
+        exploratory_summary_tsv = normalizePath(out_paths$exploratory_summary_tsv, winslash = "/", mustWork = FALSE),
+        stringsAsFactors = FALSE
+      )
+      next
+    }
 
     if (!identical(subset_result$status, "ok")) {
       write_tsv_local(empty_marker_result_05(), out_paths$exploratory_tsv)
@@ -109,6 +148,8 @@ for (idx in seq_len(nrow(layer_status_df))) {
         layer_id = layer_id,
         cluster_id = "",
         annotation_label = "",
+        analysis_mode = vars$analysis_mode,
+        analysis_unit = vars$analysis_unit,
         ident_1_n = NA_integer_,
         ident_2_n = NA_integer_,
         min_cells_per_group = vars$min_cells_per_group,
@@ -121,6 +162,9 @@ for (idx in seq_len(nrow(layer_status_df))) {
       manifest_rows[[length(manifest_rows) + 1]] <- data.frame(
         layer_id = layer_id,
         comparison_id = vars$comparison_id,
+        analysis_mode = vars$analysis_mode,
+        analysis_unit = vars$analysis_unit,
+        gene_program_role = vars$gene_program_role,
         group_var = vars$group_var,
         subset_column = vars$subset_column,
         subset_value = vars$subset_value,
@@ -137,17 +181,64 @@ for (idx in seq_len(nrow(layer_status_df))) {
     }
 
     obj_sub <- subset_result$object
-    cluster_ids <- sort(unique(as.character(obj_sub$cluster_id)))
-    cluster_ids <- cluster_ids[nzchar(cluster_ids)]
-    inference_status <- if (vars$force_exploratory) "exploratory_forced" else "exploratory_cell_level"
+    run_res <- run_exploratory_findmarkers_05(
+      obj_sub,
+      vars,
+      cluster_id = "",
+      annotation_label = if (identical(vars$analysis_mode, "subtype_marker")) vars$ident_1 else vars$analysis_mode
+    )
+    summary_rows[[length(summary_rows) + 1]] <- data.frame(
+      comparison_id = vars$comparison_id,
+      layer_id = layer_id,
+      cluster_id = "",
+      annotation_label = if (identical(vars$analysis_mode, "subtype_marker")) vars$ident_1 else vars$analysis_mode,
+      analysis_mode = vars$analysis_mode,
+      analysis_unit = vars$analysis_unit,
+      ident_1_n = run_res$n1,
+      ident_2_n = run_res$n2,
+      min_cells_per_group = vars$min_cells_per_group,
+      result_available = ifelse(is.null(run_res$result), "no", "yes"),
+      status = run_res$status,
+      reason = run_res$reason,
+      stringsAsFactors = FALSE
+    )
+    if (!is.null(run_res$result)) {
+      res <- run_res$result
+      res$comparison_id <- vars$comparison_id
+      res$layer_id <- layer_id
+      res$analysis_mode <- vars$analysis_mode
+      res$analysis_unit <- vars$analysis_unit
+      res$gene_program_role <- vars$gene_program_role
+      res$inference_scope <- "exploratory_cell_level"
+      res$inference_status <- inference_status
+      res$subset_column <- vars$subset_column
+      res$subset_value <- vars$subset_value
+      result_rows[[length(result_rows) + 1]] <- res
+    }
 
-    for (cluster_id in cluster_ids) {
-      run_res <- run_exploratory_findmarkers_05(obj_sub, cluster_id, vars)
+    if (identical(vars$analysis_mode, "annotation_cluster_marker")) {
+      cluster_ids <- sort(unique(as.character(obj_sub$cluster_id)))
+      cluster_ids <- cluster_ids[nzchar(cluster_ids)]
+      result_rows <- list()
+      summary_rows <- list()
+      for (cluster_id in cluster_ids) {
+        cluster_vars <- vars
+        cluster_vars$group_var <- "cluster_id"
+        cluster_vars$ident_1 <- cluster_id
+        cluster_vars$ident_2 <- "__rest__"
+        run_res <- run_exploratory_findmarkers_05(
+          obj_sub,
+          cluster_vars,
+          cluster_id = cluster_id,
+          annotation_label = cluster_label_for_05(obj_sub, cluster_id)
+        )
       summary_rows[[length(summary_rows) + 1]] <- data.frame(
         comparison_id = vars$comparison_id,
         layer_id = layer_id,
         cluster_id = cluster_id,
         annotation_label = cluster_label_for_05(obj_sub, cluster_id),
+        analysis_mode = vars$analysis_mode,
+        analysis_unit = vars$analysis_unit,
         ident_1_n = run_res$n1,
         ident_2_n = run_res$n2,
         min_cells_per_group = vars$min_cells_per_group,
@@ -160,13 +251,15 @@ for (idx in seq_len(nrow(layer_status_df))) {
         res <- run_res$result
         res$comparison_id <- vars$comparison_id
         res$layer_id <- layer_id
-        res$cluster_id <- cluster_id
-        res$annotation_label <- cluster_label_for_05(obj_sub, cluster_id)
+        res$analysis_mode <- vars$analysis_mode
+        res$analysis_unit <- vars$analysis_unit
+        res$gene_program_role <- vars$gene_program_role
         res$inference_scope <- "exploratory_cell_level"
         res$inference_status <- inference_status
         res$subset_column <- vars$subset_column
         res$subset_value <- vars$subset_value
         result_rows[[length(result_rows) + 1]] <- res
+      }
       }
     }
 
@@ -178,6 +271,9 @@ for (idx in seq_len(nrow(layer_status_df))) {
     manifest_rows[[length(manifest_rows) + 1]] <- data.frame(
       layer_id = layer_id,
       comparison_id = vars$comparison_id,
+      analysis_mode = vars$analysis_mode,
+      analysis_unit = vars$analysis_unit,
+      gene_program_role = vars$gene_program_role,
       group_var = vars$group_var,
       subset_column = vars$subset_column,
       subset_value = vars$subset_value,
@@ -194,7 +290,8 @@ for (idx in seq_len(nrow(layer_status_df))) {
 }
 
 manifest_df <- if (length(manifest_rows) > 0) dplyr::bind_rows(manifest_rows) else empty_df_05(c(
-  "layer_id", "comparison_id", "group_var", "subset_column", "subset_value",
+  "layer_id", "comparison_id", "analysis_mode", "analysis_unit", "gene_program_role",
+  "group_var", "subset_column", "subset_value",
   "force_exploratory", "min_cells_per_group", "logfc_threshold",
   "inference_status", "status", "exploratory_results_tsv", "exploratory_summary_tsv"
 ))

@@ -20,6 +20,7 @@ metadata/*
 !metadata/trajectory_pairs.tsv
 !metadata/scenic_targets.tsv
 !metadata/enrichment_targets.tsv
+!metadata/gene_program_targets.tsv
 !metadata/deconv_pairs.tsv
 !metadata/spatial_pairs.tsv
 raw/

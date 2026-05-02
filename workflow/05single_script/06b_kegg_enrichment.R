@@ -21,6 +21,8 @@ source_utf8(file.path(.script_dir, "helpers", "project_paths_06.R"))
 source_utf8(file.path(.script_dir, "helpers", "manifest_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "report_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "metadata_io.R"))
+source_utf8(file.path(.script_dir, "helpers", "qc_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "ambient_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "layer_config_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "comparison_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "deg_utils.R"))
@@ -38,10 +40,31 @@ human_enabled <- human_strategy_enabled_06(cfg)
 human_org_db <- if (human_enabled) optional_org_db_06("org.Hs.eg.db") else NULL
 ortholog_map <- if (human_enabled) load_ortholog_map(cfg) else empty_df_06(c("chicken_symbol", "human_symbol"))
 input_grid <- read_enrichment_input_grid_06(cfg)
+if (nrow(input_grid) > 0 && "database" %in% colnames(input_grid)) {
+  input_grid <- input_grid[toupper(input_grid$database) %in% c("KEGG", "BOTH", "ALL"), , drop = FALSE]
+}
 
-write_kegg_result <- function(layer_id, comparison_id, cluster_id, direction, source_species, organism, deg_source, deg_status, genes, org_db, enrichment_source) {
+write_kegg_result <- function(
+    layer_id,
+    comparison_id,
+    cluster_id,
+    direction,
+    source_species,
+    organism,
+    deg_source,
+    deg_status,
+    genes,
+    org_db,
+    enrichment_source,
+    target_id = "",
+    formal_status = "",
+    result_level = "",
+    biological_replicates = "",
+    background_genes = character(0),
+    background_tsv = "") {
   paths <- enrichment_paths_06(cfg, layer_id, comparison_id, cluster_id, "kegg", source_species, direction)
   extra <- list(
+    target_id = target_id,
     layer_id = layer_id,
     comparison_id = comparison_id,
     cluster_id = cluster_id,
@@ -51,13 +74,23 @@ write_kegg_result <- function(layer_id, comparison_id, cluster_id, direction, so
     source_species = source_species,
     enrichment_source = enrichment_source,
     deg_source = deg_source,
-    deg_inference_status = deg_status
+    deg_inference_status = deg_status,
+    formal_status = formal_status,
+    result_level = result_level,
+    biological_replicates = biological_replicates,
+    background_gene_n = length(background_genes)
   )
+  background_conversion <- if (!is.null(org_db) && length(background_genes) > 0) {
+    convert_symbols_to_entrezid(background_genes, org_db, keytype = "SYMBOL")
+  } else {
+    list(ids = character(0), mapped_n = 0L)
+  }
 
   if (length(genes) < cfg$enrichment_min_input_genes) {
     result_df <- empty_enrichment_result_06(names(extra))
     counts <- write_enrichment_result_06(result_df, paths, cfg)
     return(build_enrichment_manifest_row_06(
+      target_id = target_id,
       layer_id = layer_id,
       comparison_id = comparison_id,
       cluster_id = cluster_id,
@@ -67,6 +100,12 @@ write_kegg_result <- function(layer_id, comparison_id, cluster_id, direction, so
       source_species = source_species,
       deg_source = deg_source,
       deg_inference_status = deg_status,
+      formal_status = formal_status,
+      result_level = result_level,
+      biological_replicates = biological_replicates,
+      background_tsv = background_tsv,
+      background_gene_n = length(background_genes),
+      background_mapped_n = background_conversion$mapped_n %||% 0L,
       status = "too_few_genes",
       reason = sprintf("%s genes before ID conversion", length(genes)),
       input_gene_n = length(genes),
@@ -83,18 +122,20 @@ write_kegg_result <- function(layer_id, comparison_id, cluster_id, direction, so
       gene_symbols = genes,
       organism = gp_organism,
       sources = "KEGG",
-      pvalue_cutoff = cfg$enrichment_pvalue_cutoff
+      pvalue_cutoff = cfg$enrichment_pvalue_cutoff,
+      background_symbols = background_genes
     )
     result_df <- format_enrichment_result_tsv(run_res$result, extra)
     counts <- write_enrichment_result_06(result_df, paths, cfg)
     dotplot <- ""
     barplot <- ""
     if (nrow(result_df) > 0) {
-      plot_title <- sprintf("%s %s %s %s KEGG %s", layer_id, comparison_id, cluster_id, direction, source_species)
+      plot_title <- sprintf("%s %s %s %s KEGG %s %s reps=%s", layer_id, comparison_id, cluster_id, direction, source_species, formal_status, biological_replicates)
       dotplot <- plot_enrichment_dotplot(result_df, plot_title, top_n = 20L, output_png = paths$dotplot_png)
       barplot <- plot_enrichment_barplot(result_df, plot_title, top_n = 15L, output_png = paths$barplot_png)
     }
     return(build_enrichment_manifest_row_06(
+      target_id = target_id,
       layer_id = layer_id,
       comparison_id = comparison_id,
       cluster_id = cluster_id,
@@ -104,6 +145,12 @@ write_kegg_result <- function(layer_id, comparison_id, cluster_id, direction, so
       source_species = source_species,
       deg_source = deg_source,
       deg_inference_status = deg_status,
+      formal_status = formal_status,
+      result_level = result_level,
+      biological_replicates = biological_replicates,
+      background_tsv = background_tsv,
+      background_gene_n = length(background_genes),
+      background_mapped_n = background_conversion$mapped_n %||% 0L,
       status = run_res$status,
       reason = run_res$reason,
       input_gene_n = length(genes),
@@ -120,6 +167,7 @@ write_kegg_result <- function(layer_id, comparison_id, cluster_id, direction, so
     result_df <- empty_enrichment_result_06(names(extra))
     counts <- write_enrichment_result_06(result_df, paths, cfg)
     return(build_enrichment_manifest_row_06(
+      target_id = target_id,
       layer_id = layer_id,
       comparison_id = comparison_id,
       cluster_id = cluster_id,
@@ -129,6 +177,12 @@ write_kegg_result <- function(layer_id, comparison_id, cluster_id, direction, so
       source_species = source_species,
       deg_source = deg_source,
       deg_inference_status = deg_status,
+      formal_status = formal_status,
+      result_level = result_level,
+      biological_replicates = biological_replicates,
+      background_tsv = background_tsv,
+      background_gene_n = length(background_genes),
+      background_mapped_n = background_conversion$mapped_n %||% 0L,
       status = if (identical(source_species, "human")) "human_orgdb_missing" else "orgdb_missing",
       reason = sprintf("%s OrgDb is not available for clusterProfiler KEGG backend", source_species),
       input_gene_n = length(genes),
@@ -144,6 +198,7 @@ write_kegg_result <- function(layer_id, comparison_id, cluster_id, direction, so
     result_df <- empty_enrichment_result_06(names(extra))
     counts <- write_enrichment_result_06(result_df, paths, cfg)
     return(build_enrichment_manifest_row_06(
+      target_id = target_id,
       layer_id = layer_id,
       comparison_id = comparison_id,
       cluster_id = cluster_id,
@@ -153,6 +208,12 @@ write_kegg_result <- function(layer_id, comparison_id, cluster_id, direction, so
       source_species = source_species,
       deg_source = deg_source,
       deg_inference_status = deg_status,
+      formal_status = formal_status,
+      result_level = result_level,
+      biological_replicates = biological_replicates,
+      background_tsv = background_tsv,
+      background_gene_n = length(background_genes),
+      background_mapped_n = background_conversion$mapped_n %||% 0L,
       status = "too_few_mapped_genes",
       reason = sprintf("%s/%s genes mapped to ENTREZID via %s", conversion$mapped_n, conversion$input_n, conversion$keytype),
       input_gene_n = conversion$input_n,
@@ -170,19 +231,21 @@ write_kegg_result <- function(layer_id, comparison_id, cluster_id, direction, so
     qvalue_cutoff = cfg$enrichment_qvalue_cutoff,
     min_gs_size = cfg$enrichment_min_gs_size,
     max_gs_size = cfg$enrichment_max_gs_size,
-    timeout_sec = cfg$enrichment_kegg_timeout_sec
+    timeout_sec = cfg$enrichment_kegg_timeout_sec,
+    universe_ids = background_conversion$ids
   )
   result_df <- format_enrichment_result_tsv(run_res$result, extra)
   counts <- write_enrichment_result_06(result_df, paths, cfg)
   dotplot <- ""
   barplot <- ""
   if (nrow(result_df) > 0) {
-    plot_title <- sprintf("%s %s %s %s KEGG %s", layer_id, comparison_id, cluster_id, direction, source_species)
+    plot_title <- sprintf("%s %s %s %s KEGG %s %s reps=%s", layer_id, comparison_id, cluster_id, direction, source_species, formal_status, biological_replicates)
     dotplot <- plot_enrichment_dotplot(run_res$result, plot_title, top_n = 20L, output_png = paths$dotplot_png)
     barplot <- plot_enrichment_barplot(run_res$result, plot_title, top_n = 15L, output_png = paths$barplot_png)
   }
 
   build_enrichment_manifest_row_06(
+    target_id = target_id,
     layer_id = layer_id,
     comparison_id = comparison_id,
     cluster_id = cluster_id,
@@ -192,6 +255,12 @@ write_kegg_result <- function(layer_id, comparison_id, cluster_id, direction, so
     source_species = source_species,
     deg_source = deg_source,
     deg_inference_status = deg_status,
+    formal_status = formal_status,
+    result_level = result_level,
+    biological_replicates = biological_replicates,
+    background_tsv = background_tsv,
+    background_gene_n = length(background_genes),
+    background_mapped_n = background_conversion$mapped_n %||% 0L,
     status = run_res$status,
     reason = run_res$reason,
     input_gene_n = conversion$input_n,
@@ -210,10 +279,17 @@ for (idx in seq_len(nrow(input_grid))) {
   item <- input_grid[idx, , drop = FALSE]
   layer_id <- item$layer_id[[1]]
   comparison_id <- item$comparison_id[[1]]
+  target_id <- normalize_scalar_value(item$target_id[[1]])
+  formal_status <- normalize_scalar_value(item$formal_status[[1]], item$deg_inference_status[[1]])
+  result_level <- normalize_scalar_value(item$result_level[[1]])
+  biological_replicates <- normalize_scalar_value(item$biological_replicates[[1]], "unknown")
+  background_tsv <- normalize_scalar_value(item$background_tsv[[1]])
+  background_genes <- read_background_genes_06(background_tsv)
   message("06b KEGG enrichment: ", layer_id, " / ", comparison_id)
 
   if (!nzchar(item$deg_tsv[[1]]) || !file.exists(item$deg_tsv[[1]])) {
     manifest_rows[[length(manifest_rows) + 1]] <- build_enrichment_manifest_row_06(
+      target_id = target_id,
       layer_id = layer_id,
       comparison_id = comparison_id,
       cluster_id = "",
@@ -223,8 +299,14 @@ for (idx in seq_len(nrow(input_grid))) {
       source_species = "",
       deg_source = item$deg_source[[1]],
       deg_inference_status = item$deg_inference_status[[1]],
+      formal_status = formal_status,
+      result_level = result_level,
+      biological_replicates = biological_replicates,
+      background_tsv = background_tsv,
+      background_gene_n = length(background_genes),
+      background_mapped_n = 0L,
       status = "missing_deg_source",
-      reason = "No formal pseudobulk or exploratory marker DEG table was available",
+      reason = "No targeted gene program table was available from gene_program_registry.tsv",
       input_gene_n = 0L,
       mapped_gene_n = 0L,
       mapping_rate = NA_real_,
@@ -254,14 +336,22 @@ for (idx in seq_len(nrow(input_grid))) {
         deg_status = item$deg_inference_status[[1]],
         genes = genes,
         org_db = chicken_org_db,
-        enrichment_source = "org.Gg.eg.db_to_KEGG_gga"
+        enrichment_source = "org.Gg.eg.db_to_KEGG_gga",
+        target_id = target_id,
+        formal_status = formal_status,
+        result_level = result_level,
+        biological_replicates = biological_replicates,
+        background_genes = background_genes,
+        background_tsv = background_tsv
       )
 
       if (human_enabled) {
+        human_background <- map_genes_to_human(background_genes, ortholog_map)
         if (is.null(human_org_db) && clusterprofiler_available_06()) {
           paths <- enrichment_paths_06(cfg, layer_id, comparison_id, cluster_id, "kegg", "human", direction)
           write_enrichment_result_06(empty_enrichment_result_06(), paths, cfg)
           manifest_rows[[length(manifest_rows) + 1]] <- build_enrichment_manifest_row_06(
+            target_id = target_id,
             layer_id = layer_id,
             comparison_id = comparison_id,
             cluster_id = cluster_id,
@@ -271,6 +361,12 @@ for (idx in seq_len(nrow(input_grid))) {
             source_species = "human",
             deg_source = item$deg_source[[1]],
             deg_inference_status = item$deg_inference_status[[1]],
+            formal_status = formal_status,
+            result_level = result_level,
+            biological_replicates = biological_replicates,
+            background_tsv = background_tsv,
+            background_gene_n = length(background_genes),
+            background_mapped_n = human_background$mapped_n,
             status = "human_orgdb_missing",
             reason = "org.Hs.eg.db is not installed and clusterProfiler backend is active; human auxiliary KEGG channel skipped",
             input_gene_n = length(genes),
@@ -292,7 +388,13 @@ for (idx in seq_len(nrow(input_grid))) {
             deg_status = item$deg_inference_status[[1]],
             genes = human_map$genes,
             org_db = human_org_db,
-            enrichment_source = "ortholog_to_org.Hs.eg.db_to_KEGG_hsa"
+            enrichment_source = "ortholog_to_org.Hs.eg.db_to_KEGG_hsa",
+            target_id = target_id,
+            formal_status = formal_status,
+            result_level = result_level,
+            biological_replicates = biological_replicates,
+            background_genes = human_background$genes,
+            background_tsv = background_tsv
           )
         }
       }
@@ -333,9 +435,8 @@ write_manifest_local(
   module_name = module_name,
   base_dir = cfg$project_root,
   inputs = list(
-    deg_status_matrix_tsv = deg_report_paths_05(cfg)$status_matrix_tsv,
-    marker_manifest_tsv = file.path(cfg$marker_discovery_table_dir, "marker_discovery_manifest.tsv"),
-    pseudobulk_manifest_tsv = file.path(cfg$pseudobulk_table_dir, "pseudobulk_manifest.tsv"),
+    enrichment_targets_tsv = cfg$enrichment_targets_sheet,
+    gene_program_registry_tsv = cfg$gene_program_registry_tsv,
     ortholog_manifest = cfg$ortholog_manifest_path
   ),
   version = cfg$module_version,

@@ -132,6 +132,12 @@ export SAMPLE_SHEET="${SAMPLE_SHEET:-${METADATA_DIR}/samples.tsv}"
 export CANONICAL_SAMPLE_SHEET="${CANONICAL_SAMPLE_SHEET:-${METADATA_DIR}/samples.canonical.tsv}"
 export COMPARISON_SHEET="${COMPARISON_SHEET:-${METADATA_DIR}/comparisons.tsv}"
 export COMMUNICATION_PAIRS_SHEET="${COMMUNICATION_PAIRS_SHEET:-${METADATA_DIR}/communication_pairs.tsv}"
+export TRAJECTORY_PAIRS_SHEET="${TRAJECTORY_PAIRS_SHEET:-${METADATA_DIR}/trajectory_pairs.tsv}"
+export SCENIC_TARGETS_SHEET="${SCENIC_TARGETS_SHEET:-${METADATA_DIR}/scenic_targets.tsv}"
+export ENRICHMENT_TARGETS_SHEET="${ENRICHMENT_TARGETS_SHEET:-${METADATA_DIR}/enrichment_targets.tsv}"
+export GENE_PROGRAM_TARGETS_SHEET="${GENE_PROGRAM_TARGETS_SHEET:-${METADATA_DIR}/gene_program_targets.tsv}"
+export DECONV_PAIRS_SHEET="${DECONV_PAIRS_SHEET:-${METADATA_DIR}/deconv_pairs.tsv}"
+export SPATIAL_PAIRS_SHEET="${SPATIAL_PAIRS_SHEET:-${METADATA_DIR}/spatial_pairs.tsv}"
 export DELIVERY_MANIFEST="${DELIVERY_MANIFEST:-${METADATA_DIR}/delivery_manifest.tsv}"
 export RECEIVED_FILES_MANIFEST="${RECEIVED_FILES_MANIFEST:-${METADATA_DIR}/received_files_manifest.tsv}"
 export INPUT_INVENTORY_FILE="${INPUT_INVENTORY_FILE:-${INTAKE_REPORT_DIR}/input_inventory.tsv}"
@@ -178,6 +184,7 @@ export ENRICHMENT_MIN_GS_SIZE="${ENRICHMENT_MIN_GS_SIZE:-10}"
 export ENRICHMENT_MAX_GS_SIZE="${ENRICHMENT_MAX_GS_SIZE:-500}"
 export ENRICHMENT_KEGG_TIMEOUT_SEC="${ENRICHMENT_KEGG_TIMEOUT_SEC:-60}"
 export MODULE_07_VERSION="${MODULE_07_VERSION:-1.0}"
+export COMMUNICATION_CELL_TYPE_COL="${COMMUNICATION_CELL_TYPE_COL:-cell_subtype}"
 export COMMUNICATION_MIN_CELLS_PER_CELLTYPE="${COMMUNICATION_MIN_CELLS_PER_CELLTYPE:-20}"
 export COMMUNICATION_ORTHOLOG_MIN_COVERAGE="${COMMUNICATION_ORTHOLOG_MIN_COVERAGE:-0.30}"
 export CELLCHAT_MIN_CELLS_PER_GROUP="${CELLCHAT_MIN_CELLS_PER_GROUP:-20}"
@@ -356,22 +363,6 @@ ensure_mito_gene_list_file() {
 EOF
 }
 
-ensure_communication_pairs_sheet() {
-  ensure_dir "${METADATA_DIR}"
-  [[ -s "${COMMUNICATION_PAIRS_SHEET}" ]] && return 0
-
-  cat > "${COMMUNICATION_PAIRS_SHEET}" <<'EOF'
-pair_id	layer_scope	sender	receiver	subset_column	subset_value	condition_split_var	condition_split_values	tool	enabled	notes
-TC_to_GC_panorama	panorama	TC	GC			group	syf,f5	both	no	Enable after panorama cell_type labels use TC and GC.
-GC_to_TC_panorama	panorama	GC	TC			group	syf,f5	both	no	Reverse two-cell direction.
-GC_intra_subcluster	GC_subcluster	*	*			group	syf,f5	cellchat_only	no	Enable after GC subcluster layer is named in layer_scope.
-pGC_to_eGC	GC_subcluster	pGCs	eGCs			group	syf,f5	nichenet_only	no	Enable after GC subcluster annotation is finalized.
-eGC_to_rgGC	GC_subcluster	eGCs	rgGCs			group	syf,f5	nichenet_only	no	Enable after GC subcluster annotation is finalized.
-rgGC_to_lGC	GC_subcluster	rgGCs	lGCs			group	syf,f5	nichenet_only	no	Enable after GC subcluster annotation is finalized.
-TC_sub_to_lGC	panorama	TC_*	lGCs			group	syf,f5	nichenet_only	planned	Placeholder until TC subclusters are annotated.
-EOF
-}
-
 now_iso() {
   date --iso-8601=seconds
 }
@@ -445,6 +436,44 @@ tsv_require_columns() {
   done
 }
 
+ensure_metadata_fresh() {
+  local questions_file="${ANALYSIS_QUESTIONS_FILE:-${METADATA_DIR}/analysis_questions.tsv}"
+  local generated_tables=(
+    "${COMPARISON_SHEET}"
+    "${COMMUNICATION_PAIRS_SHEET}"
+    "${TRAJECTORY_PAIRS_SHEET}"
+    "${SCENIC_TARGETS_SHEET}"
+    "${ENRICHMENT_TARGETS_SHEET}"
+    "${GENE_PROGRAM_TARGETS_SHEET}"
+    "${DECONV_PAIRS_SHEET}"
+    "${SPATIAL_PAIRS_SHEET}"
+  )
+  local generator="${PIPELINE_ROOT}/workflow/03stages/95_run_metadata_generator.sh"
+  local validator="${PIPELINE_ROOT}/workflow/03stages/96_validate_metadata.sh"
+  local table_path
+  local needs_generate=0
+
+  [[ -s "${questions_file}" ]] || die "缺少 analysis questions 表: ${questions_file}"
+  [[ -x "${generator}" ]] || die "缺少可执行 metadata generator: ${generator}"
+  [[ -x "${validator}" ]] || die "缺少可执行 metadata validator: ${validator}"
+
+  for table_path in "${generated_tables[@]}"; do
+    if [[ ! -s "${table_path}" || "${questions_file}" -nt "${table_path}" ]]; then
+      needs_generate=1
+      break
+    fi
+  done
+
+  if [[ "${needs_generate}" == "1" ]]; then
+    echo "[metadata] analysis_questions.tsv 更新或 Tier 2 表缺失，重新生成 metadata。"
+    RUN_METADATA_VALIDATION_AFTER_GENERATE=no bash "${generator}"
+  else
+    echo "[metadata] Tier 2 metadata 已是最新。"
+  fi
+
+  bash "${validator}"
+}
+
 prepare_project_state_dirs() {
   ensure_dir \
     "${PROJECT_CONFIG_DIR}" \
@@ -469,7 +498,6 @@ prepare_project_state_dirs() {
   ensure_object_layer_config_file
   ensure_marker_panel_dir
   ensure_mito_gene_list_file
-  ensure_communication_pairs_sheet
 }
 
 LIB_DIR="${SCRIPT_DIR}"

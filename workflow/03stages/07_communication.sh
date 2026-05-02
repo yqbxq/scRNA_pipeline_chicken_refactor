@@ -7,6 +7,7 @@ PIPELINE_ROOT="${PIPELINE_ROOT:-$(cd "${WORKFLOW_ROOT}/.." && pwd)}"
 
 source "${WORKFLOW_ROOT}/02lib/common.sh"
 
+ensure_metadata_fresh
 check_stage_deps "07_communication"
 hold_for_gate annotation
 
@@ -19,7 +20,6 @@ MODULE_07B_MANIFEST="${MANIFEST_DIR}/07b_nichenet/_manifest.json"
 MODULE_07C_MANIFEST="${MANIFEST_DIR}/07c_communication_eda/_manifest.json"
 
 ensure_eda_control_files
-ensure_communication_pairs_sheet
 require_manifest_output "${MODULE_03D_MANIFEST}" "annotated_object" >/dev/null
 require_manifest_output "${MODULE_00_MANIFEST}" "human_best" >/dev/null
 

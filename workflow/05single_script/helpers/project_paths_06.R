@@ -19,10 +19,12 @@ get_single_script_config_06 <- function() {
   base$enrichment_table_dir <- file.path(base$table_dir, "enrichment")
   base$go_table_dir <- file.path(base$enrichment_table_dir, "go")
   base$kegg_table_dir <- file.path(base$enrichment_table_dir, "kegg")
+  base$enrichment_background_table_dir <- file.path(base$enrichment_table_dir, "background")
   base$enrichment_figure_dir <- file.path(base$figure_dir, "enrichment")
   base$go_figure_dir <- file.path(base$enrichment_figure_dir, "go")
   base$kegg_figure_dir <- file.path(base$enrichment_figure_dir, "kegg")
 
+  base$enrichment_targets_sheet <- env_or_default_03("ENRICHMENT_TARGETS_SHEET", file.path(base$metadata_dir, "enrichment_targets.tsv"))
   base$go_enrichment_manifest_tsv <- file.path(base$go_table_dir, "go_enrichment_manifest.tsv")
   base$kegg_enrichment_manifest_tsv <- file.path(base$kegg_table_dir, "kegg_enrichment_manifest.tsv")
   base$enrichment_summary_tsv <- file.path(base$enrichment_table_dir, "enrichment_summary.tsv")
@@ -49,6 +51,7 @@ prepare_dirs_06 <- function(cfg) {
     cfg$enrichment_table_dir,
     cfg$go_table_dir,
     cfg$kegg_table_dir,
+    cfg$enrichment_background_table_dir,
     cfg$enrichment_figure_dir,
     cfg$go_figure_dir,
     cfg$kegg_figure_dir,
