@@ -38,6 +38,20 @@ module_status_cols_09l <- c(
   "n_cells_used", "runtime_s", "notes"
 )
 
+empty_module_status_09l <- function() {
+  data.frame(
+    pair_id = character(0),
+    value = character(0),
+    method = character(0),
+    methods_enabled = character(0),
+    status = character(0),
+    n_cells_used = integer(0),
+    runtime_s = numeric(0),
+    notes = character(0),
+    stringsAsFactors = FALSE
+  )
+}
+
 read_manifest_output_or_fallback_09l <- function(manifest_path, key, fallback_path) {
   path <- trajectory_manifest_output_optional_09(manifest_path, key)
   if (!nzchar(path)) fallback_path else path
@@ -67,7 +81,7 @@ method_index_09l <- function(manifest_path, key, fallback_path, extra_cols = cha
 
 status_from_method_index_09l <- function(index_df, fallback_method) {
   if (nrow(index_df) == 0) {
-    return(trajectory_empty_df_09(module_status_cols_09l))
+    return(empty_module_status_09l())
   }
   rows <- lapply(seq_len(nrow(index_df)), function(i) {
     row <- index_df[i, , drop = FALSE]
@@ -96,7 +110,7 @@ status_from_method_index_09l <- function(index_df, fallback_method) {
 
 status_from_input_09l <- function(input_status) {
   if (nrow(input_status) == 0) {
-    return(trajectory_empty_df_09(module_status_cols_09l))
+    return(empty_module_status_09l())
   }
   rows <- lapply(seq_len(nrow(input_status)), function(i) {
     row <- input_status[i, , drop = FALSE]
@@ -117,7 +131,7 @@ status_from_input_09l <- function(input_status) {
 
 status_from_root_09l <- function(root_index) {
   if (nrow(root_index) == 0) {
-    return(trajectory_empty_df_09(module_status_cols_09l))
+    return(empty_module_status_09l())
   }
   rows <- lapply(seq_len(nrow(root_index)), function(i) {
     row <- root_index[i, , drop = FALSE]
@@ -146,7 +160,7 @@ status_from_root_09l <- function(root_index) {
 
 status_from_figures_09l <- function(figure_index) {
   if (nrow(figure_index) == 0) {
-    return(trajectory_empty_df_09(module_status_cols_09l))
+    return(empty_module_status_09l())
   }
   rows <- lapply(seq_len(nrow(figure_index)), function(i) {
     row <- figure_index[i, , drop = FALSE]
@@ -167,7 +181,7 @@ status_from_figures_09l <- function(figure_index) {
 
 status_from_split_compare_09l <- function(split_index) {
   if (nrow(split_index) == 0) {
-    return(trajectory_empty_df_09(module_status_cols_09l))
+    return(empty_module_status_09l())
   }
   rows <- lapply(seq_len(nrow(split_index)), function(i) {
     row <- split_index[i, , drop = FALSE]
@@ -245,7 +259,7 @@ module_status <- dplyr::bind_rows(
   status_from_split_compare_09l(split_compare_index)
 )
 if (nrow(module_status) == 0) {
-  module_status <- trajectory_empty_df_09(module_status_cols_09l)
+  module_status <- empty_module_status_09l()
 }
 module_status <- module_status[, module_status_cols_09l, drop = FALSE]
 write_tsv_local(module_status, cfg$trajectory_module_status_tsv)
