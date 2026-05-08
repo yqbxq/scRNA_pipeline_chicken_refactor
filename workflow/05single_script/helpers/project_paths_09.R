@@ -22,6 +22,9 @@ get_single_script_config_09 <- function() {
   base$module_09h_manifest_path <- file.path(base$manifest_dir, "09h_trajectory_tradeseq", "_manifest.json")
   base$module_09i_manifest_path <- file.path(base$manifest_dir, "09i_trajectory_consensus", "_manifest.json")
   base$module_09j_manifest_path <- file.path(base$manifest_dir, "09j_trajectory_velocity_link", "_manifest.json")
+  base$module_09k_manifest_path <- file.path(base$manifest_dir, "09k_trajectory_figures", "_manifest.json")
+  base$module_09m_manifest_path <- file.path(base$manifest_dir, "09m_trajectory_split_compare", "_manifest.json")
+  base$module_09l_manifest_path <- file.path(base$manifest_dir, "09l_trajectory_eda", "_manifest.json")
 
   base$trajectory_pairs_sheet <- env_or_default_03("TRAJECTORY_PAIRS_SHEET", file.path(base$metadata_dir, "trajectory_pairs.tsv"))
   base$velocity_dir <- env_or_default_03("VELOCITY_DIR", file.path(base$results_dir, "velocity"))
@@ -41,6 +44,9 @@ get_single_script_config_09 <- function() {
   base$trajectory_tradeseq_table_dir <- file.path(base$trajectory_methods_table_dir, "tradeseq")
   base$trajectory_consensus_table_dir <- file.path(base$trajectory_methods_table_dir, "consensus")
   base$trajectory_velocity_link_table_dir <- file.path(base$trajectory_methods_table_dir, "velocity_link")
+  base$trajectory_figures_table_dir <- file.path(base$trajectory_table_dir, "figures")
+  base$trajectory_split_compare_table_dir <- file.path(base$trajectory_table_dir, "split_compare")
+  base$trajectory_final_table_dir <- file.path(base$trajectory_table_dir, "final")
   base$trajectory_figure_dir <- file.path(base$figure_dir, "trajectory")
   base$trajectory_inputs_figure_dir <- file.path(base$trajectory_figure_dir, "inputs")
   base$trajectory_methods_figure_dir <- file.path(base$trajectory_figure_dir, "methods")
@@ -50,9 +56,12 @@ get_single_script_config_09 <- function() {
   base$trajectory_tradeseq_figure_dir <- file.path(base$trajectory_methods_figure_dir, "tradeseq")
   base$trajectory_consensus_figure_dir <- file.path(base$trajectory_methods_figure_dir, "consensus")
   base$trajectory_velocity_link_figure_dir <- file.path(base$trajectory_methods_figure_dir, "velocity_link")
+  base$trajectory_summary_figure_dir <- file.path(base$trajectory_figure_dir, "summary")
+  base$trajectory_split_compare_figure_dir <- file.path(base$trajectory_figure_dir, "split_compare")
   base$trajectory_python_input_dir <- file.path(base$trajectory_dir, "_python_input")
   base$trajectory_report_dir <- env_or_default_03("TRAJECTORY_REPORT_DIR", file.path(base$eda_report_dir, "trajectory"))
   base$trajectory_inputs_report_dir <- file.path(base$trajectory_report_dir, "inputs")
+  base$trajectory_split_compare_report_dir <- file.path(base$trajectory_report_dir, "split_compare")
 
   base$trajectory_input_index_tsv <- file.path(base$trajectory_inputs_table_dir, "trajectory_input_index.tsv")
   base$trajectory_outlier_qc_summary_tsv <- file.path(base$trajectory_inputs_table_dir, "outlier_qc_summary.tsv")
@@ -85,6 +94,17 @@ get_single_script_config_09 <- function() {
   base$trajectory_consensus_split_agreement_tsv <- file.path(base$trajectory_consensus_table_dir, "consensus_split_agreement.tsv")
   base$trajectory_consensus_triage_tsv <- file.path(base$trajectory_consensus_table_dir, "triage.tsv")
   base$trajectory_velocity_link_index_tsv <- file.path(base$trajectory_velocity_link_table_dir, "velocity_link_index.tsv")
+  base$trajectory_figure_index_tsv <- file.path(base$trajectory_figures_table_dir, "figure_index.tsv")
+  base$trajectory_split_compare_index_tsv <- file.path(base$trajectory_split_compare_table_dir, "split_compare_index.tsv")
+  base$trajectory_pseudotime_distribution_compare_tsv <- file.path(base$trajectory_split_compare_table_dir, "pseudotime_distribution_compare.tsv")
+  base$trajectory_lineage_backbone_match_tsv <- file.path(base$trajectory_split_compare_table_dir, "lineage_backbone_match.tsv")
+  base$trajectory_driver_overlap_tsv <- file.path(base$trajectory_split_compare_table_dir, "driver_overlap.tsv")
+  base$trajectory_option_a_b_consistency_tsv <- file.path(base$trajectory_split_compare_table_dir, "option_a_vs_b_consistency.tsv")
+  base$trajectory_entropy_compare_tsv <- file.path(base$trajectory_split_compare_table_dir, "entropy_compare.tsv")
+  base$trajectory_split_compare_report_md <- file.path(base$trajectory_split_compare_report_dir, "report.md")
+  base$trajectory_module_status_tsv <- file.path(base$trajectory_final_table_dir, "trajectory_module_status.tsv")
+  base$trajectory_triage_tsv <- file.path(base$trajectory_final_table_dir, "trajectory_triage.tsv")
+  base$trajectory_report_md <- file.path(base$trajectory_report_dir, "report.md")
 
   base$trajectory_hvg_nfeatures <- env_integer_09("TRAJECTORY_HVG_NFEATURES", base$hvg_nfeatures %||% 2000L)
   base$trajectory_pca_dims <- parse_index_spec_local(env_or_default_03("TRAJECTORY_PCA_DIMS", "1:30"), default = 1:30)
@@ -113,6 +133,9 @@ prepare_dirs_09 <- function(cfg) {
     cfg$trajectory_tradeseq_table_dir,
     cfg$trajectory_consensus_table_dir,
     cfg$trajectory_velocity_link_table_dir,
+    cfg$trajectory_figures_table_dir,
+    cfg$trajectory_split_compare_table_dir,
+    cfg$trajectory_final_table_dir,
     cfg$trajectory_figure_dir,
     cfg$trajectory_inputs_figure_dir,
     cfg$trajectory_methods_figure_dir,
@@ -122,9 +145,12 @@ prepare_dirs_09 <- function(cfg) {
     cfg$trajectory_tradeseq_figure_dir,
     cfg$trajectory_consensus_figure_dir,
     cfg$trajectory_velocity_link_figure_dir,
+    cfg$trajectory_summary_figure_dir,
+    cfg$trajectory_split_compare_figure_dir,
     cfg$trajectory_python_input_dir,
     cfg$trajectory_report_dir,
     cfg$trajectory_inputs_report_dir,
+    cfg$trajectory_split_compare_report_dir,
     dirname(cfg$module_09a_manifest_path),
     dirname(cfg$module_09b_manifest_path),
     dirname(cfg$module_09c_manifest_path),
@@ -136,6 +162,9 @@ prepare_dirs_09 <- function(cfg) {
     dirname(cfg$module_09h_manifest_path),
     dirname(cfg$module_09i_manifest_path),
     dirname(cfg$module_09j_manifest_path),
+    dirname(cfg$module_09k_manifest_path),
+    dirname(cfg$module_09m_manifest_path),
+    dirname(cfg$module_09l_manifest_path),
     dirname(cfg$trajectory_root_index_tsv),
     dirname(cfg$trajectory_root_split_agreement_tsv),
     dirname(cfg$trajectory_slingshot_index_tsv),
@@ -153,7 +182,18 @@ prepare_dirs_09 <- function(cfg) {
     dirname(cfg$trajectory_consensus_jaccard_summary_tsv),
     dirname(cfg$trajectory_consensus_split_agreement_tsv),
     dirname(cfg$trajectory_consensus_triage_tsv),
-    dirname(cfg$trajectory_velocity_link_index_tsv)
+    dirname(cfg$trajectory_velocity_link_index_tsv),
+    dirname(cfg$trajectory_figure_index_tsv),
+    dirname(cfg$trajectory_split_compare_index_tsv),
+    dirname(cfg$trajectory_pseudotime_distribution_compare_tsv),
+    dirname(cfg$trajectory_lineage_backbone_match_tsv),
+    dirname(cfg$trajectory_driver_overlap_tsv),
+    dirname(cfg$trajectory_option_a_b_consistency_tsv),
+    dirname(cfg$trajectory_entropy_compare_tsv),
+    dirname(cfg$trajectory_split_compare_report_md),
+    dirname(cfg$trajectory_module_status_tsv),
+    dirname(cfg$trajectory_triage_tsv),
+    dirname(cfg$trajectory_report_md)
   )
   invisible(lapply(ensure_dirs[nzchar(ensure_dirs)], ensure_dir))
 }
@@ -212,6 +252,9 @@ trajectory_method_table_dir_09 <- function(cfg, method, pair_id = "", split_valu
     tradeseq = cfg$trajectory_tradeseq_table_dir,
     consensus = cfg$trajectory_consensus_table_dir,
     velocity_link = cfg$trajectory_velocity_link_table_dir,
+    figures = cfg$trajectory_figures_table_dir,
+    split_compare = cfg$trajectory_split_compare_table_dir,
+    final = cfg$trajectory_final_table_dir,
     file.path(cfg$trajectory_methods_table_dir, safe_id_09(method))
   )
   if (!nzchar(normalize_scalar_value(pair_id))) {
@@ -229,6 +272,8 @@ trajectory_method_figure_dir_09 <- function(cfg, method, pair_id, split_value = 
     tradeseq = cfg$trajectory_tradeseq_figure_dir,
     consensus = cfg$trajectory_consensus_figure_dir,
     velocity_link = cfg$trajectory_velocity_link_figure_dir,
+    figures = cfg$trajectory_summary_figure_dir,
+    split_compare = cfg$trajectory_split_compare_figure_dir,
     file.path(cfg$trajectory_methods_figure_dir, safe_id_09(method))
   )
   file.path(root, trajectory_unit_file_id_09(pair_id, split_value))

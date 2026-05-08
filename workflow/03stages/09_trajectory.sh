@@ -25,6 +25,9 @@ MODULE_09G_MANIFEST="${MANIFEST_DIR}/09g_trajectory_palantir/_manifest.json"
 MODULE_09H_MANIFEST="${MANIFEST_DIR}/09h_trajectory_tradeseq/_manifest.json"
 MODULE_09I_MANIFEST="${MANIFEST_DIR}/09i_trajectory_consensus/_manifest.json"
 MODULE_09J_MANIFEST="${MANIFEST_DIR}/09j_trajectory_velocity_link/_manifest.json"
+MODULE_09K_MANIFEST="${MANIFEST_DIR}/09k_trajectory_figures/_manifest.json"
+MODULE_09M_MANIFEST="${MANIFEST_DIR}/09m_trajectory_split_compare/_manifest.json"
+MODULE_09L_MANIFEST="${MANIFEST_DIR}/09l_trajectory_eda/_manifest.json"
 
 ensure_eda_control_files
 require_manifest_output "${MODULE_03D_MANIFEST}" "annotated_object" >/dev/null
@@ -52,6 +55,7 @@ fi
 TRAJECTORY_INPUT_RERAN=0
 TRAJECTORY_METHOD_RERAN=0
 TRAJECTORY_STAGE3_RERAN=0
+TRAJECTORY_FINAL_RERAN=0
 
 run_trajectory_stage_if_stale() {
   local script_path="$1"
@@ -90,6 +94,20 @@ run_trajectory_stage3_if_stale() {
     echo "运行 ${script_path}"
     run_r_main "${script_path}"
     TRAJECTORY_STAGE3_RERAN=1
+  else
+    echo "已存在且未过期，跳过: ${output_path}"
+  fi
+}
+
+run_trajectory_final_if_stale() {
+  local script_path="$1"
+  local output_path="$2"
+  shift 2 || true
+
+  if is_stale_output "${output_path}" "$@"; then
+    echo "运行 ${script_path}"
+    run_r_main "${script_path}"
+    TRAJECTORY_FINAL_RERAN=1
   else
     echo "已存在且未过期，跳过: ${output_path}"
   fi
@@ -230,10 +248,54 @@ run_trajectory_stage3_if_stale \
   "${VELOCITY_OUTPUT_DIR}"
 require_manifest_output "${MODULE_09J_MANIFEST}" "velocity_link_index_tsv" >/dev/null
 
+run_trajectory_final_if_stale \
+  "${WORKFLOW_ROOT}/05single_script/09k_trajectory_figures.R" \
+  "${MODULE_09K_MANIFEST}" \
+  "${MODULE_09A_MANIFEST}" \
+  "${MODULE_09C_MANIFEST}" \
+  "${MODULE_09D_MANIFEST}" \
+  "${MODULE_09I_MANIFEST}"
+require_manifest_output "${MODULE_09K_MANIFEST}" "figure_index_tsv" >/dev/null
+
+run_trajectory_final_if_stale \
+  "${WORKFLOW_ROOT}/05single_script/09m_trajectory_split_compare.R" \
+  "${MODULE_09M_MANIFEST}" \
+  "${MODULE_09A_MANIFEST}" \
+  "${MODULE_09D_MANIFEST}" \
+  "${MODULE_09G_MANIFEST}" \
+  "${MODULE_09H_MANIFEST}" \
+  "${TRAJECTORY_PAIRS_SHEET}"
+require_manifest_output "${MODULE_09M_MANIFEST}" "split_compare_index_tsv" >/dev/null
+
+run_trajectory_final_if_stale \
+  "${WORKFLOW_ROOT}/05single_script/09l_trajectory_eda.R" \
+  "${MODULE_09L_MANIFEST}" \
+  "${MODULE_09B_MANIFEST}" \
+  "${MODULE_09C_MANIFEST}" \
+  "${MODULE_09D_MANIFEST}" \
+  "${MODULE_09E_MANIFEST}" \
+  "${MODULE_09E2_MANIFEST}" \
+  "${MODULE_09F_MANIFEST}" \
+  "${MODULE_09G_MANIFEST}" \
+  "${MODULE_09H_MANIFEST}" \
+  "${MODULE_09I_MANIFEST}" \
+  "${MODULE_09J_MANIFEST}" \
+  "${MODULE_09K_MANIFEST}" \
+  "${MODULE_09M_MANIFEST}"
+TRAJECTORY_FINAL_REPORT="$(require_manifest_output "${MODULE_09L_MANIFEST}" "report_md")"
+
+if [[ "${TRAJECTORY_FINAL_RERAN}" == "1" ]]; then
+  set_eda_gate_status \
+    "trajectory_finalize" \
+    "pending" \
+    "" \
+    "09 trajectory final report completed; review ${TRAJECTORY_FINAL_REPORT}, then approve trajectory_finalize."
+fi
+
 sync_workflow_gate_statuses
 update_workflow_status \
-  "09_trajectory_stage3_completed" \
-  "review 09h tradeSeq, 09i consensus, and 09j velocity-link outputs; next implement/run 09k/09m/09l final reporting" \
+  "09_trajectory_completed" \
+  "review ${TRAJECTORY_FINAL_REPORT} and approve trajectory_finalize before treating 09 as final" \
   "status.09a_trajectory_inputs_completed=true" \
   "status.09b_trajectory_inputs_eda_completed=true" \
   "status.09_trajectory_inputs_completed=true" \
@@ -247,6 +309,11 @@ update_workflow_status \
   "status.09h_trajectory_tradeseq_completed=true" \
   "status.09i_trajectory_consensus_completed=true" \
   "status.09j_trajectory_velocity_link_completed=true" \
+  "status.09k_trajectory_figures_completed=true" \
+  "status.09m_trajectory_split_compare_completed=true" \
+  "status.09l_trajectory_eda_completed=true" \
   "status.09_trajectory_stage3_completed=true" \
+  "status.09_trajectory_completed=true" \
   "status.trajectory_inputs_gate_passed=$(eda_gate_passed trajectory_inputs && echo true || echo false)" \
-  "status.trajectory_methods_gate_passed=$(eda_gate_passed trajectory_methods && echo true || echo false)"
+  "status.trajectory_methods_gate_passed=$(eda_gate_passed trajectory_methods && echo true || echo false)" \
+  "status.trajectory_finalize_gate_passed=$(eda_gate_passed trajectory_finalize && echo true || echo false)"
