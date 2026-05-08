@@ -271,6 +271,10 @@ m3_fanout_communication <- function(q) {
     rows[[length(rows) + 1L]] <- m3_comm_row(q, "F20_TC_sub_to_GC_baseline__TCsub_to_GC", "TC_*", m3_collapse(m3_gc_subtypes), tool, notes = "等TC")
   } else if (qid == "F21_TC_sub_to_GC_split") {
     rows[[length(rows) + 1L]] <- m3_comm_row(q, "F21_TC_sub_to_GC_split__TCsub_to_GC", "TC_*", m3_collapse(m3_gc_subtypes), tool, notes = "等TC")
+  } else if (qid == "F22_TC_sub_to_GC_each") {
+    for (receiver in m3_gc_subtypes) {
+      rows[[length(rows) + 1L]] <- m3_comm_row(q, paste(qid, paste("TCsub", "to", receiver, sep = "_"), sep = "__"), "TC_*", receiver, tool, notes = "等TC")
+    }
   }
 
   rows <- m3_add_differential_comm(rows, q)

@@ -4,7 +4,7 @@
 intent. Humans edit this file; M3 will fan out active rows into generated Tier 2
 module input tables.
 
-The conceptual design covers 85 questions. The committed TSV contains 81
+The conceptual design covers 87 questions. The committed TSV contains 83
 materialized rows because F23-F26 differential communication rows are derived
 from split communication questions and must be generated automatically rather
 than hand-maintained.
@@ -202,7 +202,7 @@ Enrichment, and QC/non-gene-program rows enter QC / Non-gene-program.
 
 ## M3 Fan-Out Contract
 
-M3 reads all 81 materialized rows and processes active rows for executable
+M3 reads all 83 materialized rows and processes active rows for executable
 scRNA modules. A small set of planned communication rows is emitted with
 `enabled=no` so the final communication schema stays stable. The 24 ST rows are
 all planned, so M3 must write empty `deconv_pairs.tsv` and `spatial_pairs.tsv`

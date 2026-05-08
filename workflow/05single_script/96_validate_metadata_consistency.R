@@ -379,13 +379,13 @@ for (col in optional_question_cols) {
 }
 
 if (nrow(questions) > 0 && length(missing_cols) == 0) {
-  expected_materialized <- 81L
+  expected_materialized <- 83L
   if (nrow(questions) == expected_materialized) {
-    pass("questions.row_count", "81 materialized rows present; F23-F26 are intentionally derived")
+    pass("questions.row_count", "83 materialized rows present; F23-F26 are intentionally derived")
   } else {
     warn(
       "questions.row_count",
-      sprintf("expected 81 materialized rows after derived-row removal, found %s", nrow(questions)),
+      sprintf("expected 83 materialized rows after derived-row removal, found %s", nrow(questions)),
       fix = "Check analysis_questions_FULL.md and keep F23-F26 as generator-derived rows."
     )
   }
