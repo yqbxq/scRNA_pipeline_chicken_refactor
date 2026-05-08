@@ -19,6 +19,9 @@ get_single_script_config_09 <- function() {
   base$module_09e2_manifest_path <- file.path(base$manifest_dir, "09e2_trajectory_monocle2", "_manifest.json")
   base$module_09f_manifest_path <- file.path(base$manifest_dir, "09f_trajectory_paga_dpt", "_manifest.json")
   base$module_09g_manifest_path <- file.path(base$manifest_dir, "09g_trajectory_palantir", "_manifest.json")
+  base$module_09h_manifest_path <- file.path(base$manifest_dir, "09h_trajectory_tradeseq", "_manifest.json")
+  base$module_09i_manifest_path <- file.path(base$manifest_dir, "09i_trajectory_consensus", "_manifest.json")
+  base$module_09j_manifest_path <- file.path(base$manifest_dir, "09j_trajectory_velocity_link", "_manifest.json")
 
   base$trajectory_pairs_sheet <- env_or_default_03("TRAJECTORY_PAIRS_SHEET", file.path(base$metadata_dir, "trajectory_pairs.tsv"))
   base$velocity_dir <- env_or_default_03("VELOCITY_DIR", file.path(base$results_dir, "velocity"))
@@ -35,12 +38,18 @@ get_single_script_config_09 <- function() {
   base$trajectory_monocle2_table_dir <- file.path(base$trajectory_methods_table_dir, "monocle2")
   base$trajectory_paga_table_dir <- file.path(base$trajectory_methods_table_dir, "paga_dpt")
   base$trajectory_palantir_table_dir <- file.path(base$trajectory_methods_table_dir, "palantir")
+  base$trajectory_tradeseq_table_dir <- file.path(base$trajectory_methods_table_dir, "tradeseq")
+  base$trajectory_consensus_table_dir <- file.path(base$trajectory_methods_table_dir, "consensus")
+  base$trajectory_velocity_link_table_dir <- file.path(base$trajectory_methods_table_dir, "velocity_link")
   base$trajectory_figure_dir <- file.path(base$figure_dir, "trajectory")
   base$trajectory_inputs_figure_dir <- file.path(base$trajectory_figure_dir, "inputs")
   base$trajectory_methods_figure_dir <- file.path(base$trajectory_figure_dir, "methods")
   base$trajectory_monocle2_figure_dir <- file.path(base$trajectory_methods_figure_dir, "monocle2")
   base$trajectory_paga_figure_dir <- file.path(base$trajectory_methods_figure_dir, "paga_dpt")
   base$trajectory_palantir_figure_dir <- file.path(base$trajectory_methods_figure_dir, "palantir")
+  base$trajectory_tradeseq_figure_dir <- file.path(base$trajectory_methods_figure_dir, "tradeseq")
+  base$trajectory_consensus_figure_dir <- file.path(base$trajectory_methods_figure_dir, "consensus")
+  base$trajectory_velocity_link_figure_dir <- file.path(base$trajectory_methods_figure_dir, "velocity_link")
   base$trajectory_python_input_dir <- file.path(base$trajectory_dir, "_python_input")
   base$trajectory_report_dir <- env_or_default_03("TRAJECTORY_REPORT_DIR", file.path(base$eda_report_dir, "trajectory"))
   base$trajectory_inputs_report_dir <- file.path(base$trajectory_report_dir, "inputs")
@@ -67,12 +76,24 @@ get_single_script_config_09 <- function() {
   base$trajectory_paga_jobs_tsv <- file.path(base$trajectory_paga_table_dir, "paga_dpt_jobs.tsv")
   base$trajectory_palantir_index_tsv <- file.path(base$trajectory_palantir_table_dir, "palantir_index.tsv")
   base$trajectory_palantir_jobs_tsv <- file.path(base$trajectory_palantir_table_dir, "palantir_jobs.tsv")
+  base$trajectory_tradeseq_index_tsv <- file.path(base$trajectory_tradeseq_table_dir, "tradeseq_index.tsv")
+  base$trajectory_tradeseq_condition_index_tsv <- file.path(base$trajectory_tradeseq_table_dir, "tradeseq_condition_index.tsv")
+  base$trajectory_tradeseq_driver_index_tsv <- file.path(base$trajectory_tradeseq_table_dir, "tradeseq_driver_index.tsv")
+  base$trajectory_consensus_index_tsv <- file.path(base$trajectory_consensus_table_dir, "consensus_index.tsv")
+  base$trajectory_consensus_correlation_summary_tsv <- file.path(base$trajectory_consensus_table_dir, "consensus_pseudotime_correlation_summary.tsv")
+  base$trajectory_consensus_jaccard_summary_tsv <- file.path(base$trajectory_consensus_table_dir, "consensus_jaccard_summary.tsv")
+  base$trajectory_consensus_split_agreement_tsv <- file.path(base$trajectory_consensus_table_dir, "consensus_split_agreement.tsv")
+  base$trajectory_consensus_triage_tsv <- file.path(base$trajectory_consensus_table_dir, "triage.tsv")
+  base$trajectory_velocity_link_index_tsv <- file.path(base$trajectory_velocity_link_table_dir, "velocity_link_index.tsv")
 
   base$trajectory_hvg_nfeatures <- env_integer_09("TRAJECTORY_HVG_NFEATURES", base$hvg_nfeatures %||% 2000L)
   base$trajectory_pca_dims <- parse_index_spec_local(env_or_default_03("TRAJECTORY_PCA_DIMS", "1:30"), default = 1:30)
   base$trajectory_umap_n_neighbors <- env_integer_09("TRAJECTORY_UMAP_N_NEIGHBORS", 30L)
   base$trajectory_split_min_cells <- env_integer_09("TRAJECTORY_SPLIT_MIN_CELLS", 50L)
   base$trajectory_balance_warn_fraction <- env_numeric_09("TRAJECTORY_BALANCE_WARN_FRACTION", 0.30)
+  base$tradeseq_knots <- env_integer_09("TRADESEQ_KNOTS", 6L)
+  base$trajectory_consensus_min_methods <- env_integer_09("TRAJECTORY_CONSENSUS_MIN_METHODS", 2L)
+  base$trajectory_consensus_conflict_rho <- env_numeric_09("TRAJECTORY_CONSENSUS_CONFLICT_RHO", 0.30)
   base$module_version <- env_or_default_03("MODULE_09_VERSION", "1.0")
   base
 }
@@ -89,12 +110,18 @@ prepare_dirs_09 <- function(cfg) {
     cfg$trajectory_monocle2_table_dir,
     cfg$trajectory_paga_table_dir,
     cfg$trajectory_palantir_table_dir,
+    cfg$trajectory_tradeseq_table_dir,
+    cfg$trajectory_consensus_table_dir,
+    cfg$trajectory_velocity_link_table_dir,
     cfg$trajectory_figure_dir,
     cfg$trajectory_inputs_figure_dir,
     cfg$trajectory_methods_figure_dir,
     cfg$trajectory_monocle2_figure_dir,
     cfg$trajectory_paga_figure_dir,
     cfg$trajectory_palantir_figure_dir,
+    cfg$trajectory_tradeseq_figure_dir,
+    cfg$trajectory_consensus_figure_dir,
+    cfg$trajectory_velocity_link_figure_dir,
     cfg$trajectory_python_input_dir,
     cfg$trajectory_report_dir,
     cfg$trajectory_inputs_report_dir,
@@ -106,6 +133,9 @@ prepare_dirs_09 <- function(cfg) {
     dirname(cfg$module_09e2_manifest_path),
     dirname(cfg$module_09f_manifest_path),
     dirname(cfg$module_09g_manifest_path),
+    dirname(cfg$module_09h_manifest_path),
+    dirname(cfg$module_09i_manifest_path),
+    dirname(cfg$module_09j_manifest_path),
     dirname(cfg$trajectory_root_index_tsv),
     dirname(cfg$trajectory_root_split_agreement_tsv),
     dirname(cfg$trajectory_slingshot_index_tsv),
@@ -114,7 +144,16 @@ prepare_dirs_09 <- function(cfg) {
     dirname(cfg$trajectory_paga_index_tsv),
     dirname(cfg$trajectory_paga_jobs_tsv),
     dirname(cfg$trajectory_palantir_index_tsv),
-    dirname(cfg$trajectory_palantir_jobs_tsv)
+    dirname(cfg$trajectory_palantir_jobs_tsv),
+    dirname(cfg$trajectory_tradeseq_index_tsv),
+    dirname(cfg$trajectory_tradeseq_condition_index_tsv),
+    dirname(cfg$trajectory_tradeseq_driver_index_tsv),
+    dirname(cfg$trajectory_consensus_index_tsv),
+    dirname(cfg$trajectory_consensus_correlation_summary_tsv),
+    dirname(cfg$trajectory_consensus_jaccard_summary_tsv),
+    dirname(cfg$trajectory_consensus_split_agreement_tsv),
+    dirname(cfg$trajectory_consensus_triage_tsv),
+    dirname(cfg$trajectory_velocity_link_index_tsv)
   )
   invisible(lapply(ensure_dirs[nzchar(ensure_dirs)], ensure_dir))
 }
@@ -170,6 +209,9 @@ trajectory_method_table_dir_09 <- function(cfg, method, pair_id = "", split_valu
     monocle2 = cfg$trajectory_monocle2_table_dir,
     paga_dpt = cfg$trajectory_paga_table_dir,
     palantir = cfg$trajectory_palantir_table_dir,
+    tradeseq = cfg$trajectory_tradeseq_table_dir,
+    consensus = cfg$trajectory_consensus_table_dir,
+    velocity_link = cfg$trajectory_velocity_link_table_dir,
     file.path(cfg$trajectory_methods_table_dir, safe_id_09(method))
   )
   if (!nzchar(normalize_scalar_value(pair_id))) {
@@ -184,6 +226,9 @@ trajectory_method_figure_dir_09 <- function(cfg, method, pair_id, split_value = 
     monocle2 = cfg$trajectory_monocle2_figure_dir,
     paga_dpt = cfg$trajectory_paga_figure_dir,
     palantir = cfg$trajectory_palantir_figure_dir,
+    tradeseq = cfg$trajectory_tradeseq_figure_dir,
+    consensus = cfg$trajectory_consensus_figure_dir,
+    velocity_link = cfg$trajectory_velocity_link_figure_dir,
     file.path(cfg$trajectory_methods_figure_dir, safe_id_09(method))
   )
   file.path(root, trajectory_unit_file_id_09(pair_id, split_value))

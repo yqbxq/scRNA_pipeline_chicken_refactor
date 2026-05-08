@@ -55,6 +55,38 @@ trajectory_manifest_output_optional_09 <- function(manifest_path, key) {
   tryCatch(resolve_output_local(manifest, key), error = function(e) "")
 }
 
+trajectory_read_method_index_09 <- function(manifest_path, output_key, fallback_path, cols = trajectory_method_index_cols_09) {
+  path <- trajectory_manifest_output_optional_09(manifest_path, output_key)
+  if (!nzchar(path)) {
+    path <- fallback_path
+  }
+  idx <- read_tsv_optional(path)
+  if (nrow(idx) == 0) {
+    return(trajectory_empty_df_09(cols))
+  }
+  for (col in cols) {
+    if (!col %in% colnames(idx)) {
+      idx[[col]] <- ""
+    }
+  }
+  idx
+}
+
+trajectory_read_pseudotime_csv_09 <- function(path, method) {
+  path <- normalize_scalar_value(path)
+  if (!nzchar(path) || !file.exists(path) || isTRUE(file.info(path)$size == 0)) {
+    return(data.frame(cell_id = character(0), pseudotime = numeric(0), method = character(0), stringsAsFactors = FALSE))
+  }
+  df <- read.csv(path, stringsAsFactors = FALSE, check.names = FALSE)
+  if (!"cell_id" %in% colnames(df) || !"pseudotime" %in% colnames(df)) {
+    return(data.frame(cell_id = character(0), pseudotime = numeric(0), method = character(0), stringsAsFactors = FALSE))
+  }
+  df$cell_id <- as.character(df$cell_id)
+  df$pseudotime <- suppressWarnings(as.numeric(df$pseudotime))
+  df$method <- method
+  df[nzchar(df$cell_id) & is.finite(df$pseudotime), , drop = FALSE]
+}
+
 trajectory_read_09a_index <- function(cfg) {
   path <- trajectory_manifest_output_optional_09(cfg$module_09a_manifest_path, "trajectory_input_index")
   if (!nzchar(path)) {

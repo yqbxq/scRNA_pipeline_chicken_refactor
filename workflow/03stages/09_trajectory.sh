@@ -22,6 +22,9 @@ MODULE_09E_MANIFEST="${MANIFEST_DIR}/09e_trajectory_monocle3/_manifest.json"
 MODULE_09E2_MANIFEST="${MANIFEST_DIR}/09e2_trajectory_monocle2/_manifest.json"
 MODULE_09F_MANIFEST="${MANIFEST_DIR}/09f_trajectory_paga_dpt/_manifest.json"
 MODULE_09G_MANIFEST="${MANIFEST_DIR}/09g_trajectory_palantir/_manifest.json"
+MODULE_09H_MANIFEST="${MANIFEST_DIR}/09h_trajectory_tradeseq/_manifest.json"
+MODULE_09I_MANIFEST="${MANIFEST_DIR}/09i_trajectory_consensus/_manifest.json"
+MODULE_09J_MANIFEST="${MANIFEST_DIR}/09j_trajectory_velocity_link/_manifest.json"
 
 ensure_eda_control_files
 require_manifest_output "${MODULE_03D_MANIFEST}" "annotated_object" >/dev/null
@@ -48,6 +51,7 @@ fi
 
 TRAJECTORY_INPUT_RERAN=0
 TRAJECTORY_METHOD_RERAN=0
+TRAJECTORY_STAGE3_RERAN=0
 
 run_trajectory_stage_if_stale() {
   local script_path="$1"
@@ -72,6 +76,20 @@ run_trajectory_method_if_stale() {
     echo "运行 ${script_path}"
     run_r_main "${script_path}"
     TRAJECTORY_METHOD_RERAN=1
+  else
+    echo "已存在且未过期，跳过: ${output_path}"
+  fi
+}
+
+run_trajectory_stage3_if_stale() {
+  local script_path="$1"
+  local output_path="$2"
+  shift 2 || true
+
+  if is_stale_output "${output_path}" "$@"; then
+    echo "运行 ${script_path}"
+    run_r_main "${script_path}"
+    TRAJECTORY_STAGE3_RERAN=1
   else
     echo "已存在且未过期，跳过: ${output_path}"
   fi
@@ -183,10 +201,39 @@ if [[ "${TRAJECTORY_METHOD_RERAN}" == "1" ]]; then
     "09c-09g trajectory methods completed; review root and method status before approving trajectory_methods."
 fi
 
+hold_for_gate trajectory_methods
+
+run_trajectory_stage3_if_stale \
+  "${WORKFLOW_ROOT}/05single_script/09h_trajectory_tradeseq.R" \
+  "${MODULE_09H_MANIFEST}" \
+  "${MODULE_09A_MANIFEST}" \
+  "${MODULE_09D_MANIFEST}" \
+  "${TRAJECTORY_PAIRS_SHEET}"
+require_manifest_output "${MODULE_09H_MANIFEST}" "tradeseq_index_tsv" >/dev/null
+
+run_trajectory_stage3_if_stale \
+  "${WORKFLOW_ROOT}/05single_script/09i_trajectory_consensus.R" \
+  "${MODULE_09I_MANIFEST}" \
+  "${MODULE_09D_MANIFEST}" \
+  "${MODULE_09E_MANIFEST}" \
+  "${MODULE_09F_MANIFEST}" \
+  "${MODULE_09G_MANIFEST}" \
+  "${MODULE_09E2_MANIFEST}" \
+  "${TRAJECTORY_PAIRS_SHEET}"
+require_manifest_output "${MODULE_09I_MANIFEST}" "consensus_index_tsv" >/dev/null
+
+run_trajectory_stage3_if_stale \
+  "${WORKFLOW_ROOT}/05single_script/09j_trajectory_velocity_link.R" \
+  "${MODULE_09J_MANIFEST}" \
+  "${MODULE_09A_MANIFEST}" \
+  "${MODULE_09D_MANIFEST}" \
+  "${VELOCITY_OUTPUT_DIR}"
+require_manifest_output "${MODULE_09J_MANIFEST}" "velocity_link_index_tsv" >/dev/null
+
 sync_workflow_gate_statuses
 update_workflow_status \
-  "09_trajectory_methods_completed" \
-  "review trajectory method outputs and approve trajectory_methods before running tradeSeq/consensus/final trajectory scripts" \
+  "09_trajectory_stage3_completed" \
+  "review 09h tradeSeq, 09i consensus, and 09j velocity-link outputs; next implement/run 09k/09m/09l final reporting" \
   "status.09a_trajectory_inputs_completed=true" \
   "status.09b_trajectory_inputs_eda_completed=true" \
   "status.09_trajectory_inputs_completed=true" \
@@ -197,5 +244,9 @@ update_workflow_status \
   "status.09g_trajectory_palantir_completed=$([[ -f "${MODULE_09G_MANIFEST}" ]] && echo true || echo false)" \
   "status.09e2_trajectory_monocle2_completed=$([[ -f "${MODULE_09E2_MANIFEST}" ]] && echo true || echo false)" \
   "status.09_trajectory_methods_completed=true" \
+  "status.09h_trajectory_tradeseq_completed=true" \
+  "status.09i_trajectory_consensus_completed=true" \
+  "status.09j_trajectory_velocity_link_completed=true" \
+  "status.09_trajectory_stage3_completed=true" \
   "status.trajectory_inputs_gate_passed=$(eda_gate_passed trajectory_inputs && echo true || echo false)" \
   "status.trajectory_methods_gate_passed=$(eda_gate_passed trajectory_methods && echo true || echo false)"
