@@ -126,6 +126,65 @@ run_pyscenic() {
   env "${ENV_ARGS[@]}" "${CONDA_FRONTEND}" run -p "${PYSCENIC_ENV_PREFIX}" "$@"
 }
 
+run_velocity() {
+  local command_path="${1:-}"
+  [[ -n "${command_path}" ]] || die "run_velocity 需要命令或脚本路径。"
+  shift || true
+
+  local -a ENV_ARGS=()
+  append_env_vars "${ENV_SPECS_VELOCITY[@]}"
+
+  [[ -n "${CONDA_FRONTEND}" ]] || die "系统中找不到 micromamba/mamba/conda，无法运行 velocity 环境。"
+  [[ -d "${VELOCITY_ENV_PREFIX}" ]] || die "velocity 环境不存在: ${VELOCITY_ENV_PREFIX}"
+
+  case "${command_path}" in
+    *.py)
+      env "${ENV_ARGS[@]}" "${CONDA_FRONTEND}" run -p "${VELOCITY_ENV_PREFIX}" python "${command_path}" "$@"
+      ;;
+    *.R)
+      env "${ENV_ARGS[@]}" "${CONDA_FRONTEND}" run -p "${VELOCITY_ENV_PREFIX}" Rscript "${command_path}" "$@"
+      ;;
+    *.sh)
+      env "${ENV_ARGS[@]}" "${CONDA_FRONTEND}" run -p "${VELOCITY_ENV_PREFIX}" bash "${command_path}" "$@"
+      ;;
+    *)
+      env "${ENV_ARGS[@]}" "${CONDA_FRONTEND}" run -p "${VELOCITY_ENV_PREFIX}" "${command_path}" "$@"
+      ;;
+  esac
+}
+
+run_scvelo() {
+  local command_path="${1:-}"
+  [[ -n "${command_path}" ]] || die "run_scvelo 需要命令或脚本路径。"
+  shift || true
+
+  local scvelo_prefix="${SCVELO_ENV_PREFIX:-}"
+  if [[ -z "${scvelo_prefix}" || ! -d "${scvelo_prefix}" ]]; then
+    scvelo_prefix="${VELOCITY_ENV_PREFIX}"
+  fi
+
+  local -a ENV_ARGS=()
+  append_env_vars "${ENV_SPECS_SCVELO[@]}"
+
+  [[ -n "${CONDA_FRONTEND}" ]] || die "系统中找不到 micromamba/mamba/conda，无法运行 scVelo 环境。"
+  [[ -d "${scvelo_prefix}" ]] || die "scVelo/velocity 环境不存在: ${SCVELO_ENV_PREFIX:-<unset>} 或 ${VELOCITY_ENV_PREFIX}"
+
+  case "${command_path}" in
+    *.py)
+      env "${ENV_ARGS[@]}" "${CONDA_FRONTEND}" run -p "${scvelo_prefix}" python "${command_path}" "$@"
+      ;;
+    *.R)
+      env "${ENV_ARGS[@]}" "${CONDA_FRONTEND}" run -p "${scvelo_prefix}" Rscript "${command_path}" "$@"
+      ;;
+    *.sh)
+      env "${ENV_ARGS[@]}" "${CONDA_FRONTEND}" run -p "${scvelo_prefix}" bash "${command_path}" "$@"
+      ;;
+    *)
+      env "${ENV_ARGS[@]}" "${CONDA_FRONTEND}" run -p "${scvelo_prefix}" "${command_path}" "$@"
+      ;;
+  esac
+}
+
 run_r_legacy() {
   [[ -d "${R_LEGACY_ENV_PREFIX}" ]] || die "legacy R 环境不存在: ${R_LEGACY_ENV_PREFIX}"
   run_in_conda_prefix "${R_LEGACY_ENV_PREFIX}" Rscript "$@"
