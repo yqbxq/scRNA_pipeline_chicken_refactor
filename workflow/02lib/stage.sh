@@ -129,6 +129,21 @@ check_stage_deps() {
         fi
       fi
       ;;
+    09_trajectory)
+      sync_workflow_gate_statuses
+      require_status_flag_or_warn \
+        "status.annotation_gate_passed" \
+        "09_trajectory 被 annotation gate 阻断。请先审阅 03e panorama 注释报告，并在 eda_gates.tsv 中批准 annotation。"
+      require_status_flag_or_warn \
+        "status.03_panorama_completed" \
+        "09_trajectory 需要 03_panorama 整链完成。"
+      require_status_flag_or_warn \
+        "status.subcluster_gate_passed" \
+        "09_trajectory 被 subcluster gate 阻断。请先审阅 04c subcluster EDA 报告，并在 eda_gates.tsv 中批准 subcluster。"
+      require_status_flag_or_warn \
+        "status.04_subcluster_completed" \
+        "09_trajectory 需要 04_subcluster 完成，以便解析 GC/TC subcluster layer。"
+      ;;
     *)
       warn "未定义 ${stage_id} 的依赖规则，按无依赖继续。"
       ;;
@@ -277,7 +292,12 @@ sync_workflow_gate_statuses() {
     "status.subcluster_gate_passed=$(eda_gate_passed subcluster && echo true || echo false)" \
     "status.deg_gate_passed=$(eda_gate_passed deg && echo true || echo false)" \
     "status.communication_gate_passed=$(eda_gate_passed communication && echo true || echo false)" \
-    "status.regulation_gate_passed=$(eda_gate_passed regulation && echo true || echo false)"
+    "status.regulation_gate_passed=$(eda_gate_passed regulation && echo true || echo false)" \
+    "status.trajectory_inputs_gate_passed=$(eda_gate_passed trajectory_inputs && echo true || echo false)" \
+    "status.trajectory_methods_gate_passed=$(eda_gate_passed trajectory_methods && echo true || echo false)" \
+    "status.trajectory_finalize_gate_passed=$(eda_gate_passed trajectory_finalize && echo true || echo false)" \
+    "status.velocity_inputs_gate_passed=$(eda_gate_passed velocity_inputs && echo true || echo false)" \
+    "status.velocity_finalize_gate_passed=$(eda_gate_passed velocity_finalize && echo true || echo false)"
 }
 
 update_workflow_status() {
@@ -422,7 +442,17 @@ for key in (
     "annotation_gate_passed",
     "subcluster_gate_passed",
     "deg_gate_passed",
+    "communication_gate_passed",
+    "regulation_gate_passed",
+    "trajectory_inputs_gate_passed",
+    "trajectory_methods_gate_passed",
+    "trajectory_finalize_gate_passed",
+    "velocity_inputs_gate_passed",
+    "velocity_finalize_gate_passed",
     "05_deg_completed",
+    "09a_trajectory_inputs_completed",
+    "09b_trajectory_inputs_eda_completed",
+    "09_trajectory_inputs_completed",
     "main_upstream_ready",
     "velocity_upstream_ready",
     "ambient_upstream_ready",
@@ -434,7 +464,7 @@ for key in (
 status["main_ready"] = bool(status.get("metadata_valid")) and bool(status.get("standardized_inputs")) and bool(status.get("main_upstream_ready"))
 status["deg_ready"] = annotation_exists and bool(status.get("annotation_gate_passed"))
 status["enrichment_ready"] = bool(status.get("05_deg_completed")) and bool(status.get("deg_gate_passed"))
-status["trajectory_ready"] = annotation_exists and bool(status.get("annotation_gate_passed"))
+status["trajectory_ready"] = annotation_exists and bool(status.get("annotation_gate_passed")) and bool(status.get("subcluster_gate_passed"))
 status["velocity_reference_ready"] = annotation_exists and bool(status.get("velocity_upstream_ready")) and bool(status.get("annotation_gate_passed"))
 status["scenic_export_ready"] = annotation_exists and bool(status.get("scenic_upstream_ready")) and bool(status.get("annotation_gate_passed"))
 

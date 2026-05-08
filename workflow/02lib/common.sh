@@ -243,6 +243,14 @@ export TARGET_CLUSTERS="${TARGET_CLUSTERS:-15}"
 export RES_RANGE="${RES_RANGE:-0.20,0.25,0.30,0.35,0.40,0.45,0.50,0.55,0.60}"
 export TRAJECTORY_START="${TRAJECTORY_START:-}"
 export TRADESEQ_KNOTS="${TRADESEQ_KNOTS:-6}"
+export MODULE_09_VERSION="${MODULE_09_VERSION:-1.0}"
+export TRAJECTORY_DIR="${TRAJECTORY_DIR:-${RESULTS_DIR}/trajectory}"
+export TRAJECTORY_REPORT_DIR="${TRAJECTORY_REPORT_DIR:-${EDA_REPORT_DIR}/trajectory}"
+export TRAJECTORY_HVG_NFEATURES="${TRAJECTORY_HVG_NFEATURES:-${HVG_NFEATURES:-2000}}"
+export TRAJECTORY_PCA_DIMS="${TRAJECTORY_PCA_DIMS:-1:30}"
+export TRAJECTORY_UMAP_N_NEIGHBORS="${TRAJECTORY_UMAP_N_NEIGHBORS:-30}"
+export TRAJECTORY_SPLIT_MIN_CELLS="${TRAJECTORY_SPLIT_MIN_CELLS:-50}"
+export TRAJECTORY_BALANCE_WARN_FRACTION="${TRAJECTORY_BALANCE_WARN_FRACTION:-0.30}"
 
 export PATH="${SRA_TOOLS_DIR:+${SRA_TOOLS_DIR}:}${PATH}"
 
@@ -277,7 +285,8 @@ ensure_eda_control_files() {
     "${DEG_REPORT_DIR}" \
     "${ENRICHMENT_REPORT_DIR}" \
     "${COMMUNICATION_REPORT_DIR}" \
-    "${REGULATION_REPORT_DIR}"
+    "${REGULATION_REPORT_DIR}" \
+    "${TRAJECTORY_REPORT_DIR}"
 
   if [[ ! -s "${EDA_GATE_FILE}" ]]; then
     {
@@ -290,11 +299,16 @@ ensure_eda_control_files() {
       printf 'deg\tpending\t\t\n'
       printf 'communication\tpending\t\t\n'
       printf 'regulation\tpending\t\t\n'
+      printf 'trajectory_inputs\tpending\t\t\n'
+      printf 'trajectory_methods\tpending\t\t\n'
+      printf 'trajectory_finalize\tpending\t\t\n'
+      printf 'velocity_inputs\tpending\t\t\n'
+      printf 'velocity_finalize\tpending\t\t\n'
     } > "${EDA_GATE_FILE}"
   fi
 
   local gate_id
-  for gate_id in pre_qc post_qc integration annotation subcluster deg communication regulation; do
+  for gate_id in pre_qc post_qc integration annotation subcluster deg communication regulation trajectory_inputs trajectory_methods trajectory_finalize velocity_inputs velocity_finalize; do
     if ! awk -F '\t' -v gate="${gate_id}" 'NR > 1 && $1 == gate { found = 1 } END { exit(found ? 0 : 1) }' "${EDA_GATE_FILE}" >/dev/null 2>&1; then
       printf '%s\tpending\t\t\n' "${gate_id}" >> "${EDA_GATE_FILE}"
     fi
@@ -508,6 +522,7 @@ prepare_project_state_dirs() {
     "${ENRICHMENT_REPORT_DIR}" \
     "${COMMUNICATION_REPORT_DIR}" \
     "${REGULATION_REPORT_DIR}" \
+    "${TRAJECTORY_REPORT_DIR}" \
     "${STATUS_DIR}" \
     "${MANIFEST_DIR}" \
     "${LOG_DIR}"
