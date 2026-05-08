@@ -139,6 +139,8 @@ status_from_root_09l <- function(root_index) {
       c(
         sprintf("selected_root=%s", display_scalar_value(row$selected_root[[1]], "NA")),
         sprintf("source=%s", display_scalar_value(row$selected_source[[1]], "NA")),
+        sprintf("non_prior_vote=%s", display_scalar_value(row$non_prior_vote_root[[1]], "NA")),
+        sprintf("disagreeing_methods=%s", display_scalar_value(row$disagreeing_methods[[1]], "none")),
         normalize_scalar_value(row$reason[[1]])
       ),
       collapse = "; "
@@ -206,7 +208,10 @@ input_status <- read_tsv_with_cols_09l(
 )
 root_index <- read_tsv_with_cols_09l(
   read_manifest_output_or_fallback_09l(cfg$module_09c_manifest_path, "trajectory_root_index", cfg$trajectory_root_index_tsv),
-  c("pair_id", "split_value", "selected_root", "selected_source", "status", "reason")
+  c(
+    "pair_id", "split_value", "selected_root", "selected_source", "status", "reason",
+    "non_prior_vote_root", "non_prior_vote_sources", "prior_disagreement", "disagreeing_methods"
+  )
 )
 root_agreement <- read_tsv_with_cols_09l(
   read_manifest_output_or_fallback_09l(cfg$module_09c_manifest_path, "split_root_agreement", cfg$trajectory_root_split_agreement_tsv),
@@ -277,7 +282,8 @@ if (nrow(consensus_triage) > 0) {
 if (nrow(module_status) > 0) {
   issue_status <- module_status[
     grepl("^failed", module_status$status) |
-      module_status$status %in% c("warning", "warning_low_overlap", "failed_no_root"),
+      grepl("^warning", module_status$status) |
+      module_status$status %in% c("warning_low_overlap", "failed_no_root"),
     ,
     drop = FALSE
   ]
@@ -289,6 +295,25 @@ if (nrow(module_status) > 0) {
       signal_id = "trajectory_module_status_not_ok",
       evidence = sprintf("%s value=%s status=%s notes=%s", row$method[[1]], row$value[[1]], row$status[[1]], row$notes[[1]]),
       recommended_action = "Review the module-specific index and decide whether to rerun, waive, or interpret the result as exploratory."
+    )
+  }
+}
+
+if (nrow(root_index) > 0 && "prior_disagreement" %in% colnames(root_index)) {
+  prior_disagree <- root_index[root_index$prior_disagreement == "yes", , drop = FALSE]
+  for (i in seq_len(nrow(prior_disagree))) {
+    triage_rows[[length(triage_rows) + 1L]] <- make_triage_row(
+      sample_id = prior_disagree$pair_id[[i]],
+      severity = "warning",
+      signal_id = "trajectory_prior_root_disagreement",
+      evidence = sprintf(
+        "split=%s prior-selected=%s non_prior_vote=%s disagreeing_methods=%s",
+        prior_disagree$split_value[[i]],
+        prior_disagree$selected_root[[i]],
+        prior_disagree$non_prior_vote_root[[i]],
+        prior_disagree$disagreeing_methods[[i]]
+      ),
+      recommended_action = "Prior root_group is being honored, but inspect 09c root inference before treating directionality as method-supported."
     )
   }
 }

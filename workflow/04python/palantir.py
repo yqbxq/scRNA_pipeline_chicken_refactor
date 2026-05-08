@@ -14,6 +14,8 @@ def read_lines(path):
 def empty_outputs(job, status, reason):
     import pandas as pd
 
+    for key in ("pseudotime_csv", "entropy_csv", "fate_csv", "status"):
+        Path(job[key]).parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(columns=["cell_id", "pseudotime"]).to_csv(job["pseudotime_csv"], index=False)
     pd.DataFrame(columns=["cell_id", "entropy"]).to_csv(job["entropy_csv"], index=False)
     pd.DataFrame(columns=["cell_id", "terminal_state", "probability"]).to_csv(job["fate_csv"], index=False)
@@ -64,6 +66,12 @@ def run_scanpy_fallback(job, package_status, package_reason):
         empty_outputs(job, "skipped_no_terminal_states", "no terminal cells resolved from terminal_group")
         return {"status": "skipped_no_terminal_states", "reason": "no terminal cells"}
 
+    root_cells = read_lines(input_dir / "root_cells.txt")
+    root_cells = [x for x in root_cells if x in adata.obs_names]
+    if not root_cells:
+        empty_outputs(job, "skipped_no_root", "no root cells resolved from selected root label")
+        return {"status": "skipped_no_root", "reason": "no root cells resolved from selected root label"}
+
     umap_path = input_dir / "umap.tsv"
     if umap_path.exists():
         umap = pd.read_csv(umap_path, sep="\t").set_index("cell_id").reindex(barcodes)
@@ -77,9 +85,7 @@ def run_scanpy_fallback(job, package_status, package_reason):
         sc.tl.umap(adata)
 
     sc.tl.diffmap(adata)
-    root_cells = read_lines(input_dir / "root_cells.txt")
-    root_cells = [x for x in root_cells if x in adata.obs_names]
-    adata.uns["iroot"] = int(np.where(adata.obs_names == (root_cells[0] if root_cells else adata.obs_names[0]))[0][0])
+    adata.uns["iroot"] = int(np.where(adata.obs_names == root_cells[0])[0][0])
     sc.tl.dpt(adata)
     pst = np.asarray(adata.obs["dpt_pseudotime"], dtype=float)
     pd.DataFrame({"cell_id": adata.obs_names, "pseudotime": pst}).to_csv(job["pseudotime_csv"], index=False)
@@ -145,11 +151,17 @@ def main():
     rows = []
     for _, job_row in jobs.iterrows():
         job = {k: "" if pd.isna(v) else str(v) for k, v in job_row.to_dict().items()}
+        print(f"palantir: start pair={job['pair_id']} split={job['split_value']} input={job['input_dir']}", flush=True)
         try:
             result = run_job(job)
         except Exception as exc:
             empty_outputs(job, "failed", str(exc))
             result = {"status": "failed", "reason": str(exc)}
+        print(
+            f"palantir: finish pair={job['pair_id']} split={job['split_value']} "
+            f"status={result['status']} reason={result['reason']}",
+            flush=True,
+        )
         rows.append({
             "pair_id": job["pair_id"],
             "split_value": job["split_value"],

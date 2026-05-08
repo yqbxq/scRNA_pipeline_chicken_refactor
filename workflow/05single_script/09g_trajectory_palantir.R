@@ -59,46 +59,58 @@ for (i in seq_len(nrow(units))) {
   ensure_dir(dirname(pseudo_csv))
   ensure_dir(dirname(fig_png))
 
-  tryCatch({
+  result <- tryCatch({
     seu <- readRDS(unit$input_rds[[1]])
     root <- trajectory_selected_root_09(cfg, pair_id, split_value, unit$root_group[[1]])
     trajectory_export_python_input_09(seu, input_dir, unit$coarse_label_var[[1]], root, unit$terminal_group[[1]])
-    job_rows[[length(job_rows) + 1L]] <<- data.frame(
-      pair_id = pair_id,
-      split_value = split_value,
-      input_rds = unit$input_rds[[1]],
-      input_dir = input_dir,
-      label_var = unit$coarse_label_var[[1]],
-      n_cells = ncol(seu),
-      pseudotime_csv = pseudo_csv,
-      fate_csv = fate_csv,
-      entropy_csv = entropy_csv,
-      figure_png = fig_png,
-      status = status_path,
-      stringsAsFactors = FALSE
+    list(
+      job = data.frame(
+        pair_id = pair_id,
+        split_value = split_value,
+        input_rds = unit$input_rds[[1]],
+        input_dir = input_dir,
+        label_var = unit$coarse_label_var[[1]],
+        n_cells = ncol(seu),
+        pseudotime_csv = pseudo_csv,
+        fate_csv = fate_csv,
+        entropy_csv = entropy_csv,
+        figure_png = fig_png,
+        status = status_path,
+        stringsAsFactors = FALSE
+      ),
+      index = NULL
     )
   }, error = function(e) {
     write.csv(data.frame(cell_id = character(0), pseudotime = numeric(0)), pseudo_csv, row.names = FALSE)
     write.csv(data.frame(cell_id = character(0), terminal_state = character(0), probability = numeric(0)), fate_csv, row.names = FALSE)
     write.csv(data.frame(cell_id = character(0), entropy = numeric(0)), entropy_csv, row.names = FALSE)
     writeLines(paste("failed", conditionMessage(e), sep = "\t"), status_path, useBytes = TRUE)
-    index_rows[[length(index_rows) + 1L]] <<- data.frame(
-      pair_id = pair_id,
-      split_value = split_value,
-      method = "palantir",
-      methods_enabled = "yes",
-      input_rds = unit$input_rds[[1]],
-      output_path = pseudo_csv,
-      extra_path = entropy_csv,
-      figure_path = fig_png,
-      n_cells = suppressWarnings(as.integer(unit$cell_n_after[[1]])),
-      status = "failed",
-      reason = conditionMessage(e),
-      runtime_s = "",
-      fate_path = fate_csv,
-      stringsAsFactors = FALSE
+    list(
+      job = NULL,
+      index = data.frame(
+        pair_id = pair_id,
+        split_value = split_value,
+        method = "palantir",
+        methods_enabled = "yes",
+        input_rds = unit$input_rds[[1]],
+        output_path = pseudo_csv,
+        extra_path = entropy_csv,
+        figure_path = fig_png,
+        n_cells = suppressWarnings(as.integer(unit$cell_n_after[[1]])),
+        status = "failed",
+        reason = conditionMessage(e),
+        runtime_s = "",
+        fate_path = fate_csv,
+        stringsAsFactors = FALSE
+      )
     )
   })
+  if (!is.null(result$job)) {
+    job_rows[[length(job_rows) + 1L]] <- result$job
+  }
+  if (!is.null(result$index)) {
+    index_rows[[length(index_rows) + 1L]] <- result$index
+  }
 }
 
 jobs <- if (length(job_rows) > 0) dplyr::bind_rows(job_rows) else trajectory_empty_df_09(c(

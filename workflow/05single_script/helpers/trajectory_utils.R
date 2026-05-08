@@ -322,7 +322,8 @@ trajectory_python_exe_09 <- function() {
       return(candidate)
     }
   }
-  Sys.which("python3")[[1]] %||% ""
+  exe <- normalize_scalar_value(unname(Sys.which("python3")[[1]]))
+  if (nzchar(exe) && file.exists(exe)) exe else ""
 }
 
 trajectory_run_python_bridge_09 <- function(script_path, jobs_tsv, index_tsv) {
@@ -330,14 +331,28 @@ trajectory_run_python_bridge_09 <- function(script_path, jobs_tsv, index_tsv) {
   if (!nzchar(python) || !file.exists(python)) {
     return(FALSE)
   }
+  message(sprintf(
+    "Running Python trajectory bridge: %s %s --jobs %s --index %s",
+    shQuote(python),
+    shQuote(script_path),
+    shQuote(jobs_tsv),
+    shQuote(index_tsv)
+  ))
   status <- system2(
     python,
     args = c(script_path, "--jobs", jobs_tsv, "--index", index_tsv),
-    stdout = TRUE,
-    stderr = TRUE
+    stdout = "",
+    stderr = ""
   )
-  if (!is.null(attr(status, "status")) && attr(status, "status") != 0) {
-    warning(paste(status, collapse = "\n"), call. = FALSE)
+  exit_status <- suppressWarnings(as.integer(status))
+  if (!is.finite(exit_status)) {
+    exit_status <- 1L
+  }
+  if (exit_status != 0L) {
+    warning(
+      sprintf("Python trajectory bridge failed with exit status %s: %s", exit_status, script_path),
+      call. = FALSE
+    )
     return(FALSE)
   }
   TRUE

@@ -50,11 +50,11 @@ for (i in seq_len(nrow(units))) {
   ensure_dir(dirname(out_csv))
   ensure_dir(dirname(fig_png))
 
-  tryCatch({
+  job_row <- tryCatch({
     seu <- readRDS(unit$input_rds[[1]])
     root <- trajectory_selected_root_09(cfg, pair_id, split_value, unit$root_group[[1]])
     trajectory_export_python_input_09(seu, input_dir, unit$coarse_label_var[[1]], root, unit$terminal_group[[1]])
-    job_rows[[length(job_rows) + 1L]] <<- data.frame(
+    data.frame(
       pair_id = pair_id,
       split_value = split_value,
       input_rds = unit$input_rds[[1]],
@@ -72,7 +72,7 @@ for (i in seq_len(nrow(units))) {
     write.csv(data.frame(cell_id = character(0), pseudotime = numeric(0), label = character(0)), out_csv, row.names = FALSE)
     write_tsv_local(data.frame(source = character(0), target = character(0), connectivity = numeric(0)), conn_tsv)
     writeLines(paste("failed", conditionMessage(e), sep = "\t"), status_path, useBytes = TRUE)
-    job_rows[[length(job_rows) + 1L]] <<- data.frame(
+    data.frame(
       pair_id = pair_id,
       split_value = split_value,
       input_rds = unit$input_rds[[1]],
@@ -87,6 +87,7 @@ for (i in seq_len(nrow(units))) {
       stringsAsFactors = FALSE
     )
   })
+  job_rows[[length(job_rows) + 1L]] <- job_row
 }
 
 jobs <- if (length(job_rows) > 0) dplyr::bind_rows(job_rows) else trajectory_empty_df_09(c(

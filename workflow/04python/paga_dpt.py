@@ -14,6 +14,8 @@ def read_lines(path):
 def empty_outputs(job, status, reason):
     import pandas as pd
 
+    for key in ("pseudotime_csv", "connectivity_tsv", "status"):
+        Path(job[key]).parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(columns=["cell_id", "pseudotime", "label"]).to_csv(job["pseudotime_csv"], index=False)
     pd.DataFrame(columns=["source", "target", "connectivity"]).to_csv(job["connectivity_tsv"], sep="\t", index=False)
     Path(job["status"]).write_text(f"{status}\t{reason}\n", encoding="utf-8")
@@ -62,6 +64,12 @@ def run_job(job):
         if adata.obs[label_var].nunique() < 2:
             raise ValueError(f"label_var has fewer than 2 categories: {label_var}")
 
+        root_cells = read_lines(input_dir / "root_cells.txt")
+        root_cells = [x for x in root_cells if x in adata.obs_names]
+        if not root_cells:
+            empty_outputs(job, "skipped_no_root", "no root cells resolved from selected root label")
+            return {"status": "skipped_no_root", "reason": "no root cells resolved from selected root label"}
+
         if "X_umap" in adata.obsm:
             sc.pp.neighbors(adata, use_rep="X_umap", n_neighbors=min(30, max(2, adata.n_obs - 1)))
         else:
@@ -73,12 +81,7 @@ def run_job(job):
 
         sc.tl.paga(adata, groups=label_var)
         sc.tl.diffmap(adata)
-        root_cells = read_lines(input_dir / "root_cells.txt")
-        root_cells = [x for x in root_cells if x in adata.obs_names]
-        if root_cells:
-            adata.uns["iroot"] = int(np.where(adata.obs_names == root_cells[0])[0][0])
-        else:
-            adata.uns["iroot"] = 0
+        adata.uns["iroot"] = int(np.where(adata.obs_names == root_cells[0])[0][0])
         sc.tl.dpt(adata)
 
         pst = np.asarray(adata.obs["dpt_pseudotime"], dtype=float)
@@ -134,7 +137,13 @@ def main():
     rows = []
     for _, job_row in jobs.iterrows():
         job = {k: "" if pd.isna(v) else str(v) for k, v in job_row.to_dict().items()}
+        print(f"paga_dpt: start pair={job['pair_id']} split={job['split_value']} input={job['input_dir']}", flush=True)
         result = run_job(job)
+        print(
+            f"paga_dpt: finish pair={job['pair_id']} split={job['split_value']} "
+            f"status={result['status']} reason={result['reason']}",
+            flush=True,
+        )
         rows.append({
             "pair_id": job["pair_id"],
             "split_value": job["split_value"],

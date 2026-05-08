@@ -40,7 +40,8 @@ root_inference_cols <- c(
 root_index_cols <- c(
   "pair_id", "split_value", "selected_root", "selected_source",
   "prior_root", "cytotrace_root", "velocity_root", "n_methods_ok",
-  "status", "reason", "root_inference_tsv"
+  "non_prior_vote_root", "non_prior_vote_sources", "prior_disagreement",
+  "disagreeing_methods", "status", "reason", "root_inference_tsv"
 )
 split_agreement_cols <- c("pair_id", "split_values", "selected_roots", "status", "reason")
 
@@ -145,12 +146,14 @@ cytotrace_root_row_09c <- function(seu, pair_id, split_value, label_var, prior_r
 
 velocity_root_row_09c <- function(cfg, pair_id, split_value, prior_root) {
   unit_id <- trajectory_unit_file_id_09(pair_id, split_value)
-  candidates <- c(
-    file.path(cfg$velocity_output_dir, sprintf("velocity_root_terminal_%s.tsv", unit_id)),
-    file.path(cfg$velocity_output_dir, sprintf("velocity_root_terminal_%s__%s.tsv", safe_id_09(pair_id), safe_id_09(split_value))),
-    file.path(cfg$velocity_output_dir, sprintf("velocity_root_terminal_%s.tsv", safe_id_09(pair_id))),
-    Sys.glob(file.path(cfg$velocity_output_dir, sprintf("*%s*root*terminal*.tsv", unit_id)))
-  )
+  split_key <- trajectory_unit_value_09(split_value)
+  candidates <- file.path(cfg$velocity_output_dir, sprintf("velocity_root_terminal_%s.tsv", unit_id))
+  if (!nzchar(split_key)) {
+    candidates <- c(
+      candidates,
+      file.path(cfg$velocity_output_dir, sprintf("velocity_root_terminal_%s__pooled.tsv", safe_id_09(pair_id)))
+    )
+  }
   candidates <- unique(candidates[nzchar(candidates) & file.exists(candidates)])
   if (length(candidates) == 0) {
     return(data.frame(
@@ -162,6 +165,19 @@ velocity_root_row_09c <- function(cfg, pair_id, split_value, prior_root) {
       agree_with_prior = "not_applicable",
       status = "skipped_no_velocity",
       reason = "10h velocity root/terminal output not found",
+      stringsAsFactors = FALSE
+    ))
+  }
+  if (length(candidates) > 1) {
+    return(data.frame(
+      pair_id = pair_id,
+      split_value = display_scalar_value(split_value, "pooled"),
+      method = "velocity",
+      recommended_root = "",
+      score = NA_real_,
+      agree_with_prior = "not_applicable",
+      status = "skipped_ambiguous_velocity",
+      reason = sprintf("multiple exact velocity root candidates: %s", paste(candidates, collapse = ";")),
       stringsAsFactors = FALSE
     ))
   }
@@ -210,22 +226,79 @@ velocity_root_row_09c <- function(cfg, pair_id, split_value, prior_root) {
   )
 }
 
-select_root_09c <- function(inference, prior_root) {
-  ok <- inference[inference$status %in% c("ok", "proxy") & nzchar(inference$recommended_root), , drop = FALSE]
+# Explicit root_group values are treated as user priors when the label is
+# present. CytoTRACE/velocity votes are still summarized so prior conflicts are
+# visible in downstream triage instead of being silently hidden.
+root_vote_summary_09c <- function(ok) {
+  ok <- ok[nzchar(ok$recommended_root), , drop = FALSE]
   if (nrow(ok) == 0) {
-    return(list(root = "", source = "", status = "failed_no_root", reason = "no root method returned a label"))
-  }
-  prior_root <- normalize_scalar_value(prior_root, "auto")
-  if (!prior_root %in% c("auto", "*")) {
-    prior_hit <- ok[ok$method == "prior" & ok$recommended_root == prior_root, , drop = FALSE]
-    if (nrow(prior_hit) > 0) {
-      return(list(root = prior_root, source = "prior", status = "ok", reason = "prior label present"))
-    }
+    return(list(root = "", sources = ""))
   }
   tab <- sort(table(ok$recommended_root), decreasing = TRUE)
   root <- names(tab)[[1]]
-  source <- paste(ok$method[ok$recommended_root == root], collapse = ",")
-  list(root = root, source = source, status = "ok", reason = "method vote")
+  list(
+    root = root,
+    sources = paste(ok$method[ok$recommended_root == root], collapse = ",")
+  )
+}
+
+select_root_09c <- function(inference, prior_root) {
+  ok <- inference[inference$status %in% c("ok", "proxy") & nzchar(inference$recommended_root), , drop = FALSE]
+  if (nrow(ok) == 0) {
+    return(list(
+      root = "",
+      source = "",
+      status = "failed_no_root",
+      reason = "no root method returned a label",
+      non_prior_vote_root = "",
+      non_prior_vote_sources = "",
+      prior_disagreement = "not_applicable",
+      disagreeing_methods = ""
+    ))
+  }
+  prior_root <- normalize_scalar_value(prior_root, "auto")
+  non_prior_ok <- ok[ok$method != "prior", , drop = FALSE]
+  non_prior_vote <- root_vote_summary_09c(non_prior_ok)
+  if (!prior_root %in% c("auto", "*")) {
+    prior_hit <- ok[ok$method == "prior" & ok$recommended_root == prior_root, , drop = FALSE]
+    if (nrow(prior_hit) > 0) {
+      disagree <- non_prior_ok[non_prior_ok$recommended_root != prior_root, , drop = FALSE]
+      if (nrow(disagree) > 0) {
+        disagreeing <- paste(sprintf("%s=%s", disagree$method, disagree$recommended_root), collapse = ",")
+        return(list(
+          root = prior_root,
+          source = "prior",
+          status = "warning_prior_disagreement",
+          reason = sprintf("prior label present but non-prior methods disagree: %s", disagreeing),
+          non_prior_vote_root = non_prior_vote$root,
+          non_prior_vote_sources = non_prior_vote$sources,
+          prior_disagreement = "yes",
+          disagreeing_methods = disagreeing
+        ))
+      }
+      return(list(
+        root = prior_root,
+        source = "prior",
+        status = "ok",
+        reason = "prior label present; non-prior methods agree or are unavailable",
+        non_prior_vote_root = non_prior_vote$root,
+        non_prior_vote_sources = non_prior_vote$sources,
+        prior_disagreement = "no",
+        disagreeing_methods = ""
+      ))
+    }
+  }
+  vote <- root_vote_summary_09c(ok)
+  list(
+    root = vote$root,
+    source = vote$sources,
+    status = "ok",
+    reason = "method vote",
+    non_prior_vote_root = non_prior_vote$root,
+    non_prior_vote_sources = non_prior_vote$sources,
+    prior_disagreement = "not_applicable",
+    disagreeing_methods = ""
+  )
 }
 
 units <- trajectory_execution_units_09(cfg)
@@ -268,7 +341,22 @@ for (i in seq_len(nrow(units))) {
       stringsAsFactors = FALSE
     )
     write_tsv_local(inference, out_path)
-    list(inference = inference, selected = list(root = "", source = "", status = "failed", reason = conditionMessage(e)), n_cells = 0L, status = "failed", reason = conditionMessage(e))
+    list(
+      inference = inference,
+      selected = list(
+        root = "",
+        source = "",
+        status = "failed",
+        reason = conditionMessage(e),
+        non_prior_vote_root = "",
+        non_prior_vote_sources = "",
+        prior_disagreement = "not_applicable",
+        disagreeing_methods = ""
+      ),
+      n_cells = 0L,
+      status = "failed",
+      reason = conditionMessage(e)
+    )
   })
 
   root_rows[[length(root_rows) + 1L]] <- result$inference
@@ -281,6 +369,10 @@ for (i in seq_len(nrow(units))) {
     cytotrace_root = first_or_empty_09c(result$inference$recommended_root[grepl("^cytotrace", result$inference$method)]),
     velocity_root = first_or_empty_09c(result$inference$recommended_root[result$inference$method == "velocity"]),
     n_methods_ok = sum(result$inference$status %in% c("ok", "proxy")),
+    non_prior_vote_root = result$selected$non_prior_vote_root,
+    non_prior_vote_sources = result$selected$non_prior_vote_sources,
+    prior_disagreement = result$selected$prior_disagreement,
+    disagreeing_methods = result$selected$disagreeing_methods,
     status = result$status,
     reason = result$reason,
     root_inference_tsv = out_path,

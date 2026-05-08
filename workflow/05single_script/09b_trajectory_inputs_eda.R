@@ -207,15 +207,16 @@ if (nrow(input_status) > 0) {
   }
 }
 
-build_split_balance_09b <- function(input_index, split_index) {
+build_split_balance_09b <- function(input_index, split_index, balance_warn_fraction, split_min_cells) {
   if (nrow(input_index) == 0 || nrow(split_index) == 0) {
-    return(empty_df_09b(split_balance_cols_09b))
+    return(list(balance = empty_df_09b(split_balance_cols_09b), triage = empty_triage_df(include_sample = TRUE)))
   }
   ok_inputs <- input_index[input_index$status == "ok", , drop = FALSE]
   if (nrow(ok_inputs) == 0) {
-    return(empty_df_09b(split_balance_cols_09b))
+    return(list(balance = empty_df_09b(split_balance_cols_09b), triage = empty_triage_df(include_sample = TRUE)))
   }
   rows <- list()
+  local_triage_rows <- list()
   for (pair_id in unique(ok_inputs$pair_id)) {
     pair_inputs <- ok_inputs[ok_inputs$pair_id == pair_id, , drop = FALSE]
     pair_splits <- split_index[split_index$pair_id == pair_id, , drop = FALSE]
@@ -235,13 +236,13 @@ build_split_balance_09b <- function(input_index, split_index) {
     if (nzchar(split_var) && nrow(totals) > 1 && max(totals$cell_n_after, na.rm = TRUE) > 0) {
       imbalance <- (max(totals$cell_n_after, na.rm = TRUE) - min(totals$cell_n_after, na.rm = TRUE)) /
         max(totals$cell_n_after, na.rm = TRUE)
-      warn_imbalanced <- is.finite(imbalance) && imbalance >= cfg$trajectory_balance_warn_fraction
+      warn_imbalanced <- is.finite(imbalance) && imbalance >= balance_warn_fraction
       if (warn_imbalanced) {
-        triage_rows[[length(triage_rows) + 1L]] <<- make_triage_row(
+        local_triage_rows[[length(local_triage_rows) + 1L]] <- make_triage_row(
           sample_id = pair_id,
           severity = "warning",
           signal_id = "trajectory_split_imbalanced",
-          evidence = sprintf("split cell-count imbalance %.3f >= %.3f", imbalance, cfg$trajectory_balance_warn_fraction),
+          evidence = sprintf("split cell-count imbalance %.3f >= %.3f", imbalance, balance_warn_fraction),
           recommended_action = "审阅 split_balance 表；必要时改用 pooled trajectory 或下调 split 分析优先级。"
         )
       }
@@ -250,9 +251,9 @@ build_split_balance_09b <- function(input_index, split_index) {
     pair_splits$n_cells <- suppressWarnings(as.numeric(pair_splits$n_cells))
     for (i in seq_len(nrow(pair_splits))) {
       total_cells <- unname(total_lookup[pair_splits$split_value[[i]]])
-      low_label <- is.finite(pair_splits$n_cells[[i]]) && pair_splits$n_cells[[i]] < cfg$trajectory_split_min_cells
+      low_label <- is.finite(pair_splits$n_cells[[i]]) && pair_splits$n_cells[[i]] < split_min_cells
       if (low_label) {
-        triage_rows[[length(triage_rows) + 1L]] <<- make_triage_row(
+        local_triage_rows[[length(local_triage_rows) + 1L]] <- make_triage_row(
           sample_id = pair_id,
           severity = "warning",
           signal_id = "trajectory_split_label_low_cells",
@@ -262,7 +263,7 @@ build_split_balance_09b <- function(input_index, split_index) {
             pair_splits$label_value[[i]],
             pair_splits$n_cells[[i]],
             pair_splits$split_value[[i]],
-            cfg$trajectory_split_min_cells
+            split_min_cells
           ),
           recommended_action = "低细胞数 label 的拟时序结果只作探索；必要时合并相邻 label 或改用 pooled 输入。"
         )
@@ -283,13 +284,21 @@ build_split_balance_09b <- function(input_index, split_index) {
       )
     }
   }
-  if (length(rows) == 0) {
-    return(empty_df_09b(split_balance_cols_09b))
-  }
-  dplyr::bind_rows(rows)
+  balance <- if (length(rows) == 0) empty_df_09b(split_balance_cols_09b) else dplyr::bind_rows(rows)
+  triage <- if (length(local_triage_rows) == 0) empty_triage_df(include_sample = TRUE) else dplyr::bind_rows(local_triage_rows)
+  list(balance = balance, triage = triage)
 }
 
-split_balance <- build_split_balance_09b(input_index, split_index)
+split_balance_result <- build_split_balance_09b(
+  input_index,
+  split_index,
+  cfg$trajectory_balance_warn_fraction,
+  cfg$trajectory_split_min_cells
+)
+split_balance <- split_balance_result$balance
+if (nrow(split_balance_result$triage) > 0) {
+  triage_rows[[length(triage_rows) + 1L]] <- split_balance_result$triage
+}
 write_tsv_local(split_balance, cfg$trajectory_split_balance_summary_tsv)
 if (nrow(split_balance) > 0) {
   for (pair_id in unique(split_balance$pair_id)) {
