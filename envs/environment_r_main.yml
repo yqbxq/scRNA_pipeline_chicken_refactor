@@ -39,6 +39,7 @@ dependencies:
   - bioconductor-speckle
   - bioconductor-slingshot=2.14.0
   - bioconductor-tradeseq=1.20.0
+  - bioconductor-monocle
   - bioconductor-clusterprofiler=4.14.0
   - bioconductor-org.gg.eg.db
   - bioconductor-biomart=2.62.0
