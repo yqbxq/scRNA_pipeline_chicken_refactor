@@ -9,6 +9,8 @@ normalize_flag <- function(x, default = "yes") {
   tolower(x)
 }
 
+# Return a trimmed scalar for internal IDs and config values. Empty or missing
+# values become `default`.
 normalize_scalar_value <- function(x, default = "") {
   if (length(x) == 0 || is.na(x) || !nzchar(trimws(as.character(x)))) {
     return(default)
@@ -16,6 +18,8 @@ normalize_scalar_value <- function(x, default = "") {
   trimws(as.character(x))
 }
 
+# Return a trimmed scalar for tables/reports. Empty or missing values become a
+# display placeholder, usually "NA" or "pooled".
 display_scalar_value <- function(x, default = "NA") {
   value <- normalize_scalar_value(x)
   if (nzchar(value)) {

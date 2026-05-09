@@ -22,11 +22,11 @@ monocle2_index_cols <- c(trajectory_method_index_cols_09, "branches_path", "root
 state_of_root_09e2 <- function(cds, label_var, root_label) {
   pheno <- Biobase::pData(cds)
   if (!"State" %in% colnames(pheno) || !label_var %in% colnames(pheno)) {
-    return(NA)
+    return(NA_real_)
   }
   root_rows <- as.character(pheno[[label_var]]) == root_label
   if (!any(root_rows)) {
-    return(NA)
+    return(NA_real_)
   }
   tab <- sort(table(pheno$State[root_rows]), decreasing = TRUE)
   suppressWarnings(as.numeric(names(tab)[[1]]))

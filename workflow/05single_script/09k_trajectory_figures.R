@@ -158,7 +158,7 @@ plot_label_umap_09k <- function(plot_df, color_var, title) {
     ggplot2::guides(color = ggplot2::guide_legend(override.aes = list(size = 2, alpha = 1))) +
     ggplot2::labs(title = title, x = "UMAP 1", y = "UMAP 2", color = color_var)
   labels <- levels(plot_df$label)
-  pal <- paper_feature_palette()
+  pal <- project_feature_palette()
   if (length(labels) > 0 && length(labels) <= length(pal)) {
     p <- p + ggplot2::scale_color_manual(values = setNames(pal[seq_along(labels)], labels), na.value = "grey80")
   }

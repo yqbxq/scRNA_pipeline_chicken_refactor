@@ -49,7 +49,7 @@ if awk -F '\t' '
   }
   END { exit(found ? 0 : 1) }
 ' "${TRAJECTORY_PAIRS_SHEET}"; then
-  [[ -s "${MODULE_04B_MANIFEST}" ]] || die "trajectory_pairs.tsv 请求 subcluster layer，但缺少 04b manifest: ${MODULE_04B_MANIFEST}"
+  [[ -s "${MODULE_04B_MANIFEST}" ]] || die "trajectory_pairs.tsv requests a subcluster layer but 04b manifest is missing: ${MODULE_04B_MANIFEST}"
 fi
 
 TRAJECTORY_INPUT_RERAN=0
@@ -63,11 +63,11 @@ run_trajectory_stage_if_stale() {
   shift 2 || true
 
   if is_stale_output "${output_path}" "$@"; then
-    echo "运行 ${script_path}"
+    echo "Running ${script_path}"
     run_r_main "${script_path}"
     TRAJECTORY_INPUT_RERAN=1
   else
-    echo "已存在且未过期，跳过: ${output_path}"
+    echo "Existing output is current; skipping: ${output_path}"
   fi
 }
 
@@ -77,11 +77,11 @@ run_trajectory_method_if_stale() {
   shift 2 || true
 
   if is_stale_output "${output_path}" "$@"; then
-    echo "运行 ${script_path}"
+    echo "Running ${script_path}"
     run_r_main "${script_path}"
     TRAJECTORY_METHOD_RERAN=1
   else
-    echo "已存在且未过期，跳过: ${output_path}"
+    echo "Existing output is current; skipping: ${output_path}"
   fi
 }
 
@@ -91,11 +91,11 @@ run_trajectory_stage3_if_stale() {
   shift 2 || true
 
   if is_stale_output "${output_path}" "$@"; then
-    echo "运行 ${script_path}"
+    echo "Running ${script_path}"
     run_r_main "${script_path}"
     TRAJECTORY_STAGE3_RERAN=1
   else
-    echo "已存在且未过期，跳过: ${output_path}"
+    echo "Existing output is current; skipping: ${output_path}"
   fi
 }
 
@@ -105,11 +105,11 @@ run_trajectory_final_if_stale() {
   shift 2 || true
 
   if is_stale_output "${output_path}" "$@"; then
-    echo "运行 ${script_path}"
+    echo "Running ${script_path}"
     run_r_main "${script_path}"
     TRAJECTORY_FINAL_RERAN=1
   else
-    echo "已存在且未过期，跳过: ${output_path}"
+    echo "Existing output is current; skipping: ${output_path}"
   fi
 }
 
@@ -207,7 +207,7 @@ if trajectory_has_monocle2_optin; then
     "${TRAJECTORY_PAIRS_SHEET}"
   require_manifest_output "${MODULE_09E2_MANIFEST}" "monocle2_index_tsv" >/dev/null
 else
-  echo "trajectory_pairs.tsv 未通过 methods_extra 或 tools_to_run 启用 monocle2，跳过 09e2。"
+  echo "trajectory_pairs.tsv did not enable monocle2 through methods_extra or tools_to_run; skipping 09e2."
 fi
 
 if [[ "${TRAJECTORY_METHOD_RERAN}" == "1" ]]; then

@@ -21,6 +21,25 @@ def empty_outputs(job, status, reason):
     Path(job["status"]).write_text(f"{status}\t{reason}\n", encoding="utf-8")
 
 
+def write_paga_figure(job, adata, pseudotime, plt):
+    fig_path = Path(job["figure_png"])
+    fig_path.parent.mkdir(parents=True, exist_ok=True)
+    plt.figure(figsize=(6, 4.8))
+    if "X_umap" in adata.obsm:
+        xy = adata.obsm["X_umap"]
+        plt.scatter(xy[:, 0], xy[:, 1], c=pseudotime, s=2, cmap="viridis")
+        plt.colorbar(label="DPT pseudotime")
+        plt.xlabel("UMAP 1")
+        plt.ylabel("UMAP 2")
+    else:
+        plt.text(0.5, 0.5, "No UMAP coordinates available", ha="center", va="center")
+        plt.axis("off")
+    plt.title(f"PAGA-DPT {job['pair_id']} {job['split_value']}")
+    plt.tight_layout()
+    plt.savefig(fig_path, dpi=300)
+    plt.close()
+
+
 def run_job(job):
     try:
         import numpy as np
@@ -71,6 +90,9 @@ def run_job(job):
             return {"status": "skipped_no_root", "reason": "no root cells resolved from selected root label"}
 
         if "X_umap" in adata.obsm:
+            # Use the 09a UMAP graph intentionally so PAGA-DPT stays aligned
+            # with the R-side trajectory input; this trades statistical purity
+            # for cross-method visual and neighborhood consistency.
             sc.pp.neighbors(adata, use_rep="X_umap", n_neighbors=min(30, max(2, adata.n_obs - 1)))
         else:
             sc.pp.normalize_total(adata)
@@ -104,19 +126,7 @@ def run_job(job):
         conn_df.to_csv(job["connectivity_tsv"], sep="\t", index=False)
         adata.write_h5ad(job["h5ad_path"])
 
-        fig_path = Path(job["figure_png"])
-        fig_path.parent.mkdir(parents=True, exist_ok=True)
-        if "X_umap" in adata.obsm:
-            xy = adata.obsm["X_umap"]
-            plt.figure(figsize=(6, 4.8))
-            plt.scatter(xy[:, 0], xy[:, 1], c=pst, s=2, cmap="viridis")
-            plt.colorbar(label="DPT pseudotime")
-            plt.xlabel("UMAP 1")
-            plt.ylabel("UMAP 2")
-            plt.title(f"PAGA-DPT {job['pair_id']} {job['split_value']}")
-            plt.tight_layout()
-            plt.savefig(fig_path, dpi=300)
-            plt.close()
+        write_paga_figure(job, adata, pst, plt)
 
         Path(job["status"]).write_text("ok\t\n", encoding="utf-8")
         return {"status": "ok", "reason": ""}

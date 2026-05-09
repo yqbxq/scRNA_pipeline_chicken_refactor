@@ -224,6 +224,8 @@ safe_id_09 <- function(value) {
   safe_id_07(value)
 }
 
+# File/path IDs are kept with path helpers because they define directory and
+# filename contracts. Scalar normalization/display helpers live in metadata_io.R.
 trajectory_method_registry_09 <- function() {
   list(
     root = list(table_dir_key = "trajectory_root_table_dir"),

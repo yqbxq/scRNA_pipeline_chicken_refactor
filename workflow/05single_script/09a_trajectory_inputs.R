@@ -91,7 +91,7 @@ trajectory_reset_reductions_09 <- function(seu) {
 read_trajectory_pairs_09 <- function(cfg) {
   pairs <- read_tsv_optional(cfg$trajectory_pairs_sheet)
   if (nrow(pairs) == 0) {
-    stop(sprintf("trajectory_pairs.tsv 为空或不存在: %s", cfg$trajectory_pairs_sheet), call. = FALSE)
+    stop(sprintf("trajectory_pairs.tsv is empty or missing: %s", cfg$trajectory_pairs_sheet), call. = FALSE)
   }
   required <- c(
     "trajectory_id", "source_question_id", "layer_scope", "root_group",
@@ -109,7 +109,7 @@ resolve_trajectory_layer_09 <- function(cfg, layer_scope) {
   layer_scope <- normalize_scalar_value(layer_scope, cfg$panorama_layer_id)
   layers <- communication_layer_status_07(cfg)
   if (nrow(layers) == 0) {
-    stop("未发现 03d/04b 可用注释对象；请先完成 annotation/subcluster 输出。", call. = FALSE)
+    stop("no usable 03d/04b annotation objects found; complete annotation/subcluster outputs first", call. = FALSE)
   }
 
   aliases <- unique(c(layer_scope, safe_id_09(layer_scope)))
@@ -124,7 +124,7 @@ resolve_trajectory_layer_09 <- function(cfg, layer_scope) {
   if (nrow(hit) == 0) {
     stop(
       sprintf(
-        "layer_scope=%s 未匹配到可用注释对象。可用 layer: %s",
+        "layer_scope=%s did not match any usable annotation object; available layers: %s",
         layer_scope,
         paste(layers$layer_id, collapse = ",")
       ),
@@ -437,7 +437,7 @@ split_values_for_pair_09 <- function(seu, pair_row) {
     return(list(split_var = "", values = ""))
   }
   if (!split_var %in% colnames(seu@meta.data)) {
-    stop(sprintf("condition_split_var=%s 不在对象 metadata 中。", split_var), call. = FALSE)
+    stop(sprintf("condition_split_var=%s is absent from object metadata", split_var), call. = FALSE)
   }
   values <- split_csv_local(pair_row$condition_split_values[[1]])
   if (length(values) == 0) {
@@ -531,7 +531,7 @@ prepare_one_split_09 <- function(pair_row, layer_row, source_obj, split_var, spl
     values <- trimws(as.character(split_obj@meta.data[[split_var]]))
     cells <- rownames(split_obj@meta.data)[values == split_value]
     if (length(cells) == 0) {
-      stop(sprintf("split %s=%s 匹配 0 cells", split_var, split_value), call. = FALSE)
+      stop(sprintf("split %s=%s matched zero cells", split_var, split_value), call. = FALSE)
     }
     split_obj <- subset(split_obj, cells = cells)
   }
@@ -541,7 +541,7 @@ prepare_one_split_09 <- function(pair_row, layer_row, source_obj, split_var, spl
   missing_labels <- setdiff(c(coarse, fine), colnames(split_obj@meta.data))
   missing_labels <- missing_labels[nzchar(missing_labels)]
   if (length(missing_labels) > 0) {
-    stop(sprintf("对象 metadata 缺少 trajectory label 列: %s", paste(missing_labels, collapse = ",")), call. = FALSE)
+    stop(sprintf("object metadata is missing trajectory label columns: %s", paste(missing_labels, collapse = ",")), call. = FALSE)
   }
 
   assay <- trajectory_default_assay_09(split_obj)

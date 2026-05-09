@@ -236,8 +236,8 @@ run_option_b_09h <- function(pair_id, units_pair, sling_index) {
     }
     common_genes <- Reduce(intersect, lapply(counts_list, rownames))
     counts <- do.call(cbind, lapply(counts_list, function(x) x[common_genes, , drop = FALSE]))
-    pseudotime <- do.call(rbind, lapply(pt_list, function(x) x$pseudotime[, 1, drop = FALSE]))
-    cell_weights <- do.call(rbind, lapply(pt_list, function(x) x$cell_weights[, 1, drop = FALSE]))
+    pseudotime <- do.call(base::rbind, lapply(pt_list, function(x) x$pseudotime[, 1, drop = FALSE]))
+    cell_weights <- do.call(base::rbind, lapply(pt_list, function(x) x$cell_weights[, 1, drop = FALSE]))
     fit <- fit_tradeseq_09h(counts, pseudotime, cell_weights, conditions = factor(cond))
     condition_df <- normalize_test_df_09h(tradeSeq::conditionTest(fit))
     drivers <- cbind(

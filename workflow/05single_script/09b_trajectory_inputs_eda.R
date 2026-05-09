@@ -137,7 +137,7 @@ plot_outlier_pre_post_09b <- function(outlier_cells, path) {
   pre$stage <- "pre"
   post <- outlier_cells[retained, , drop = FALSE]
   post$stage <- "post"
-  combined <- rbind(pre, post)
+  combined <- dplyr::bind_rows(pre, post)
   rows <- list()
   for (metric in metrics) {
     rows[[length(rows) + 1L]] <- data.frame(
