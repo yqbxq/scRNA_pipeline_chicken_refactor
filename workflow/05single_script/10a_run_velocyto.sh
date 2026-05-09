@@ -140,9 +140,14 @@ resolve_bam_10a() {
     "${DNBC4TOOLS_OUT_DIR}/${sample_id}/${VELOCITY_BAM_PATTERN}" \
     "${DNBC4TOOLS_OUT_DIR}/${sample_id}/outs/${VELOCITY_BAM_PATTERN}" \
     "${DATA_DIR}/${sample_id}/${VELOCITY_BAM_PATTERN}" \
-    "${DATA_DIR}/${sample_id}/outs/${VELOCITY_BAM_PATTERN}" || true)"
+    "${DATA_DIR}/${sample_id}/outs/${VELOCITY_BAM_PATTERN}" \
+    "${CELLRANGER_OUT_DIR}/${sample_id}/${VELOCITY_BAM_PATTERN}" \
+    "${CELLRANGER_OUT_DIR}/${sample_id}/outs/${VELOCITY_BAM_PATTERN}" || true)"
   if [[ -z "${path}" ]]; then
     path="$(find_first_matching_10a "${DNBC4TOOLS_OUT_DIR}" "${sample_id}" "${VELOCITY_BAM_PATTERN}" || true)"
+  fi
+  if [[ -z "${path}" && -n "${CELLRANGER_OUT_DIR}" ]]; then
+    path="$(find_first_matching_10a "${CELLRANGER_OUT_DIR}" "${sample_id}" "${VELOCITY_BAM_PATTERN}" || true)"
   fi
   echo "${path}"
 }
