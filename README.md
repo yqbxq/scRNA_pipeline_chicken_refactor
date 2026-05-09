@@ -363,14 +363,9 @@ gate 规则采用 Option B：
 ### 5.14 RNA velocity
 
 - `workflow/03stages/10_velocity.sh`
-  - 需要：
-    - `outs/possorted_genome_bam.bam`
-    - `outs/filtered_feature_bc_matrix`
-  - 生成 `.loom`
-
-- `workflow/03stages/10_velocity.sh`
-  - 先准备参考对象
-  - 再跑 `scVelo`
+  - `10a_run_velocyto.sh`：从 dnbc4tools `anno_decon_sorted.bam` 和 `filtered_feature_bc_matrix.h5` 生成 per-sample `.loom`
+  - `10b_prepare_velocity_reference.R`：按 `trajectory_pairs.tsv` 中 `method=velocity` 的 H05/H06 行导出 UMAP 和 metadata reference
+  - 完成 10a/10b 后会把 `velocity_inputs` gate 置为 `pending`；10c+ 下游 velocity 方法在该 gate 审阅通过后继续
 
 ### 5.15 Regulation / SCENIC / decoupleR
 

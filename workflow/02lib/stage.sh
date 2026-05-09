@@ -144,6 +144,24 @@ check_stage_deps() {
         "status.04_subcluster_completed" \
         "09_trajectory 需要 04_subcluster 完成，以便解析 GC/TC subcluster layer。"
       ;;
+    10_velocity)
+      sync_workflow_gate_statuses
+      require_status_flag_or_warn \
+        "status.annotation_gate_passed" \
+        "10_velocity 被 annotation gate 阻断。请先审阅 03e panorama 注释报告，并在 eda_gates.tsv 中批准 annotation。"
+      require_status_flag_or_warn \
+        "status.03_panorama_completed" \
+        "10_velocity 需要 03_panorama 整链完成。"
+      require_status_flag_or_warn \
+        "status.subcluster_gate_passed" \
+        "10_velocity 被 subcluster gate 阻断。请先审阅 04c subcluster EDA 报告，并在 eda_gates.tsv 中批准 subcluster。"
+      require_status_flag_or_warn \
+        "status.04_subcluster_completed" \
+        "10_velocity 需要 04_subcluster 完成，以便解析 GC/TC velocity reference layer。"
+      require_status_flag_or_warn \
+        "status.velocity_upstream_ready" \
+        "10_velocity 需要 velocity_upstream_ready=true；请先完成 intake/audit 并确认 BAM 输入可用。"
+      ;;
     *)
       warn "未定义 ${stage_id} 的依赖规则，按无依赖继续。"
       ;;
@@ -468,6 +486,9 @@ for key in (
     "09l_trajectory_eda_completed",
     "09_trajectory_stage3_completed",
     "09_trajectory_completed",
+    "10a_velocity_loom_completed",
+    "10b_velocity_reference_completed",
+    "10_velocity_inputs_completed",
     "main_upstream_ready",
     "velocity_upstream_ready",
     "ambient_upstream_ready",
