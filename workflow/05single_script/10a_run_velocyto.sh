@@ -347,6 +347,9 @@ done < <(detect_velocity_samples_10a | awk '!seen[$0]++')
 
 if [[ "${#sample_ids[@]}" -eq 0 ]]; then
   echo "10a: no samples selected for RNA velocity loom generation."
+  write_manifest_10a
+  echo "10a completed. velocity loom index: ${LOOM_INDEX_TSV}"
+  exit 0
 fi
 
 for sample_id in "${sample_ids[@]}"; do
