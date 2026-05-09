@@ -26,7 +26,7 @@ velocity_method_index_cols_10 <- c(
 
 velocity_scvelo_index_cols_10 <- c(
   velocity_method_index_cols_10,
-  "qc_tsv", "stochastic_status"
+  "qc_tsv", "vector_tsv", "stochastic_status"
 )
 
 velocity_scvelo_qc_cols_10 <- c(
@@ -52,6 +52,37 @@ velocity_driver_overlap_cols_10 <- c(
 velocity_velocyto_steady_index_cols_10 <- c(
   velocity_method_index_cols_10,
   "direction_tsv"
+)
+
+velocity_cellrank_index_cols_10 <- c(
+  velocity_method_index_cols_10,
+  "fate_csv", "macrostates_tsv", "terminal_figure_path"
+)
+
+velocity_consistency_index_cols_10 <- c(
+  velocity_method_index_cols_10,
+  "split_compare_path"
+)
+
+velocity_consistency_summary_cols_10 <- c(
+  "pair_id", "split_value", "metric_id", "group_a", "group_b",
+  "n", "value", "p_value", "status", "reason"
+)
+
+velocity_split_compare_cols_10 <- c(
+  "pair_id", "comparison_id", "metric_id", "group_a", "group_b",
+  "n_a", "n_b", "value", "p_value", "status", "reason"
+)
+
+velocity_root_terminal_index_cols_10 <- c(
+  velocity_method_index_cols_10,
+  "root_terminal_tsv"
+)
+
+velocity_root_terminal_cols_10 <- c(
+  "pair_id", "split_value", "cluster", "cell_n", "initial_score",
+  "root_score", "terminal_score", "initial_probability",
+  "terminal_probability", "latent_time_mean", "status", "reason"
 )
 
 velocity_read_pairs_10 <- function(cfg) {
@@ -93,6 +124,46 @@ velocity_read_reference_index_10 <- function(cfg, include_not_ok = FALSE) {
     return(velocity_empty_df_10(velocity_reference_index_cols_10))
   }
   for (col in velocity_reference_index_cols_10) {
+    if (!col %in% colnames(idx)) {
+      idx[[col]] <- ""
+    }
+  }
+  if (!isTRUE(include_not_ok)) {
+    idx <- idx[idx$status == "ok", , drop = FALSE]
+  }
+  idx
+}
+
+velocity_read_scvelo_index_10 <- function(cfg, include_not_ok = FALSE) {
+  path <- velocity_manifest_output_optional_10(cfg$module_10c_manifest_path, "scvelo_index_tsv")
+  if (!nzchar(path)) {
+    path <- cfg$velocity_scvelo_index_tsv
+  }
+  idx <- read_tsv_optional(path)
+  if (nrow(idx) == 0) {
+    return(velocity_empty_df_10(velocity_scvelo_index_cols_10))
+  }
+  for (col in velocity_scvelo_index_cols_10) {
+    if (!col %in% colnames(idx)) {
+      idx[[col]] <- ""
+    }
+  }
+  if (!isTRUE(include_not_ok)) {
+    idx <- idx[idx$status == "ok", , drop = FALSE]
+  }
+  idx
+}
+
+velocity_read_cellrank_index_10 <- function(cfg, include_not_ok = FALSE) {
+  path <- velocity_manifest_output_optional_10(cfg$module_10f_manifest_path, "cellrank_index_tsv")
+  if (!nzchar(path)) {
+    path <- cfg$velocity_cellrank_index_tsv
+  }
+  idx <- read_tsv_optional(path)
+  if (nrow(idx) == 0) {
+    return(velocity_empty_df_10(velocity_cellrank_index_cols_10))
+  }
+  for (col in velocity_cellrank_index_cols_10) {
     if (!col %in% colnames(idx)) {
       idx[[col]] <- ""
     }

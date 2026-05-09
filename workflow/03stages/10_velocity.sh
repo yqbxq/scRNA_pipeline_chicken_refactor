@@ -17,6 +17,9 @@ MODULE_10B_MANIFEST="${MANIFEST_DIR}/10b_prepare_velocity_reference/_manifest.js
 MODULE_10C_MANIFEST="${MANIFEST_DIR}/10c_scvelo_dynamical/_manifest.json"
 MODULE_10D_MANIFEST="${MANIFEST_DIR}/10d_velocyto_steady_state/_manifest.json"
 MODULE_10E_MANIFEST="${MANIFEST_DIR}/10e_scvelo_drivers/_manifest.json"
+MODULE_10F_MANIFEST="${MANIFEST_DIR}/10f_cellrank_fate/_manifest.json"
+MODULE_10G_MANIFEST="${MANIFEST_DIR}/10g_velocity_consistency/_manifest.json"
+MODULE_10H_MANIFEST="${MANIFEST_DIR}/10h_velocity_root_terminal/_manifest.json"
 
 ensure_eda_control_files
 ensure_dir "${VELOCITY_INPUT_DIR}" "${VELOCITY_LOOM_DIR}" "${VELOCITY_OUTPUT_DIR}"
@@ -116,15 +119,50 @@ run_velocity_stage3_if_stale \
 require_manifest_output "${MODULE_10E_MANIFEST}" "velocity_driver_index_tsv" >/dev/null
 require_manifest_output "${MODULE_10E_MANIFEST}" "velocity_driver_overlap_tsv" >/dev/null
 
+run_velocity_stage3_if_stale \
+  run_scvelo \
+  "${WORKFLOW_ROOT}/04python/10f_cellrank_fate.py" \
+  "${MODULE_10F_MANIFEST}" \
+  "${MODULE_10C_MANIFEST}" \
+  "${TRAJECTORY_PAIRS_SHEET}" \
+  "${WORKFLOW_ROOT}/04python/10f_cellrank_fate.py"
+require_manifest_output "${MODULE_10F_MANIFEST}" "cellrank_index_tsv" >/dev/null
+
+run_velocity_stage3_if_stale \
+  run_r_main \
+  "${WORKFLOW_ROOT}/05single_script/10g_velocity_consistency.R" \
+  "${MODULE_10G_MANIFEST}" \
+  "${MODULE_10C_MANIFEST}" \
+  "${MODULE_10D_MANIFEST}" \
+  "${MODULE_10E_MANIFEST}" \
+  "${MODULE_10F_MANIFEST}" \
+  "${MODULE_09D_MANIFEST:-${MANIFEST_DIR}/09d_trajectory_slingshot/_manifest.json}" \
+  "${WORKFLOW_ROOT}/05single_script/10g_velocity_consistency.R"
+require_manifest_output "${MODULE_10G_MANIFEST}" "velocity_consistency_index_tsv" >/dev/null
+require_manifest_output "${MODULE_10G_MANIFEST}" "velocity_consistency_summary_tsv" >/dev/null
+require_manifest_output "${MODULE_10G_MANIFEST}" "velocity_split_compare_tsv" >/dev/null
+
+run_velocity_stage3_if_stale \
+  run_r_main \
+  "${WORKFLOW_ROOT}/05single_script/10h_velocity_root_terminal.R" \
+  "${MODULE_10H_MANIFEST}" \
+  "${MODULE_10C_MANIFEST}" \
+  "${MODULE_10F_MANIFEST}" \
+  "${WORKFLOW_ROOT}/05single_script/10h_velocity_root_terminal.R"
+require_manifest_output "${MODULE_10H_MANIFEST}" "velocity_root_terminal_index_tsv" >/dev/null
+
 sync_workflow_gate_statuses
 update_workflow_status \
   "10_velocity_stage3_completed" \
-  "continue module 10 with CellRank/fate probability and velocity trajectory comparison components" \
+  "continue module 10 with final velocity report component 10i" \
   "status.10a_velocity_loom_completed=true" \
   "status.10b_velocity_reference_completed=true" \
   "status.10_velocity_inputs_completed=true" \
   "status.10c_scvelo_dynamical_completed=true" \
   "status.10d_velocyto_steady_completed=true" \
   "status.10e_scvelo_drivers_completed=true" \
+  "status.10f_cellrank_fate_completed=true" \
+  "status.10g_velocity_consistency_completed=true" \
+  "status.10h_velocity_root_terminal_completed=true" \
   "status.10_velocity_stage3_completed=true" \
   "status.velocity_inputs_gate_passed=$(eda_gate_passed velocity_inputs && echo true || echo false)"

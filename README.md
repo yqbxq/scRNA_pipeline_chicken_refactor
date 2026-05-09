@@ -369,6 +369,9 @@ gate 规则采用 Option B：
   - `10c_scvelo_dynamical.py`：按 pooled/split unit 运行 scVelo dynamical，并记录 stochastic 旁路指标
   - `10d_velocyto_steady_state.R`：运行 velocyto.R steady-state 交叉验证
   - `10e_scvelo_drivers.py`：导出 scVelo driver gene top list 和 split overlap
+  - `10f_cellrank_fate.py`：默认运行 CellRank fate/macrostates，可用 `methods_extra=-cellrank` 禁用
+  - `10g_velocity_consistency.R`：汇总 scVelo/stochastic/velocyto/Slingshot/CellRank 一致性和 split 比较
+  - `10h_velocity_root_terminal.R`：输出 09c 可反向读取的 `velocity_root_terminal_<unit>.tsv`
 
 ### 5.15 Regulation / SCENIC / decoupleR
 

@@ -79,6 +79,7 @@ INDEX_COLUMNS = [
     "reason",
     "runtime_s",
     "qc_tsv",
+    "vector_tsv",
     "stochastic_status",
 ]
 
@@ -103,6 +104,26 @@ QC_COLUMNS = [
     "velocity_length_stochastic_mean",
     "status",
     "reason",
+]
+
+VECTOR_COLUMNS = [
+    "pair_id",
+    "split_value",
+    "cell_id",
+    "UMAP_1",
+    "UMAP_2",
+    "velocity_umap_1",
+    "velocity_umap_2",
+    "velocity_umap_1_stochastic",
+    "velocity_umap_2_stochastic",
+    "latent_time",
+    "velocity_pseudotime",
+    "velocity_length",
+    "velocity_confidence",
+    "velocity_length_stochastic",
+    "velocity_confidence_stochastic",
+    "cell_type",
+    "cluster",
 ]
 
 
@@ -444,6 +465,9 @@ def matrix_total(matrix):
 
 def copy_stochastic_outputs(adata):
     copied = False
+    if "velocity_umap" in adata.obsm:
+        adata.obsm["velocity_umap_stochastic"] = adata.obsm["velocity_umap"].copy()
+        copied = True
     if "velocity" in adata.layers:
         adata.layers["velocity_stochastic"] = adata.layers["velocity"].copy()
         copied = True
@@ -456,6 +480,59 @@ def copy_stochastic_outputs(adata):
             adata.uns[f"{key}_stochastic"] = adata.uns[key].copy()
             copied = True
     return copied
+
+
+def compute_velocity_embedding_safe(adata):
+    try:
+        scv.tl.velocity_embedding(adata, basis="umap")
+        return "ok"
+    except Exception as exc:
+        return str(exc)
+
+
+def obs_values(adata, key, default=np.nan):
+    if key in adata.obs:
+        return pd.to_numeric(adata.obs[key], errors="coerce")
+    return pd.Series([default] * adata.n_obs, index=adata.obs_names)
+
+
+def export_velocity_vectors(pair_id, split_value, adata, path):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    umap = adata.obsm.get("X_umap")
+    dyn = adata.obsm.get("velocity_umap")
+    stoch = adata.obsm.get("velocity_umap_stochastic")
+    if umap is None:
+        umap = np.full((adata.n_obs, 2), np.nan)
+    if dyn is None:
+        dyn = np.full((adata.n_obs, 2), np.nan)
+    if stoch is None:
+        stoch = np.full((adata.n_obs, 2), np.nan)
+    cluster = adata.obs["cluster_for_plot"].astype(str).values if "cluster_for_plot" in adata.obs else np.repeat("", adata.n_obs)
+    cell_type = adata.obs["cell_type"].astype(str).values if "cell_type" in adata.obs else np.repeat("", adata.n_obs)
+    df = pd.DataFrame(
+        {
+            "pair_id": pair_id,
+            "split_value": display_split(split_value),
+            "cell_id": adata.obs_names.astype(str),
+            "UMAP_1": umap[:, 0],
+            "UMAP_2": umap[:, 1],
+            "velocity_umap_1": dyn[:, 0],
+            "velocity_umap_2": dyn[:, 1],
+            "velocity_umap_1_stochastic": stoch[:, 0],
+            "velocity_umap_2_stochastic": stoch[:, 1],
+            "latent_time": obs_values(adata, "latent_time").values,
+            "velocity_pseudotime": obs_values(adata, "velocity_pseudotime").values,
+            "velocity_length": obs_values(adata, "velocity_length").values,
+            "velocity_confidence": obs_values(adata, "velocity_confidence").values,
+            "velocity_length_stochastic": obs_values(adata, "velocity_length_stochastic").values,
+            "velocity_confidence_stochastic": obs_values(adata, "velocity_confidence_stochastic").values,
+            "cell_type": cell_type,
+            "cluster": cluster,
+        }
+    )
+    df.to_csv(path, sep="\t", index=False)
+    return df
 
 
 def build_qc_row(pair_id, split_value, adata, status="ok", reason=""):
@@ -503,6 +580,7 @@ def run_unit(unit, args, loom_table):
     figure_dir.mkdir(parents=True, exist_ok=True)
     h5ad_path = out_dir / f"scvelo_result_{uid}.h5ad"
     qc_path = out_dir / f"velocity_qc_{uid}.tsv"
+    vector_path = out_dir / f"velocity_vectors_{uid}.tsv"
     figures = {
         "stream_clusters": figure_dir / f"Figure_Velocity_StreamClusters_{uid}.png",
         "stream_celltypes": figure_dir / f"Figure_Velocity_StreamCellTypes_{uid}.png",
@@ -513,7 +591,7 @@ def run_unit(unit, args, loom_table):
 
     if not method_enabled(unit, "scvelo_dynamical", default=True):
         reason = disabled_reason(unit, "scvelo_dynamical")
-        row = index_row(pair_id, split_value, unit, h5ad_path, qc_path, figures, "no", "skipped_disabled", reason, time.time() - start, "not_run")
+        row = index_row(pair_id, split_value, unit, h5ad_path, qc_path, vector_path, figures, "no", "skipped_disabled", reason, time.time() - start, "not_run")
         return row, [], {}
 
     try:
@@ -532,11 +610,13 @@ def run_unit(unit, args, loom_table):
         if method_enabled(unit, "scvelo_stochastic", default=True):
             scv.tl.velocity(adata, mode="stochastic")
             scv.tl.velocity_graph(adata)
+            compute_velocity_embedding_safe(adata)
             scv.tl.velocity_confidence(adata)
             stochastic_status = "ok" if copy_stochastic_outputs(adata) else "not_available"
 
         scv.tl.velocity(adata, mode="dynamical")
         scv.tl.velocity_graph(adata)
+        compute_velocity_embedding_safe(adata)
         scv.tl.latent_time(adata)
         scv.tl.velocity_confidence(adata)
 
@@ -549,19 +629,20 @@ def run_unit(unit, args, loom_table):
         adata.write(str(h5ad_path))
         qc_row = build_qc_row(pair_id, split_value, adata)
         write_tsv([qc_row], qc_path, QC_COLUMNS)
-        row = index_row(pair_id, split_value, unit, h5ad_path, qc_path, figures, "yes", "ok", "", time.time() - start, stochastic_status, adata.n_obs)
-        dynamic = dynamic_outputs(args.project_root, pair_id, split_value, h5ad_path, qc_path, figures)
+        export_velocity_vectors(pair_id, split_value, adata, vector_path)
+        row = index_row(pair_id, split_value, unit, h5ad_path, qc_path, vector_path, figures, "yes", "ok", "", time.time() - start, stochastic_status, adata.n_obs)
+        dynamic = dynamic_outputs(args.project_root, pair_id, split_value, h5ad_path, qc_path, vector_path, figures)
         return row, [qc_row], dynamic
     except Exception as exc:
         reason = str(exc)
         qc_row = {key: "" for key in QC_COLUMNS}
         qc_row.update({"pair_id": pair_id, "split_value": split_value, "status": "failed", "reason": reason})
         write_tsv([qc_row], qc_path, QC_COLUMNS)
-        row = index_row(pair_id, split_value, unit, h5ad_path, qc_path, figures, "yes", "failed", reason, time.time() - start, "not_evaluated")
+        row = index_row(pair_id, split_value, unit, h5ad_path, qc_path, vector_path, figures, "yes", "failed", reason, time.time() - start, "not_evaluated")
         return row, [qc_row], {}
 
 
-def index_row(pair_id, split_value, unit, h5ad_path, qc_path, figures, enabled, status, reason, runtime_s, stochastic_status, n_cells=0):
+def index_row(pair_id, split_value, unit, h5ad_path, qc_path, vector_path, figures, enabled, status, reason, runtime_s, stochastic_status, n_cells=0):
     return {
         "pair_id": pair_id,
         "split_value": display_split(split_value),
@@ -576,6 +657,7 @@ def index_row(pair_id, split_value, unit, h5ad_path, qc_path, figures, enabled, 
         "reason": reason,
         "runtime_s": f"{runtime_s:.3f}",
         "qc_tsv": str(qc_path),
+        "vector_tsv": str(vector_path),
         "stochastic_status": stochastic_status,
     }
 
@@ -601,11 +683,12 @@ def output_entry(path, typ, module, semantics, base_dir, schema=None):
     return entry
 
 
-def dynamic_outputs(project_root, pair_id, split_value, h5ad_path, qc_path, figures):
+def dynamic_outputs(project_root, pair_id, split_value, h5ad_path, qc_path, vector_path, figures):
     uid = unit_id(pair_id, split_value)
     outputs = {
         f"scvelo_result__{uid}": output_entry(h5ad_path, "h5ad", "10c_scvelo_dynamical", "scVelo dynamical result for one velocity unit", project_root),
         f"velocity_qc__{uid}": output_entry(qc_path, "tsv", "10c_scvelo_dynamical", "scVelo QC metrics for one velocity unit", project_root),
+        f"velocity_vectors__{uid}": output_entry(vector_path, "tsv", "10c_scvelo_dynamical", "per-cell scVelo UMAP velocity vectors", project_root),
     }
     for name, path in figures.items():
         if Path(path).exists():
