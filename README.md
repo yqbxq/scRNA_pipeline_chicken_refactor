@@ -370,9 +370,12 @@ gate 规则采用 Option B：
   - `10d_velocyto_steady_state.R`：运行 velocyto.R steady-state 交叉验证
   - `10e_scvelo_drivers.py`：导出 scVelo driver gene top list 和 split overlap
   - `10f_cellrank_fate.py`：默认运行 CellRank fate/macrostates，可用 `methods_extra=-cellrank` 禁用
-  - `10g_velocity_consistency.R`：汇总 scVelo/stochastic/velocyto/Slingshot/CellRank 一致性和 split 比较
   - `10h_velocity_root_terminal.R`：输出 09c 可反向读取的 `velocity_root_terminal_<unit>.tsv`
-  - `10i_velocity_eda.R`：生成 `velocity_module_status.tsv`、`velocity_triage.tsv` 和 velocity finalize 报告；可通过 `10_velocity_finalize.sh` 单独刷新
+- `workflow/03stages/09_10_trajectory_velocity.sh`
+  - 按计划顺序串联 `10_velocity.sh -> 09_trajectory.sh -> 10_velocity_finalize.sh`
+- `workflow/03stages/10_velocity_finalize.sh`
+  - `10g_velocity_consistency.R`：汇总 scVelo/stochastic/velocyto/Slingshot/CellRank 一致性和 split 比较
+  - `10i_velocity_eda.R`：生成 `velocity_module_status.tsv`、`velocity_triage.tsv` 和 velocity finalize 报告
 
 ### 5.15 Regulation / SCENIC / decoupleR
 
@@ -446,8 +449,15 @@ bash workflow/01run.sh <stage>
 如果要 RNA velocity：
 
 ```bash
+bash workflow/03stages/09_10_trajectory_velocity.sh
+```
+
+等价的显式顺序是：
+
+```bash
 bash workflow/03stages/10_velocity.sh
-bash workflow/03stages/10_velocity.sh
+bash workflow/03stages/09_trajectory.sh
+bash workflow/03stages/10_velocity_finalize.sh
 ```
 
 如果要 SCENIC：

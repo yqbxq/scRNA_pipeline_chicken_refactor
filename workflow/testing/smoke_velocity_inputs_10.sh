@@ -7,6 +7,7 @@ cd "${REPO_ROOT}"
 bash -n workflow/05single_script/10a_run_velocyto.sh
 bash -n workflow/03stages/10_velocity.sh
 bash -n workflow/03stages/10_velocity_finalize.sh
+bash -n workflow/03stages/09_10_trajectory_velocity.sh
 python3 -m py_compile workflow/04python/10c_scvelo_dynamical.py workflow/04python/10e_scvelo_drivers.py workflow/04python/10f_cellrank_fate.py
 
 Rscript -e 'invisible(parse(file = "workflow/05single_script/10b_prepare_velocity_reference.R")); invisible(parse(file = "workflow/05single_script/10d_velocyto_steady_state.R")); invisible(parse(file = "workflow/05single_script/10g_velocity_consistency.R")); invisible(parse(file = "workflow/05single_script/10h_velocity_root_terminal.R")); invisible(parse(file = "workflow/05single_script/10i_velocity_eda.R")); invisible(parse(file = "workflow/05single_script/helpers/project_paths_10.R")); invisible(parse(file = "workflow/05single_script/helpers/velocity_utils_10.R"))'

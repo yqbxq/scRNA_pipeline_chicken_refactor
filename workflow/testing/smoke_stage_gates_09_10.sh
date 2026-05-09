@@ -46,7 +46,8 @@ assert_before() {
 for shell_file in \
   workflow/03stages/09_trajectory.sh \
   workflow/03stages/10_velocity.sh \
-  workflow/03stages/10_velocity_finalize.sh; do
+  workflow/03stages/10_velocity_finalize.sh \
+  workflow/03stages/09_10_trajectory_velocity.sh; do
   bash -n "${shell_file}"
 done
 
@@ -78,10 +79,11 @@ assert_before workflow/03stages/10_velocity.sh "hold_for_gate velocity_inputs" "
 assert_contains workflow/03stages/10_velocity.sh "10a_run_velocyto.sh"
 assert_contains workflow/03stages/10_velocity.sh "10b_prepare_velocity_reference.R"
 assert_contains workflow/03stages/10_velocity.sh "10f_cellrank_fate.py"
-assert_contains workflow/03stages/10_velocity.sh "10g_velocity_consistency.R"
 assert_contains workflow/03stages/10_velocity.sh "10h_velocity_root_terminal.R"
 assert_contains workflow/03stages/10_velocity.sh "status.10_velocity_stage3_completed=true"
 assert_contains workflow/03stages/10_velocity.sh "status.velocity_inputs_gate_passed"
+assert_not_contains workflow/03stages/10_velocity.sh "10g_velocity_consistency.R"
+assert_not_contains workflow/03stages/10_velocity.sh "status.10g_velocity_consistency_completed=true"
 assert_not_contains workflow/03stages/10_velocity.sh "RUN_CELLRANK"
 assert_not_contains workflow/04python/10f_cellrank_fate.py "RUN_CELLRANK"
 
@@ -91,6 +93,9 @@ assert_contains workflow/03stages/10_velocity_finalize.sh "10i_velocity_eda.R"
 assert_contains workflow/03stages/10_velocity_finalize.sh "\"velocity_finalize\""
 assert_contains workflow/03stages/10_velocity_finalize.sh "MODULE_10I_MANIFEST"
 assert_contains workflow/03stages/10_velocity_finalize.sh "status.velocity_finalize_gate_passed"
+
+assert_before workflow/03stages/09_10_trajectory_velocity.sh 'run_stage_09_10 "10_velocity.sh"' 'run_stage_09_10 "09_trajectory.sh"'
+assert_before workflow/03stages/09_10_trajectory_velocity.sh 'run_stage_09_10 "09_trajectory.sh"' 'run_stage_09_10 "10_velocity_finalize.sh"'
 
 assert_contains workflow/05single_script/helpers/metadata_fanout_trajectory.R "slingshot,monocle3,paga_dpt,tradeseq,palantir"
 assert_contains workflow/05single_script/helpers/metadata_fanout_trajectory.R "scvelo_dynamical,scvelo_stochastic,velocyto,cellrank"
