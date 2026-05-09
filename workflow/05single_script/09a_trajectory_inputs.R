@@ -93,13 +93,7 @@ read_trajectory_pairs_09 <- function(cfg) {
   if (nrow(pairs) == 0) {
     stop(sprintf("trajectory_pairs.tsv is empty or missing: %s", cfg$trajectory_pairs_sheet), call. = FALSE)
   }
-  required <- c(
-    "trajectory_id", "source_question_id", "layer_scope", "root_group",
-    "terminal_group", "condition_split_var", "condition_split_values",
-    "method", "tools_to_run", "outlier_qc_policy", "regress_cell_cycle",
-    "coarse_label_var", "fine_label_var", "split_mode", "enabled"
-  )
-  require_columns_local(pairs, required, "trajectory_pairs.tsv", cfg$trajectory_pairs_sheet)
+  require_columns_local(pairs, trajectory_pairs_cols_09, "trajectory_pairs.tsv", cfg$trajectory_pairs_sheet)
   pairs$enabled <- normalize_flag(pairs$enabled, "yes")
   pairs$method <- tolower(normalize_flag(pairs$method, "trajectory"))
   pairs[pairs$enabled != "no" & pairs$method == "trajectory", , drop = FALSE]

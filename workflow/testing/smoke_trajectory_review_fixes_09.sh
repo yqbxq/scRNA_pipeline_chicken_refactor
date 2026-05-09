@@ -60,6 +60,16 @@ fi
 "${R_BIN}" - <<'EOF'
 .script_dir <- normalizePath("workflow/05single_script", winslash = "/", mustWork = TRUE)
 source(file.path(.script_dir, "helpers", "load_helpers_09.R"), encoding = "UTF-8")
+source(file.path(.script_dir, "helpers", "metadata_fanout_trajectory.R"), encoding = "UTF-8")
+stopifnot(
+  length(trajectory_pairs_cols_09) == 17L,
+  identical(trajectory_pairs_cols_09, m3_trajectory_cols)
+)
+current_pairs <- read_tsv_optional("metadata/trajectory_pairs.tsv")
+stopifnot(
+  nrow(current_pairs) > 0,
+  identical(colnames(current_pairs)[seq_along(trajectory_pairs_cols_09)], trajectory_pairs_cols_09)
+)
 row <- data.frame(methods_extra = "", tools_to_run = "slingshot,monocle3", stringsAsFactors = FALSE)
 stopifnot(
   isTRUE(trajectory_method_enabled_09(row, "slingshot")),

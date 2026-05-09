@@ -678,6 +678,108 @@ allowed_enrichment_usage <- c(
   "mechanism_enrichment", "global_context_enrichment"
 )
 
+if (!is.null(loaded_generated$trajectory_pairs)) {
+  trajectory_pairs <- loaded_generated$trajectory_pairs
+  trajectory_schema <- c(
+    "trajectory_id", "source_question_id", "layer_scope", "root_group",
+    "terminal_group", "condition_split_var", "condition_split_values",
+    "method", "tools_to_run", "methods_extra", "outlier_qc_policy",
+    "regress_cell_cycle", "coarse_label_var", "fine_label_var",
+    "split_mode", "enabled", "notes"
+  )
+  if (require_generated_cols("trajectory_pairs.tsv", trajectory_pairs, trajectory_schema)) {
+    observed <- colnames(trajectory_pairs)[seq_along(trajectory_schema)]
+    if (identical(observed, trajectory_schema)) {
+      pass("tier2.trajectory_pairs.column_order", "trajectory_pairs.tsv uses the v4 17-column order")
+    } else {
+      fail(
+        "tier2.trajectory_pairs.column_order",
+        sprintf("trajectory_pairs.tsv first %s columns do not match v4 order", length(trajectory_schema))
+      )
+    }
+  }
+
+  if (nrow(trajectory_pairs) > 0 && all(trajectory_schema %in% colnames(trajectory_pairs))) {
+    trajectory_pairs$method <- tolower(vapply(trajectory_pairs$method, trim, character(1)))
+    trajectory_pairs$enabled <- tolower(vapply(trajectory_pairs$enabled, trim, character(1)))
+    active_trajectory_pairs <- trajectory_pairs[trajectory_pairs$enabled != "no", , drop = FALSE]
+    allowed_methods <- c("trajectory", "velocity")
+    bad_methods <- unique(active_trajectory_pairs$method[!active_trajectory_pairs$method %in% allowed_methods])
+    bad_methods <- bad_methods[nzchar(bad_methods)]
+    if (length(bad_methods) > 0) {
+      fail("tier2.trajectory_pairs.method", sprintf("unsupported method values: %s", paste(bad_methods, collapse = ", ")))
+    } else {
+      pass("tier2.trajectory_pairs.method", "trajectory pair methods are valid")
+    }
+
+    enum_checks <- list(
+      outlier_qc_policy = c("strict", "standard", "off"),
+      regress_cell_cycle = c("yes", "no", "auto"),
+      split_mode = c("auto", "force_split", "force_pooled", "pooled")
+    )
+    for (col in names(enum_checks)) {
+      values <- tolower(vapply(active_trajectory_pairs[[col]], trim, character(1)))
+      values[!nzchar(values)] <- switch(col, outlier_qc_policy = "standard", regress_cell_cycle = "auto", split_mode = "auto")
+      bad <- unique(values[!values %in% enum_checks[[col]]])
+      bad <- bad[nzchar(bad)]
+      if (length(bad) > 0) {
+        fail(paste0("tier2.trajectory_pairs.", col), sprintf("unsupported %s values: %s", col, paste(bad, collapse = ", ")))
+      } else {
+        pass(paste0("tier2.trajectory_pairs.", col), sprintf("%s values are valid", col))
+      }
+    }
+
+    split_method_tokens <- function(x) {
+      parts <- trimws(unlist(strsplit(trim(x), "[,;[:space:]]+", perl = TRUE), use.names = FALSE))
+      parts[nzchar(parts)]
+    }
+    allowed_tools <- list(
+      trajectory = c("slingshot", "monocle3", "monocle2", "paga-dpt", "tradeseq", "palantir"),
+      velocity = c("scvelo-dynamical", "scvelo-stochastic", "velocyto", "cellrank")
+    )
+    tool_fail_n <- 0L
+    extra_fail_n <- 0L
+    for (idx in seq_len(nrow(active_trajectory_pairs))) {
+      row <- active_trajectory_pairs[idx, , drop = FALSE]
+      method <- row$method[[1]]
+      tools <- tolower(gsub("_", "-", split_method_tokens(row$tools_to_run[[1]]), fixed = TRUE))
+      allowed <- allowed_tools[[method]] %||% character(0)
+      bad_tools <- setdiff(tools, allowed)
+      if (length(tools) == 0) {
+        fail("tier2.trajectory_pairs.tools_to_run", sprintf("%s has empty tools_to_run", row$trajectory_id[[1]]))
+        tool_fail_n <- tool_fail_n + 1L
+      } else if (length(bad_tools) > 0) {
+        fail("tier2.trajectory_pairs.tools_to_run", sprintf("%s has unsupported tools_to_run tokens: %s", row$trajectory_id[[1]], paste(bad_tools, collapse = ", ")))
+        tool_fail_n <- tool_fail_n + length(bad_tools)
+      }
+      extra_tokens <- split_method_tokens(row$methods_extra[[1]])
+      bad_extra <- extra_tokens[!grepl("^(\\+|-|no[-_])?[A-Za-z0-9_.-]+$", extra_tokens, perl = TRUE)]
+      if (length(bad_extra) > 0) {
+        fail("tier2.trajectory_pairs.methods_extra", sprintf("%s has invalid methods_extra tokens: %s", row$trajectory_id[[1]], paste(bad_extra, collapse = ", ")))
+        extra_fail_n <- extra_fail_n + length(bad_extra)
+      }
+    }
+    if (tool_fail_n == 0L) {
+      pass("tier2.trajectory_pairs.tools_to_run", "tools_to_run tokens are valid for trajectory/velocity rows")
+    }
+    if (extra_fail_n == 0L) {
+      pass("tier2.trajectory_pairs.methods_extra", "methods_extra +/- tokens are syntactically valid")
+    }
+
+    missing_labels <- active_trajectory_pairs[
+      !nzchar(trim(active_trajectory_pairs$coarse_label_var)) |
+        !nzchar(trim(active_trajectory_pairs$fine_label_var)),
+      ,
+      drop = FALSE
+    ]
+    if (nrow(missing_labels) > 0) {
+      fail("tier2.trajectory_pairs.label_vars", sprintf("missing label vars: %s", paste(missing_labels$trajectory_id, collapse = ", ")))
+    } else {
+      pass("tier2.trajectory_pairs.label_vars", "coarse_label_var and fine_label_var are populated")
+    }
+  }
+}
+
 if (!is.null(loaded_generated$annotation_marker_targets)) {
   annotation_marker_targets <- loaded_generated$annotation_marker_targets
   annotation_marker_schema <- c(
