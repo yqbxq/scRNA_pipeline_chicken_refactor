@@ -9,22 +9,7 @@
   }
 )
 
-source_utf8 <- function(path) source(path, encoding = "UTF-8")
-
-source_utf8(file.path(.script_dir, "helpers", "runtime_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "config.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_02.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_03.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_04.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_05.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_06.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_07.R"))
-source_utf8(file.path(.script_dir, "helpers", "manifest_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "report_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "metadata_io.R"))
-source_utf8(file.path(.script_dir, "helpers", "layer_config_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "triage_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_09.R"))
+source(file.path(.script_dir, "helpers", "load_helpers_09.R"), encoding = "UTF-8")
 
 load_required_packages(c("Seurat", "dplyr", "ggplot2", "jsonlite"))
 
@@ -488,7 +473,7 @@ write_manifest_local(
     module_09a = cfg$module_09a_manifest_path,
     trajectory_pairs = cfg$trajectory_pairs_sheet
   ),
-  version = cfg$module_version,
+  version = module_version_09(cfg, module_name),
   depends_on = list(module_09a = cfg$module_09a_manifest_path)
 )
 

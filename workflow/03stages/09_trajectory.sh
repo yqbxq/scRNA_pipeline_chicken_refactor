@@ -123,7 +123,10 @@ trajectory_has_monocle2_optin() {
       method = tolower($(idx["method"]))
       enabled = tolower($(idx["enabled"]))
       extra = tolower($(idx["methods_extra"]))
-      if (method == "trajectory" && enabled != "no" && extra ~ /(^|[,;[:space:]])[+]?monocle2([,;[:space:]]|$)/) found = 1
+      tools = tolower($(idx["tools_to_run"]))
+      enable_pat = "(^|[,;[:space:]])[+]?monocle2([,;[:space:]]|$)"
+      disable_pat = "(^|[,;[:space:]])(-|no[-_])monocle2([,;[:space:]]|$)"
+      if (method == "trajectory" && enabled != "no" && extra !~ disable_pat && (extra ~ enable_pat || tools ~ enable_pat)) found = 1
     }
     END { exit(found ? 0 : 1) }
   ' "${TRAJECTORY_PAIRS_SHEET}"
@@ -187,17 +190,13 @@ run_trajectory_method_if_stale \
   "${TRAJECTORY_PAIRS_SHEET}"
 require_manifest_output "${MODULE_09F_MANIFEST}" "paga_dpt_index_tsv" >/dev/null
 
-if [[ "${RUN_PALANTIR:-yes}" != "no" ]]; then
-  run_trajectory_method_if_stale \
-    "${WORKFLOW_ROOT}/05single_script/09g_trajectory_palantir.R" \
-    "${MODULE_09G_MANIFEST}" \
-    "${MODULE_09A_MANIFEST}" \
-    "${MODULE_09C_MANIFEST}" \
-    "${TRAJECTORY_PAIRS_SHEET}"
-  require_manifest_output "${MODULE_09G_MANIFEST}" "palantir_index_tsv" >/dev/null
-else
-  warn "RUN_PALANTIR=no，跳过 09g Palantir。"
-fi
+run_trajectory_method_if_stale \
+  "${WORKFLOW_ROOT}/05single_script/09g_trajectory_palantir.R" \
+  "${MODULE_09G_MANIFEST}" \
+  "${MODULE_09A_MANIFEST}" \
+  "${MODULE_09C_MANIFEST}" \
+  "${TRAJECTORY_PAIRS_SHEET}"
+require_manifest_output "${MODULE_09G_MANIFEST}" "palantir_index_tsv" >/dev/null
 
 if trajectory_has_monocle2_optin; then
   run_trajectory_method_if_stale \
@@ -208,7 +207,7 @@ if trajectory_has_monocle2_optin; then
     "${TRAJECTORY_PAIRS_SHEET}"
   require_manifest_output "${MODULE_09E2_MANIFEST}" "monocle2_index_tsv" >/dev/null
 else
-  echo "trajectory_pairs.tsv 未启用 methods_extra=+monocle2，跳过 09e2。"
+  echo "trajectory_pairs.tsv 未通过 methods_extra 或 tools_to_run 启用 monocle2，跳过 09e2。"
 fi
 
 if [[ "${TRAJECTORY_METHOD_RERAN}" == "1" ]]; then

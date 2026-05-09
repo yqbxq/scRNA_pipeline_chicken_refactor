@@ -9,23 +9,7 @@
   }
 )
 
-source_utf8 <- function(path) source(path, encoding = "UTF-8")
-
-source_utf8(file.path(.script_dir, "helpers", "runtime_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "config.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_02.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_03.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_04.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_05.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_06.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_07.R"))
-source_utf8(file.path(.script_dir, "helpers", "manifest_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "report_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "metadata_io.R"))
-source_utf8(file.path(.script_dir, "helpers", "layer_config_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "ambient_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_09.R"))
-source_utf8(file.path(.script_dir, "helpers", "trajectory_utils.R"))
+source(file.path(.script_dir, "helpers", "load_helpers_09.R"), encoding = "UTF-8")
 
 load_required_packages(c("Seurat", "dplyr", "jsonlite", "Matrix", "ggplot2"))
 
@@ -34,8 +18,17 @@ module_name <- "09f_trajectory_paga_dpt"
 prepare_dirs_09(cfg)
 
 paga_index_cols <- c(trajectory_method_index_cols_09, "h5ad_path")
-units <- trajectory_execution_units_09(cfg)
+units_all <- trajectory_execution_units_09(cfg)
+enabled_mask <- if (nrow(units_all) > 0) {
+  vapply(seq_len(nrow(units_all)), function(i) {
+    trajectory_method_enabled_09(units_all[i, , drop = FALSE], "paga_dpt")
+  }, logical(1))
+} else {
+  logical(0)
+}
+units <- units_all[enabled_mask, , drop = FALSE]
 job_rows <- list()
+index_rows <- list()
 
 for (i in seq_len(nrow(units))) {
   unit <- units[i, , drop = FALSE]
@@ -120,6 +113,32 @@ if (nrow(jobs) > 0) {
   }
 } else {
   write_tsv_local(trajectory_empty_df_09(paga_index_cols), cfg$trajectory_paga_index_tsv)
+}
+
+if (nrow(units_all) > 0 && any(!enabled_mask)) {
+  disabled <- units_all[!enabled_mask, , drop = FALSE]
+  for (i in seq_len(nrow(disabled))) {
+    unit <- disabled[i, , drop = FALSE]
+    index_rows[[length(index_rows) + 1L]] <- data.frame(
+      pair_id = unit$pair_id[[1]],
+      split_value = display_scalar_value(unit$split_value[[1]], "pooled"),
+      method = "paga_dpt",
+      methods_enabled = "no",
+      input_rds = unit$input_rds[[1]],
+      output_path = "",
+      extra_path = "",
+      figure_path = "",
+      n_cells = suppressWarnings(as.integer(unit$cell_n_after[[1]])),
+      status = "skipped_disabled",
+      reason = trajectory_method_disabled_reason_09(unit, "paga_dpt"),
+      runtime_s = 0,
+      h5ad_path = "",
+      stringsAsFactors = FALSE
+    )
+  }
+  bridge_index <- read_tsv_optional(cfg$trajectory_paga_index_tsv)
+  bridge_index <- dplyr::bind_rows(bridge_index, dplyr::bind_rows(index_rows))
+  write_tsv_local(bridge_index, cfg$trajectory_paga_index_tsv)
 }
 
 index_df <- read_tsv_optional(cfg$trajectory_paga_index_tsv)

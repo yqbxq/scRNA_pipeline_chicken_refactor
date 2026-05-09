@@ -9,23 +9,7 @@
   }
 )
 
-source_utf8 <- function(path) source(path, encoding = "UTF-8")
-
-source_utf8(file.path(.script_dir, "helpers", "runtime_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "config.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_02.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_03.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_04.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_05.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_06.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_07.R"))
-source_utf8(file.path(.script_dir, "helpers", "manifest_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "report_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "metadata_io.R"))
-source_utf8(file.path(.script_dir, "helpers", "layer_config_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "plotting_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_09.R"))
-source_utf8(file.path(.script_dir, "helpers", "trajectory_utils.R"))
+source(file.path(.script_dir, "helpers", "load_helpers_09.R"), encoding = "UTF-8")
 
 load_required_packages(c("dplyr", "jsonlite", "ggplot2"))
 
@@ -417,7 +401,7 @@ pair_table_path_09m <- function(kind, pair_id) {
 figure_path_09m <- function(pair_id) {
   out_dir <- trajectory_method_figure_dir_09(cfg, "split_compare", pair_id, "")
   ensure_dir(out_dir)
-  file.path(out_dir, sprintf("Figure_5H_split_compare_%s.png", safe_id_09(pair_id)))
+  file.path(out_dir, sprintf("Figure_Trajectory_SplitCompare_%s.png", safe_id_09(pair_id)))
 }
 
 plot_pair_summary_09m <- function(pair_id, pseudotime_df, lineage_df, driver_df, option_df, entropy_df, path) {

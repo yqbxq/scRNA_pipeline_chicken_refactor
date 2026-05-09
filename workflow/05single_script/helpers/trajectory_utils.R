@@ -11,6 +11,14 @@ trajectory_input_index_cols_09 <- c(
   "umap_reduction", "status", "reason", "produced_at"
 )
 
+trajectory_pairs_cols_09 <- c(
+  "trajectory_id", "source_question_id", "layer_scope", "root_group",
+  "terminal_group", "condition_split_var", "condition_split_values",
+  "method", "tools_to_run", "methods_extra", "outlier_qc_policy",
+  "regress_cell_cycle", "coarse_label_var", "fine_label_var",
+  "split_mode", "enabled", "notes"
+)
+
 trajectory_method_index_cols_09 <- c(
   "pair_id", "split_value", "method", "methods_enabled", "input_rds",
   "output_path", "extra_path", "figure_path", "n_cells", "status",
@@ -22,14 +30,7 @@ trajectory_read_pairs_09 <- function(cfg) {
   if (nrow(pairs) == 0) {
     return(pairs)
   }
-  required <- c(
-    "trajectory_id", "source_question_id", "layer_scope", "root_group",
-    "terminal_group", "condition_split_var", "condition_split_values",
-    "method", "tools_to_run", "methods_extra", "outlier_qc_policy",
-    "regress_cell_cycle", "coarse_label_var", "fine_label_var",
-    "split_mode", "enabled"
-  )
-  for (col in required) {
+  for (col in trajectory_pairs_cols_09) {
     if (!col %in% colnames(pairs)) {
       pairs[[col]] <- ""
     }
@@ -113,18 +114,80 @@ trajectory_method_extra_tokens_09 <- function(x) {
   parts[nzchar(parts)]
 }
 
-trajectory_method_enabled_09 <- function(pair_row, method, default = TRUE) {
+trajectory_method_key_09 <- function(method) {
+  method <- as.character(method)
+  method[is.na(method)] <- ""
+  gsub("_", "-", tolower(trimws(method)), fixed = TRUE)
+}
+
+trajectory_method_default_enabled_09 <- function(method) {
+  defaults <- c(
+    slingshot = TRUE,
+    monocle3 = TRUE,
+    monocle2 = FALSE,
+    `paga-dpt` = TRUE,
+    palantir = TRUE,
+    tradeseq = TRUE
+  )
+  key <- trajectory_method_key_09(method)
+  value <- unname(defaults[[key]])
+  if (is.null(value) || is.na(value)) TRUE else isTRUE(value)
+}
+
+trajectory_method_token_matches_09 <- function(tokens, method) {
+  tokens <- trajectory_method_key_09(tokens)
+  method_key <- trajectory_method_key_09(method)
+  aliases <- unique(c(method_key, gsub("-", "_", method_key, fixed = TRUE)))
+  any(tokens %in% trajectory_method_key_09(aliases))
+}
+
+trajectory_method_disabled_reason_09 <- function(pair_row, method) {
+  method <- normalize_scalar_value(method)
+  methods_extra <- if ("methods_extra" %in% colnames(pair_row)) pair_row$methods_extra[[1]] else ""
+  tools_to_run <- if ("tools_to_run" %in% colnames(pair_row)) pair_row$tools_to_run[[1]] else ""
+  tokens <- tolower(trajectory_method_extra_tokens_09(methods_extra))
+  normalized <- trajectory_method_key_09(tokens)
+  method_key <- trajectory_method_key_09(method)
+  disabled_tokens <- trajectory_method_key_09(c(paste0("-", method_key), paste0("no-", method_key)))
+  enabled_tokens <- trajectory_method_key_09(c(paste0("+", method_key), method_key))
+  if (any(normalized %in% disabled_tokens)) {
+    return(sprintf("methods_extra disables %s", method))
+  }
+  if (any(normalized %in% enabled_tokens)) {
+    return("")
+  }
+  tool_tokens <- trajectory_method_extra_tokens_09(tools_to_run)
+  if (length(tool_tokens) > 0 && !trajectory_method_token_matches_09(tool_tokens, method)) {
+    return(sprintf("tools_to_run does not include %s", method))
+  }
+  if (!trajectory_method_default_enabled_09(method)) {
+    return(sprintf("%s is disabled by default; add +%s to methods_extra", method, method_key))
+  }
+  ""
+}
+
+# Precedence: methods_extra explicit +/- overrides tools_to_run; otherwise a
+# non-empty tools_to_run is an allow-list; empty tools_to_run falls back to the
+# central per-method defaults above.
+trajectory_method_enabled_09 <- function(pair_row, method, default = NULL) {
   method <- tolower(normalize_scalar_value(method))
-  tokens <- tolower(trajectory_method_extra_tokens_09(pair_row$methods_extra[[1]]))
-  normalized <- gsub("_", "-", tokens, fixed = TRUE)
-  method_dash <- gsub("_", "-", method, fixed = TRUE)
-  disabled_tokens <- c(paste0("-", method), paste0("-", method_dash), paste0("no-", method_dash), paste0("no_", method))
-  enabled_tokens <- c(paste0("+", method), paste0("+", method_dash), method, method_dash)
-  if (any(normalized %in% gsub("_", "-", disabled_tokens, fixed = TRUE))) {
+  if (is.null(default)) {
+    default <- trajectory_method_default_enabled_09(method)
+  }
+  tokens <- tolower(trajectory_method_extra_tokens_09(if ("methods_extra" %in% colnames(pair_row)) pair_row$methods_extra[[1]] else ""))
+  normalized <- trajectory_method_key_09(tokens)
+  method_key <- trajectory_method_key_09(method)
+  disabled_tokens <- trajectory_method_key_09(c(paste0("-", method_key), paste0("no-", method_key)))
+  enabled_tokens <- trajectory_method_key_09(c(paste0("+", method_key), method_key))
+  if (any(normalized %in% disabled_tokens)) {
     return(FALSE)
   }
-  if (any(normalized %in% gsub("_", "-", enabled_tokens, fixed = TRUE))) {
+  if (any(normalized %in% enabled_tokens)) {
     return(TRUE)
+  }
+  tool_tokens <- trajectory_method_extra_tokens_09(if ("tools_to_run" %in% colnames(pair_row)) pair_row$tools_to_run[[1]] else "")
+  if (length(tool_tokens) > 0) {
+    return(trajectory_method_token_matches_09(tool_tokens, method))
   }
   isTRUE(default)
 }
@@ -150,14 +213,18 @@ trajectory_execution_units_09 <- function(cfg, include_not_ok = FALSE) {
     suffixes = c("", ".pair"),
     sort = FALSE
   )
-  for (base_col in c("source_question_id", "layer_scope", "root_group", "terminal_group", "coarse_label_var", "fine_label_var", "split_mode")) {
+  for (base_col in c("source_question_id", "layer_scope", "root_group", "terminal_group", "coarse_label_var", "fine_label_var", "split_mode", "tools_to_run", "methods_extra")) {
     pair_col <- paste0(base_col, ".pair")
+    if (!base_col %in% colnames(merged)) {
+      merged[[base_col]] <- ""
+    }
     if (pair_col %in% colnames(merged)) {
       empty <- !nzchar(normalize_flag(merged[[base_col]], ""))
       merged[[base_col]][empty] <- merged[[pair_col]][empty]
     }
   }
-  merged
+  pair_cols <- grep("\\.pair$", colnames(merged), value = TRUE)
+  merged[, !colnames(merged) %in% pair_cols, drop = FALSE]
 }
 
 trajectory_load_root_index_09 <- function(cfg) {
@@ -368,7 +435,16 @@ trajectory_method_manifest_09 <- function(cfg, manifest_path, module_name, outpu
     module_name = module_name,
     base_dir = cfg$project_root,
     inputs = inputs,
-    version = cfg$module_version,
+    version = module_version_09(cfg, module_name),
     depends_on = depends_on
   )
+}
+
+module_version_09 <- function(cfg, module_name) {
+  versions <- cfg$module_versions_09 %||% list()
+  version <- versions[[module_name]]
+  if (is.null(version) || !nzchar(normalize_scalar_value(version))) {
+    version <- cfg$module_version
+  }
+  normalize_scalar_value(version, "1.0")
 }

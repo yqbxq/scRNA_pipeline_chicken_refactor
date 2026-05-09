@@ -10,6 +10,23 @@ env_integer_09 <- function(name, default) {
 
 get_single_script_config_09 <- function() {
   base <- get_single_script_config_07()
+  base$module_version <- env_or_default_03("MODULE_09_VERSION", "1.0")
+  base$module_versions_09 <- list(
+    `09a_trajectory_inputs` = env_or_default_03("MODULE_09A_VERSION", base$module_version),
+    `09b_trajectory_inputs_eda` = env_or_default_03("MODULE_09B_VERSION", base$module_version),
+    `09c_trajectory_root` = env_or_default_03("MODULE_09C_VERSION", base$module_version),
+    `09d_trajectory_slingshot` = env_or_default_03("MODULE_09D_VERSION", base$module_version),
+    `09e_trajectory_monocle3` = env_or_default_03("MODULE_09E_VERSION", base$module_version),
+    `09e2_trajectory_monocle2` = env_or_default_03("MODULE_09E2_VERSION", base$module_version),
+    `09f_trajectory_paga_dpt` = env_or_default_03("MODULE_09F_VERSION", base$module_version),
+    `09g_trajectory_palantir` = env_or_default_03("MODULE_09G_VERSION", base$module_version),
+    `09h_trajectory_tradeseq` = env_or_default_03("MODULE_09H_VERSION", base$module_version),
+    `09i_trajectory_consensus` = env_or_default_03("MODULE_09I_VERSION", base$module_version),
+    `09j_trajectory_velocity_link` = env_or_default_03("MODULE_09J_VERSION", base$module_version),
+    `09k_trajectory_figures` = env_or_default_03("MODULE_09K_VERSION", base$module_version),
+    `09m_trajectory_split_compare` = env_or_default_03("MODULE_09M_VERSION", base$module_version),
+    `09l_trajectory_eda` = env_or_default_03("MODULE_09L_VERSION", base$module_version)
+  )
 
   base$module_09a_manifest_path <- file.path(base$manifest_dir, "09a_trajectory_inputs", "_manifest.json")
   base$module_09b_manifest_path <- file.path(base$manifest_dir, "09b_trajectory_inputs_eda", "_manifest.json")
@@ -111,10 +128,15 @@ get_single_script_config_09 <- function() {
   base$trajectory_umap_n_neighbors <- env_integer_09("TRAJECTORY_UMAP_N_NEIGHBORS", 30L)
   base$trajectory_split_min_cells <- env_integer_09("TRAJECTORY_SPLIT_MIN_CELLS", 50L)
   base$trajectory_balance_warn_fraction <- env_numeric_09("TRAJECTORY_BALANCE_WARN_FRACTION", 0.30)
+  base$trajectory_outlier_low_prob <- env_numeric_09("TRAJECTORY_OUTLIER_LOW_PROB", 0.01)
+  base$trajectory_outlier_high_prob <- env_numeric_09("TRAJECTORY_OUTLIER_HIGH_PROB", 0.99)
+  base$trajectory_outlier_neighbor_cutoff <- env_numeric_09("TRAJECTORY_OUTLIER_NEIGHBOR_CUTOFF", 4)
+  base$trajectory_outlier_strict_low_prob <- env_numeric_09("TRAJECTORY_OUTLIER_STRICT_LOW_PROB", 0.02)
+  base$trajectory_outlier_strict_high_prob <- env_numeric_09("TRAJECTORY_OUTLIER_STRICT_HIGH_PROB", 0.98)
+  base$trajectory_outlier_strict_neighbor_cutoff <- env_numeric_09("TRAJECTORY_OUTLIER_STRICT_NEIGHBOR_CUTOFF", 3)
   base$tradeseq_knots <- env_integer_09("TRADESEQ_KNOTS", 6L)
   base$trajectory_consensus_min_methods <- env_integer_09("TRAJECTORY_CONSENSUS_MIN_METHODS", 2L)
   base$trajectory_consensus_conflict_rho <- env_numeric_09("TRAJECTORY_CONSENSUS_CONFLICT_RHO", 0.30)
-  base$module_version <- env_or_default_03("MODULE_09_VERSION", "1.0")
   base
 }
 
@@ -202,6 +224,38 @@ safe_id_09 <- function(value) {
   safe_id_07(value)
 }
 
+trajectory_method_registry_09 <- function() {
+  list(
+    root = list(table_dir_key = "trajectory_root_table_dir"),
+    slingshot = list(table_dir_key = "trajectory_slingshot_table_dir", figure_dir_key = "trajectory_methods_figure_dir"),
+    monocle3 = list(table_dir_key = "trajectory_monocle3_table_dir", figure_dir_key = "trajectory_methods_figure_dir"),
+    monocle2 = list(table_dir_key = "trajectory_monocle2_table_dir", figure_dir_key = "trajectory_monocle2_figure_dir"),
+    paga_dpt = list(table_dir_key = "trajectory_paga_table_dir", figure_dir_key = "trajectory_paga_figure_dir"),
+    palantir = list(table_dir_key = "trajectory_palantir_table_dir", figure_dir_key = "trajectory_palantir_figure_dir"),
+    tradeseq = list(table_dir_key = "trajectory_tradeseq_table_dir", figure_dir_key = "trajectory_tradeseq_figure_dir"),
+    consensus = list(table_dir_key = "trajectory_consensus_table_dir", figure_dir_key = "trajectory_consensus_figure_dir"),
+    velocity_link = list(table_dir_key = "trajectory_velocity_link_table_dir", figure_dir_key = "trajectory_velocity_link_figure_dir"),
+    figures = list(table_dir_key = "trajectory_figures_table_dir", figure_dir_key = "trajectory_summary_figure_dir"),
+    split_compare = list(table_dir_key = "trajectory_split_compare_table_dir", figure_dir_key = "trajectory_split_compare_figure_dir"),
+    final = list(table_dir_key = "trajectory_final_table_dir")
+  )
+}
+
+trajectory_method_root_dir_09 <- function(cfg, method, kind = c("table", "figure")) {
+  kind <- match.arg(kind)
+  method <- tolower(normalize_scalar_value(method))
+  registry <- trajectory_method_registry_09()
+  entry <- registry[[method]]
+  key <- if (!is.null(entry)) entry[[paste0(kind, "_dir_key")]] else NULL
+  if (!is.null(key) && nzchar(key) && !is.null(cfg[[key]])) {
+    return(cfg[[key]])
+  }
+  if (identical(kind, "table")) {
+    return(file.path(cfg$trajectory_methods_table_dir, safe_id_09(method)))
+  }
+  file.path(cfg$trajectory_methods_figure_dir, safe_id_09(method))
+}
+
 trajectory_pair_dir_09 <- function(cfg, pair_id) {
   file.path(cfg$trajectory_dir, safe_id_09(pair_id))
 }
@@ -241,22 +295,7 @@ trajectory_unit_file_id_09 <- function(pair_id, split_value = "") {
 }
 
 trajectory_method_table_dir_09 <- function(cfg, method, pair_id = "", split_value = "") {
-  root <- switch(
-    method,
-    root = cfg$trajectory_root_table_dir,
-    slingshot = cfg$trajectory_slingshot_table_dir,
-    monocle3 = cfg$trajectory_monocle3_table_dir,
-    monocle2 = cfg$trajectory_monocle2_table_dir,
-    paga_dpt = cfg$trajectory_paga_table_dir,
-    palantir = cfg$trajectory_palantir_table_dir,
-    tradeseq = cfg$trajectory_tradeseq_table_dir,
-    consensus = cfg$trajectory_consensus_table_dir,
-    velocity_link = cfg$trajectory_velocity_link_table_dir,
-    figures = cfg$trajectory_figures_table_dir,
-    split_compare = cfg$trajectory_split_compare_table_dir,
-    final = cfg$trajectory_final_table_dir,
-    file.path(cfg$trajectory_methods_table_dir, safe_id_09(method))
-  )
+  root <- trajectory_method_root_dir_09(cfg, method, "table")
   if (!nzchar(normalize_scalar_value(pair_id))) {
     return(root)
   }
@@ -264,18 +303,7 @@ trajectory_method_table_dir_09 <- function(cfg, method, pair_id = "", split_valu
 }
 
 trajectory_method_figure_dir_09 <- function(cfg, method, pair_id, split_value = "") {
-  root <- switch(
-    method,
-    monocle2 = cfg$trajectory_monocle2_figure_dir,
-    paga_dpt = cfg$trajectory_paga_figure_dir,
-    palantir = cfg$trajectory_palantir_figure_dir,
-    tradeseq = cfg$trajectory_tradeseq_figure_dir,
-    consensus = cfg$trajectory_consensus_figure_dir,
-    velocity_link = cfg$trajectory_velocity_link_figure_dir,
-    figures = cfg$trajectory_summary_figure_dir,
-    split_compare = cfg$trajectory_split_compare_figure_dir,
-    file.path(cfg$trajectory_methods_figure_dir, safe_id_09(method))
-  )
+  root <- trajectory_method_root_dir_09(cfg, method, "figure")
   file.path(root, trajectory_unit_file_id_09(pair_id, split_value))
 }
 

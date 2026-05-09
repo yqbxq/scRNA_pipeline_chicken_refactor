@@ -9,23 +9,7 @@
   }
 )
 
-source_utf8 <- function(path) source(path, encoding = "UTF-8")
-
-source_utf8(file.path(.script_dir, "helpers", "runtime_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "config.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_02.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_03.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_04.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_05.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_06.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_07.R"))
-source_utf8(file.path(.script_dir, "helpers", "manifest_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "report_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "metadata_io.R"))
-source_utf8(file.path(.script_dir, "helpers", "layer_config_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "ambient_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_09.R"))
-source_utf8(file.path(.script_dir, "helpers", "trajectory_utils.R"))
+source(file.path(.script_dir, "helpers", "load_helpers_09.R"), encoding = "UTF-8")
 
 load_required_packages(c("Seurat", "dplyr", "jsonlite", "Matrix", "ggplot2"))
 
@@ -35,12 +19,13 @@ prepare_dirs_09(cfg)
 
 palantir_index_cols <- c(trajectory_method_index_cols_09, "fate_path")
 units_all <- trajectory_execution_units_09(cfg)
-enabled_mask <- if (nrow(units_all) > 0) {
+global_palantir_enabled <- !identical(tolower(normalize_scalar_value(Sys.getenv("RUN_PALANTIR", "yes"), "yes")), "no")
+enabled_mask <- if (global_palantir_enabled && nrow(units_all) > 0) {
   vapply(seq_len(nrow(units_all)), function(i) {
-    trajectory_method_enabled_09(units_all[i, , drop = FALSE], "palantir", default = TRUE)
+    trajectory_method_enabled_09(units_all[i, , drop = FALSE], "palantir")
   }, logical(1))
 } else {
-  logical(0)
+  rep(FALSE, nrow(units_all))
 }
 units <- units_all[enabled_mask, , drop = FALSE]
 job_rows <- list()
@@ -141,12 +126,19 @@ if (nrow(jobs) > 0) {
     )
     write_tsv_local(index_fallback, cfg$trajectory_palantir_index_tsv)
   }
+} else {
+  write_tsv_local(trajectory_empty_df_09(palantir_index_cols), cfg$trajectory_palantir_index_tsv)
 }
 
 if (nrow(units_all) > 0 && any(!enabled_mask)) {
   disabled <- units_all[!enabled_mask, , drop = FALSE]
   for (i in seq_len(nrow(disabled))) {
     unit <- disabled[i, , drop = FALSE]
+    reason <- if (!global_palantir_enabled) {
+      "RUN_PALANTIR=no"
+    } else {
+      trajectory_method_disabled_reason_09(unit, "palantir")
+    }
     index_rows[[length(index_rows) + 1L]] <- data.frame(
       pair_id = unit$pair_id[[1]],
       split_value = display_scalar_value(unit$split_value[[1]], "pooled"),
@@ -158,7 +150,7 @@ if (nrow(units_all) > 0 && any(!enabled_mask)) {
       figure_path = "",
       n_cells = suppressWarnings(as.integer(unit$cell_n_after[[1]])),
       status = "skipped_disabled",
-      reason = "methods_extra contains -palantir",
+      reason = reason,
       runtime_s = 0,
       fate_path = "",
       stringsAsFactors = FALSE

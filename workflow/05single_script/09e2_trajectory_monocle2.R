@@ -9,23 +9,7 @@
   }
 )
 
-source_utf8 <- function(path) source(path, encoding = "UTF-8")
-
-source_utf8(file.path(.script_dir, "helpers", "runtime_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "config.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_02.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_03.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_04.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_05.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_06.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_07.R"))
-source_utf8(file.path(.script_dir, "helpers", "manifest_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "report_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "metadata_io.R"))
-source_utf8(file.path(.script_dir, "helpers", "layer_config_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "ambient_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_09.R"))
-source_utf8(file.path(.script_dir, "helpers", "trajectory_utils.R"))
+source(file.path(.script_dir, "helpers", "load_helpers_09.R"), encoding = "UTF-8")
 
 load_required_packages(c("Seurat", "dplyr", "jsonlite", "Matrix", "ggplot2"))
 
@@ -71,16 +55,30 @@ run_monocle2_09e2 <- function(seu, label_var, root_label, out_csv, tree_rds, fig
   if (length(expressed) < 20L) {
     expressed <- rownames(counts)
   }
+  n_cores <- suppressWarnings(as.integer(parallel::detectCores(logical = FALSE)))
+  n_cores <- if (length(n_cores) == 0 || is.na(n_cores)) 1L else max(1L, min(4L, n_cores))
   day_genes <- tryCatch(
     monocle::differentialGeneTest(
       cds[expressed, ],
       fullModelFormulaStr = paste0("~", label_var),
-      cores = max(1L, min(4L, parallel::detectCores(logical = FALSE) %||% 1L))
+      cores = n_cores
     ),
-    error = function(e) data.frame(qval = rep(1, length(expressed)), row.names = expressed)
+    error = function(e) {
+      stop(sprintf("Monocle 2 differentialGeneTest failed; refusing q=1 ordering fallback: %s", conditionMessage(e)), call. = FALSE)
+    }
   )
+  if (!"qval" %in% colnames(day_genes)) {
+    stop("Monocle 2 differentialGeneTest output lacks qval; refusing ordering fallback", call. = FALSE)
+  }
+  day_genes$qval <- suppressWarnings(as.numeric(day_genes$qval))
+  if (!any(is.finite(day_genes$qval))) {
+    stop("Monocle 2 differentialGeneTest returned no finite qval; refusing ordering fallback", call. = FALSE)
+  }
   ordering_genes <- rownames(day_genes)[order(day_genes$qval)]
   ordering_genes <- utils::head(ordering_genes[nzchar(ordering_genes)], min(2000L, length(ordering_genes)))
+  if (length(ordering_genes) < 20L) {
+    stop("Monocle 2 differentialGeneTest returned fewer than 20 ordering genes", call. = FALSE)
+  }
   cds <- monocle::setOrderingFilter(cds, ordering_genes = ordering_genes)
   cds <- monocle::reduceDimension(cds, method = "DDRTree", max_components = 2, norm_method = "none", pseudo_expr = 0)
   root_state <- state_of_root_09e2(cds, label_var, root_label)
@@ -100,13 +98,14 @@ run_monocle2_09e2 <- function(seu, label_var, root_label, out_csv, tree_rds, fig
 }
 
 units_all <- trajectory_execution_units_09(cfg)
-if (nrow(units_all) > 0) {
-  units <- units_all[vapply(seq_len(nrow(units_all)), function(i) {
-    trajectory_method_enabled_09(units_all[i, , drop = FALSE], "monocle2", default = FALSE)
-  }, logical(1)), , drop = FALSE]
+enabled_mask <- if (nrow(units_all) > 0) {
+  vapply(seq_len(nrow(units_all)), function(i) {
+    trajectory_method_enabled_09(units_all[i, , drop = FALSE], "monocle2")
+  }, logical(1))
 } else {
-  units <- units_all
+  logical(0)
 }
+units <- units_all[enabled_mask, , drop = FALSE]
 
 index_rows <- list()
 dynamic_outputs <- list()
@@ -168,9 +167,10 @@ for (i in seq_len(nrow(units))) {
   dynamic_outputs[[sprintf("monocle2_%s_pseudotime", trajectory_unit_file_id_09(pair_id, split_value))]] <- build_output_entry(out_csv, "csv", module_name, "Monocle 2 pseudotime", base_dir = cfg$project_root)
 }
 
-if (nrow(units_all) > 0 && nrow(units) == 0) {
-  disabled_rows <- lapply(seq_len(nrow(units_all)), function(i) {
-    unit <- units_all[i, , drop = FALSE]
+if (nrow(units_all) > 0 && any(!enabled_mask)) {
+  disabled <- units_all[!enabled_mask, , drop = FALSE]
+  disabled_rows <- lapply(seq_len(nrow(disabled)), function(i) {
+    unit <- disabled[i, , drop = FALSE]
     pair_id <- unit$pair_id[[1]]
     split_value <- display_scalar_value(unit$split_value[[1]], "pooled")
     data.frame(
@@ -184,14 +184,14 @@ if (nrow(units_all) > 0 && nrow(units) == 0) {
       figure_path = "",
       n_cells = suppressWarnings(as.integer(unit$cell_n_after[[1]])),
       status = "skipped_disabled",
-      reason = "methods_extra does not opt in to monocle2",
+      reason = trajectory_method_disabled_reason_09(unit, "monocle2"),
       runtime_s = 0,
       branches_path = "",
       root_state = NA_real_,
       stringsAsFactors = FALSE
     )
   })
-  index_rows <- disabled_rows
+  index_rows <- c(index_rows, disabled_rows)
 }
 
 index_df <- if (length(index_rows) > 0) dplyr::bind_rows(index_rows) else trajectory_empty_df_09(monocle2_index_cols)

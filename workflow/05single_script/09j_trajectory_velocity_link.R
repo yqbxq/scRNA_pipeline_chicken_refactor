@@ -9,29 +9,14 @@
   }
 )
 
-source_utf8 <- function(path) source(path, encoding = "UTF-8")
-
-source_utf8(file.path(.script_dir, "helpers", "runtime_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "config.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_02.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_03.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_04.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_05.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_06.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_07.R"))
-source_utf8(file.path(.script_dir, "helpers", "manifest_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "report_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "metadata_io.R"))
-source_utf8(file.path(.script_dir, "helpers", "layer_config_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "ambient_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_09.R"))
-source_utf8(file.path(.script_dir, "helpers", "trajectory_utils.R"))
+source(file.path(.script_dir, "helpers", "load_helpers_09.R"), encoding = "UTF-8")
 
 load_required_packages(c("Seurat", "dplyr", "jsonlite", "ggplot2"))
 
 cfg <- get_single_script_config_09()
 module_name <- "09j_trajectory_velocity_link"
 prepare_dirs_09(cfg)
+extract_velocity_obs_script_09j <- normalizePath(file.path(.script_dir, "..", "04python", "extract_velocity_obs.py"), winslash = "/", mustWork = FALSE)
 
 velocity_link_index_cols <- c(
   trajectory_method_index_cols_09,
@@ -59,6 +44,20 @@ slingshot_row_for_unit_09j <- function(index_df, pair_id, split_value) {
   if (nrow(hit) == 0) NULL else hit[1, , drop = FALSE]
 }
 
+regex_escape_09j <- function(x) {
+  gsub("([][{}()+*^$|\\\\?.])", "\\\\\\1", x, perl = TRUE)
+}
+
+velocity_h5ad_token_match_09j <- function(path, token) {
+  token <- normalize_scalar_value(token)
+  if (!nzchar(token)) {
+    return(FALSE)
+  }
+  token <- regex_escape_09j(tolower(token))
+  lower <- tolower(normalizePath(path, winslash = "/", mustWork = FALSE))
+  grepl(sprintf("(^|[/_.-])%s([./-]|$)", token), lower, perl = TRUE)
+}
+
 velocity_h5ad_candidates_09j <- function(cfg, pair_id, split_value) {
   if (!dir.exists(cfg$velocity_output_dir)) {
     return(character(0))
@@ -67,13 +66,27 @@ velocity_h5ad_candidates_09j <- function(cfg, pair_id, split_value) {
   if (length(files) == 0) {
     return(character(0))
   }
-  value <- trajectory_unit_value_09(split_value)
-  tokens <- unique(c(safe_id_09(pair_id), pair_id, if (nzchar(value)) c(safe_id_09(value), value) else character(0)))
+  split_key <- trajectory_unit_value_09(split_value)
+  unit_id <- trajectory_unit_file_id_09(pair_id, split_value)
+  pair_tokens <- unique(c(pair_id, safe_id_09(pair_id)))
+  split_tokens <- if (nzchar(split_key)) unique(c(split_key, safe_id_09(split_key))) else character(0)
   score <- vapply(files, function(path) {
-    lower <- tolower(path)
-    sum(vapply(tokens, function(tok) grepl(tolower(tok), lower, fixed = TRUE), logical(1)))
+    unit_hit <- velocity_h5ad_token_match_09j(path, unit_id)
+    pair_hit <- any(vapply(pair_tokens, function(tok) velocity_h5ad_token_match_09j(path, tok), logical(1)))
+    split_hit <- if (length(split_tokens) == 0) {
+      TRUE
+    } else {
+      any(vapply(split_tokens, function(tok) velocity_h5ad_token_match_09j(path, tok), logical(1)))
+    }
+    if (unit_hit || (pair_hit && split_hit)) {
+      as.numeric(unit_hit) * 100 + as.numeric(pair_hit) * 10 + as.numeric(split_hit)
+    } else {
+      0
+    }
   }, numeric(1))
-  files[order(score, decreasing = TRUE)]
+  files <- files[score > 0]
+  score <- score[score > 0]
+  files[order(-score, basename(files))]
 }
 
 extract_velocity_time_09j <- function(h5ad_path, out_tsv) {
@@ -81,22 +94,25 @@ extract_velocity_time_09j <- function(h5ad_path, out_tsv) {
   if (!nzchar(python) || !file.exists(python)) {
     stop("python executable for velocity/anndata is unavailable", call. = FALSE)
   }
-  script <- tempfile(fileext = ".py")
-  writeLines(c(
-    "import sys",
-    "import anndata as ad",
-    "import pandas as pd",
-    "h5ad_path, out_tsv = sys.argv[1], sys.argv[2]",
-    "adata = ad.read_h5ad(h5ad_path)",
-    "obs = adata.obs.copy()",
-    "cols = [c for c in ['latent_time', 'velocity_pseudotime', 'velocity_length', 'velocity_confidence'] if c in obs.columns]",
-    "df = obs[cols].copy() if cols else pd.DataFrame(index=obs.index)",
-    "df.insert(0, 'cell_id', obs.index.astype(str))",
-    "df.to_csv(out_tsv, sep='\\t', index=False)"
-  ), script, useBytes = TRUE)
-  status <- system2(python, args = c(script, h5ad_path, out_tsv), stdout = TRUE, stderr = TRUE)
-  if (!is.null(attr(status, "status")) && attr(status, "status") != 0) {
-    stop(paste(status, collapse = "\n"), call. = FALSE)
+  if (!file.exists(extract_velocity_obs_script_09j)) {
+    stop(sprintf("extract_velocity_obs.py is unavailable: %s", extract_velocity_obs_script_09j), call. = FALSE)
+  }
+  import_check <- suppressWarnings(system2(python, args = c("-c", "import anndata"), stdout = TRUE, stderr = TRUE))
+  if (!is.null(attr(import_check, "status")) && attr(import_check, "status") != 0) {
+    stop(paste(c("anndata package unavailable", import_check), collapse = "\n"), call. = FALSE)
+  }
+  status <- system2(
+    python,
+    args = c(extract_velocity_obs_script_09j, "--h5ad", h5ad_path, "--out", out_tsv),
+    stdout = "",
+    stderr = ""
+  )
+  exit_status <- suppressWarnings(as.integer(status))
+  if (!is.finite(exit_status)) {
+    exit_status <- 1L
+  }
+  if (exit_status != 0L) {
+    stop(sprintf("extract_velocity_obs.py failed with exit status %s", exit_status), call. = FALSE)
   }
   read_tsv_optional(out_tsv)
 }
@@ -139,7 +155,7 @@ run_velocity_link_09j <- function(unit, sling_row) {
   tryCatch({
     candidates <- velocity_h5ad_candidates_09j(cfg, pair_id, split_value)
     if (length(candidates) == 0) {
-      stop("skipped_no_velocity: no .h5ad files in VELOCITY_OUTPUT_DIR", call. = FALSE)
+      stop("warning_no_velocity_outputs: no strict .h5ad match in VELOCITY_OUTPUT_DIR; run module 10 velocity first or rerun 09j after velocity outputs exist", call. = FALSE)
     }
     h5ad_path <- candidates[[1]]
     if (is.null(sling_row) || sling_row$status[[1]] != "ok" || !file.exists(sling_row$output_path[[1]])) {
@@ -215,8 +231,8 @@ run_velocity_link_09j <- function(unit, sling_row) {
       direction_aligned = best$direction_aligned[[1]], stringsAsFactors = FALSE
     )
   }, error = function(e) {
-    status <- if (grepl("skipped_no_velocity", conditionMessage(e))) {
-      "skipped_no_velocity"
+    status <- if (grepl("warning_no_velocity_outputs", conditionMessage(e))) {
+      "warning_no_velocity_outputs"
     } else if (grepl("anndata|python executable", conditionMessage(e), ignore.case = TRUE)) {
       "skipped_h5ad_reader_unavailable"
     } else if (grepl("Slingshot", conditionMessage(e))) {
@@ -283,7 +299,7 @@ trajectory_method_manifest_09(
   cfg$module_09j_manifest_path,
   module_name,
   outputs,
-  inputs = list(module_09a = cfg$module_09a_manifest_path, module_09d = cfg$module_09d_manifest_path, velocity_output_dir = cfg$velocity_output_dir),
+  inputs = list(module_09a = cfg$module_09a_manifest_path, module_09d = cfg$module_09d_manifest_path, velocity_output_dir = cfg$velocity_output_dir, python_script = extract_velocity_obs_script_09j),
   depends_on = list(module_09a = cfg$module_09a_manifest_path, module_09d = cfg$module_09d_manifest_path)
 )
 

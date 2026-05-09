@@ -9,23 +9,7 @@
   }
 )
 
-source_utf8 <- function(path) source(path, encoding = "UTF-8")
-
-source_utf8(file.path(.script_dir, "helpers", "runtime_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "config.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_02.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_03.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_04.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_05.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_06.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_07.R"))
-source_utf8(file.path(.script_dir, "helpers", "manifest_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "report_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "metadata_io.R"))
-source_utf8(file.path(.script_dir, "helpers", "layer_config_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "plotting_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_09.R"))
-source_utf8(file.path(.script_dir, "helpers", "trajectory_utils.R"))
+source(file.path(.script_dir, "helpers", "load_helpers_09.R"), encoding = "UTF-8")
 
 load_required_packages(c("Seurat", "dplyr", "jsonlite", "ggplot2"))
 
@@ -247,16 +231,16 @@ plot_unit_figures_09k <- function(unit, consensus_index, slingshot_index) {
     for (color_var in label_vars) {
       plot_df <- build_plot_df_09k(seu, unit, pseudotime_df, color_var)
       plot_obj <- plot_label_umap_09k(plot_df, color_var, sprintf("Trajectory lineages %s %s by %s", pair_id, split_value, color_var))
-      png_path <- figure_path_09k(pair_id, split_value, "Figure_5F_Lineages", color_var)
+      png_path <- figure_path_09k(pair_id, split_value, "Figure_Trajectory_Lineages", color_var)
       rows[[length(rows) + 1L]] <- save_figure_row_09k(plot_obj, pair_id, split_value, "lineages", color_var, png_path, ncol(seu))
     }
 
     root_plot <- plot_root_terminal_09k(seu, unit, pseudotime_df, sprintf("Trajectory root/terminal %s %s", pair_id, split_value))
-    root_png <- figure_path_09k(pair_id, split_value, "Figure_5F_RootTerminal")
+    root_png <- figure_path_09k(pair_id, split_value, "Figure_Trajectory_RootTerminal")
     rows[[length(rows) + 1L]] <- save_figure_row_09k(root_plot, pair_id, split_value, "root_terminal_overlay", "", root_png, ncol(seu))
     dplyr::bind_rows(rows)
   }, error = function(e) {
-    png_path <- figure_path_09k(pair_id, split_value, "Figure_5F_Lineages", "failed")
+    png_path <- figure_path_09k(pair_id, split_value, "Figure_Trajectory_Lineages", "failed")
     plot_obj <- empty_plot_09k(sprintf("Trajectory lineages %s %s", pair_id, split_value), conditionMessage(e))
     save_figure_row_09k(
       plot_obj,
@@ -319,7 +303,7 @@ plot_split_compare_09k <- function(pair_units, consensus_index, slingshot_index)
     plot_df$split_value <- factor(plot_df$split_value, levels = split_values)
     plot_obj <- plot_label_umap_09k(plot_df, color_var, sprintf("Split trajectory comparison %s by %s", pair_id, color_var)) +
       ggplot2::facet_wrap(~split_value, nrow = 1)
-    png_path <- figure_path_09k(pair_id, "split_compare", "Figure_5F_Lineages", color_var)
+    png_path <- figure_path_09k(pair_id, "split_compare", "Figure_Trajectory_Lineages", color_var)
     rows[[length(rows) + 1L]] <- save_figure_row_09k(
       plot_obj,
       pair_id,

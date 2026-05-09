@@ -9,23 +9,7 @@
   }
 )
 
-source_utf8 <- function(path) source(path, encoding = "UTF-8")
-
-source_utf8(file.path(.script_dir, "helpers", "runtime_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "config.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_02.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_03.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_04.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_05.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_06.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_07.R"))
-source_utf8(file.path(.script_dir, "helpers", "manifest_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "report_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "metadata_io.R"))
-source_utf8(file.path(.script_dir, "helpers", "layer_config_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "ambient_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_09.R"))
-source_utf8(file.path(.script_dir, "helpers", "trajectory_utils.R"))
+source(file.path(.script_dir, "helpers", "load_helpers_09.R"), encoding = "UTF-8")
 
 load_required_packages(c("Seurat", "dplyr", "jsonlite", "Matrix", "ggplot2"))
 
@@ -39,7 +23,7 @@ root_inference_cols <- c(
 )
 root_index_cols <- c(
   "pair_id", "split_value", "selected_root", "selected_source",
-  "prior_root", "cytotrace_root", "velocity_root", "n_methods_ok",
+  "prior_root", "cytotrace_root", "velocity_root", "velocity_status", "n_methods_ok",
   "non_prior_vote_root", "non_prior_vote_sources", "prior_disagreement",
   "disagreeing_methods", "status", "reason", "root_inference_tsv"
 )
@@ -368,6 +352,7 @@ for (i in seq_len(nrow(units))) {
     prior_root = normalize_scalar_value(unit$root_group[[1]], "auto"),
     cytotrace_root = first_or_empty_09c(result$inference$recommended_root[grepl("^cytotrace", result$inference$method)]),
     velocity_root = first_or_empty_09c(result$inference$recommended_root[result$inference$method == "velocity"]),
+    velocity_status = first_or_empty_09c(result$inference$status[result$inference$method == "velocity"]),
     n_methods_ok = sum(result$inference$status %in% c("ok", "proxy")),
     non_prior_vote_root = result$selected$non_prior_vote_root,
     non_prior_vote_sources = result$selected$non_prior_vote_sources,

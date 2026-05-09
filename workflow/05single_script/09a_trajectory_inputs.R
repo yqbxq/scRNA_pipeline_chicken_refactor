@@ -9,23 +9,7 @@
   }
 )
 
-source_utf8 <- function(path) source(path, encoding = "UTF-8")
-
-source_utf8(file.path(.script_dir, "helpers", "runtime_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "config.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_02.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_03.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_04.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_05.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_06.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_07.R"))
-source_utf8(file.path(.script_dir, "helpers", "manifest_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "report_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "metadata_io.R"))
-source_utf8(file.path(.script_dir, "helpers", "layer_config_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "ambient_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "communication_mapping_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_09.R"))
+source(file.path(.script_dir, "helpers", "load_helpers_09.R"), encoding = "UTF-8")
 
 load_required_packages(c("Seurat", "dplyr", "jsonlite", "Matrix"))
 
@@ -241,7 +225,22 @@ metric_from_meta_or_counts_09 <- function(seu, assay) {
   )
 }
 
-add_outlier_flags_09 <- function(qc_df, policy) {
+outlier_thresholds_09 <- function(cfg, policy) {
+  if (identical(policy, "strict")) {
+    return(list(
+      low_prob = cfg$trajectory_outlier_strict_low_prob,
+      high_prob = cfg$trajectory_outlier_strict_high_prob,
+      neighbor_cutoff = cfg$trajectory_outlier_strict_neighbor_cutoff
+    ))
+  }
+  list(
+    low_prob = cfg$trajectory_outlier_low_prob,
+    high_prob = cfg$trajectory_outlier_high_prob,
+    neighbor_cutoff = cfg$trajectory_outlier_neighbor_cutoff
+  )
+}
+
+add_outlier_flags_09 <- function(qc_df, policy, cfg) {
   policy <- tolower(normalize_scalar_value(policy, "standard"))
   if (!policy %in% c("off", "none", "standard", "strict")) {
     policy <- "standard"
@@ -262,36 +261,46 @@ add_outlier_flags_09 <- function(qc_df, policy) {
     ))
   }
 
-  low_prob <- if (identical(policy, "strict")) 0.02 else 0.01
-  high_prob <- if (identical(policy, "strict")) 0.98 else 0.99
-  neighbor_cutoff <- if (identical(policy, "strict")) 3 else 4
+  thresholds <- outlier_thresholds_09(cfg, policy)
+  low_prob <- thresholds$low_prob
+  high_prob <- thresholds$high_prob
+  neighbor_cutoff <- thresholds$neighbor_cutoff
   nfeature_low <- safe_quantile(qc_df$nFeature_RNA, low_prob)
   nfeature_high <- safe_quantile(qc_df$nFeature_RNA, high_prob)
   mt_high <- safe_quantile(qc_df$percent.mt, high_prob)
 
   reasons <- vector("list", nrow(qc_df))
   flag <- rep(FALSE, nrow(qc_df))
-  add_reason <- function(mask, label) {
+  add_reason <- function(flag, reasons, mask, label) {
     mask[is.na(mask)] <- FALSE
-    flag <<- flag | mask
+    flag <- flag | mask
     idx <- which(mask)
     if (length(idx) > 0) {
       for (i in idx) {
-        reasons[[i]] <<- c(reasons[[i]], label)
+        reasons[[i]] <- c(reasons[[i]], label)
       }
     }
+    list(flag = flag, reasons = reasons)
   }
 
   if (is.finite(nfeature_low)) {
-    add_reason(qc_df$nFeature_RNA < nfeature_low, "nFeature_low")
+    state <- add_reason(flag, reasons, qc_df$nFeature_RNA < nfeature_low, "nFeature_low")
+    flag <- state$flag
+    reasons <- state$reasons
   }
   if (is.finite(nfeature_high)) {
-    add_reason(qc_df$nFeature_RNA > nfeature_high, "nFeature_high")
+    state <- add_reason(flag, reasons, qc_df$nFeature_RNA > nfeature_high, "nFeature_high")
+    flag <- state$flag
+    reasons <- state$reasons
   }
   if (is.finite(mt_high)) {
-    add_reason(qc_df$percent.mt > mt_high, "percent_mt_high")
+    state <- add_reason(flag, reasons, qc_df$percent.mt > mt_high, "percent_mt_high")
+    flag <- state$flag
+    reasons <- state$reasons
   }
-  add_reason(qc_df$neighbor_distance_z > neighbor_cutoff, "neighbor_distance_high")
+  state <- add_reason(flag, reasons, qc_df$neighbor_distance_z > neighbor_cutoff, "neighbor_distance_high")
+  flag <- state$flag
+  reasons <- state$reasons
 
   retained <- !flag
   filter_status <- "applied"
@@ -537,7 +546,7 @@ prepare_one_split_09 <- function(pair_row, layer_row, source_obj, split_var, spl
 
   assay <- trajectory_default_assay_09(split_obj)
   qc_df <- metric_from_meta_or_counts_09(split_obj, assay)
-  outlier <- add_outlier_flags_09(qc_df, pair_row$outlier_qc_policy[[1]])
+  outlier <- add_outlier_flags_09(qc_df, pair_row$outlier_qc_policy[[1]], cfg)
   retained_cells <- outlier$cells$cell_id[outlier$cells$retained]
   outlier_n <- sum(!outlier$cells$retained)
 
@@ -764,20 +773,18 @@ for (i in seq_len(nrow(pairs))) {
   layer_row <- NULL
   source_obj <- NULL
   split_plan <- NULL
-  setup_ok <- TRUE
-  setup_error <- NULL
 
-  tryCatch({
+  setup <- tryCatch({
     layer_row <- resolve_trajectory_layer_09(cfg, pair_row$layer_scope[[1]])
     source_obj <- load_comm_layer_object_07(layer_row)
     split_plan <- split_values_for_pair_09(source_obj, pair_row)
+    list(ok = TRUE, error = NULL)
   }, error = function(e) {
-    setup_ok <<- FALSE
-    setup_error <<- e
+    list(ok = FALSE, error = e)
   })
 
-  if (!setup_ok) {
-    index_rows[[length(index_rows) + 1L]] <- failed_split_09(pair_row, layer_row, "", "", setup_error)
+  if (!setup$ok) {
+    index_rows[[length(index_rows) + 1L]] <- failed_split_09(pair_row, layer_row, "", "", setup$error)
     next
   }
 
@@ -841,7 +848,7 @@ write_manifest_local(
     module_04b = cfg$module_04b_manifest_path,
     layer_status = cfg$layer_status_file
   ),
-  version = cfg$module_version,
+  version = module_version_09(cfg, module_name),
   depends_on = list(
     module_00c = cfg$module_00c_manifest_path,
     module_03d = cfg$module_03d_manifest_path,

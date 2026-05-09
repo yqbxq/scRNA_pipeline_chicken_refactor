@@ -9,23 +9,7 @@
   }
 )
 
-source_utf8 <- function(path) source(path, encoding = "UTF-8")
-
-source_utf8(file.path(.script_dir, "helpers", "runtime_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "config.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_02.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_03.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_04.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_05.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_06.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_07.R"))
-source_utf8(file.path(.script_dir, "helpers", "manifest_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "report_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "metadata_io.R"))
-source_utf8(file.path(.script_dir, "helpers", "layer_config_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "ambient_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_09.R"))
-source_utf8(file.path(.script_dir, "helpers", "trajectory_utils.R"))
+source(file.path(.script_dir, "helpers", "load_helpers_09.R"), encoding = "UTF-8")
 
 load_required_packages(c("Seurat", "dplyr", "jsonlite", "Matrix", "ggplot2"))
 
@@ -176,7 +160,7 @@ run_option_a_09h <- function(unit, sling_row) {
   assoc_tsv <- trajectory_method_output_path_09(cfg, "tradeseq", pair_id, split_value, "tradeseq_assoc", "tsv")
   pattern_tsv <- trajectory_method_output_path_09(cfg, "tradeseq", pair_id, split_value, "tradeseq_pattern", "tsv")
   driver_tsv <- trajectory_method_output_path_09(cfg, "tradeseq", pair_id, split_value, "tradeseq_drivers_top200", "tsv")
-  fig_png <- trajectory_method_figure_path_09(cfg, "tradeseq", pair_id, split_value, "Figure_5G_DriverHeatmap")
+  fig_png <- trajectory_method_figure_path_09(cfg, "tradeseq", pair_id, split_value, "Figure_Trajectory_DriverHeatmap")
   started <- proc.time()[["elapsed"]]
 
   row <- tryCatch({
@@ -225,7 +209,7 @@ run_option_b_09h <- function(pair_id, units_pair, sling_index) {
   split_values <- unique(vapply(units_pair$split_value, display_scalar_value, character(1), default = "pooled"))
   condition_tsv <- trajectory_method_output_path_09(cfg, "tradeseq", pair_id, "", "tradeseq_conditiontest", "tsv")
   driver_tsv <- trajectory_method_output_path_09(cfg, "tradeseq", pair_id, "", "tradeseq_drivers_condition_top200", "tsv")
-  fig_png <- trajectory_method_figure_path_09(cfg, "tradeseq", pair_id, "", "Figure_5G_ConditionTest")
+  fig_png <- trajectory_method_figure_path_09(cfg, "tradeseq", pair_id, "", "Figure_Trajectory_ConditionTest")
   started <- proc.time()[["elapsed"]]
   tryCatch({
     if (length(split_values) < 2 || all(split_values == "pooled")) {
@@ -286,7 +270,15 @@ run_option_b_09h <- function(pair_id, units_pair, sling_index) {
   })
 }
 
-units <- trajectory_execution_units_09(cfg)
+units_all <- trajectory_execution_units_09(cfg)
+enabled_mask <- if (nrow(units_all) > 0) {
+  vapply(seq_len(nrow(units_all)), function(i) {
+    trajectory_method_enabled_09(units_all[i, , drop = FALSE], "tradeseq")
+  }, logical(1))
+} else {
+  logical(0)
+}
+units <- units_all[enabled_mask, , drop = FALSE]
 slingshot_index <- read_slingshot_index_09h(cfg)
 index_rows <- list()
 dynamic_outputs <- list()
@@ -311,6 +303,33 @@ if (nrow(units) > 0) {
       dynamic_outputs[[sprintf("tradeseq_conditiontest_%s", safe_id_09(pair_id))]] <- build_output_entry(row$conditiontest_path[[1]], "tsv", module_name, "tradeSeq conditionTest output for split-mode pair", base_dir = cfg$project_root)
       dynamic_outputs[[sprintf("tradeseq_condition_drivers_%s_top200", safe_id_09(pair_id))]] <- build_output_entry(row$driver_path[[1]], "tsv", module_name, "top condition-dependent trajectory drivers", base_dir = cfg$project_root)
     }
+  }
+}
+
+if (nrow(units_all) > 0 && any(!enabled_mask)) {
+  disabled <- units_all[!enabled_mask, , drop = FALSE]
+  for (i in seq_len(nrow(disabled))) {
+    unit <- disabled[i, , drop = FALSE]
+    index_rows[[length(index_rows) + 1L]] <- data.frame(
+      pair_id = unit$pair_id[[1]],
+      split_value = display_scalar_value(unit$split_value[[1]], "pooled"),
+      method = "tradeseq",
+      methods_enabled = "no",
+      input_rds = unit$input_rds[[1]],
+      output_path = "",
+      extra_path = "",
+      figure_path = "",
+      n_cells = suppressWarnings(as.integer(unit$cell_n_after[[1]])),
+      status = "skipped_disabled",
+      reason = trajectory_method_disabled_reason_09(unit, "tradeseq"),
+      runtime_s = 0,
+      option = "disabled",
+      association_path = "",
+      pattern_path = "",
+      driver_path = "",
+      conditiontest_path = "",
+      stringsAsFactors = FALSE
+    )
   }
 }
 

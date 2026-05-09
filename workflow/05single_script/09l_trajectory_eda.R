@@ -9,23 +9,7 @@
   }
 )
 
-source_utf8 <- function(path) source(path, encoding = "UTF-8")
-
-source_utf8(file.path(.script_dir, "helpers", "runtime_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "config.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_02.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_03.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_04.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_05.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_06.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_07.R"))
-source_utf8(file.path(.script_dir, "helpers", "manifest_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "report_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "metadata_io.R"))
-source_utf8(file.path(.script_dir, "helpers", "layer_config_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "triage_utils.R"))
-source_utf8(file.path(.script_dir, "helpers", "project_paths_09.R"))
-source_utf8(file.path(.script_dir, "helpers", "trajectory_utils.R"))
+source(file.path(.script_dir, "helpers", "load_helpers_09.R"), encoding = "UTF-8")
 
 load_required_packages(c("dplyr", "jsonlite", "ggplot2"))
 
@@ -141,6 +125,7 @@ status_from_root_09l <- function(root_index) {
         sprintf("source=%s", display_scalar_value(row$selected_source[[1]], "NA")),
         sprintf("non_prior_vote=%s", display_scalar_value(row$non_prior_vote_root[[1]], "NA")),
         sprintf("disagreeing_methods=%s", display_scalar_value(row$disagreeing_methods[[1]], "none")),
+        sprintf("velocity_status=%s", display_scalar_value(row$velocity_status[[1]], "NA")),
         normalize_scalar_value(row$reason[[1]])
       ),
       collapse = "; "
@@ -210,7 +195,8 @@ root_index <- read_tsv_with_cols_09l(
   read_manifest_output_or_fallback_09l(cfg$module_09c_manifest_path, "trajectory_root_index", cfg$trajectory_root_index_tsv),
   c(
     "pair_id", "split_value", "selected_root", "selected_source", "status", "reason",
-    "non_prior_vote_root", "non_prior_vote_sources", "prior_disagreement", "disagreeing_methods"
+    "non_prior_vote_root", "non_prior_vote_sources", "prior_disagreement", "disagreeing_methods",
+    "velocity_status"
   )
 )
 root_agreement <- read_tsv_with_cols_09l(
@@ -314,6 +300,19 @@ if (nrow(root_index) > 0 && "prior_disagreement" %in% colnames(root_index)) {
         prior_disagree$disagreeing_methods[[i]]
       ),
       recommended_action = "Prior root_group is being honored, but inspect 09c root inference before treating directionality as method-supported."
+    )
+  }
+}
+
+if (nrow(root_index) > 0 && "velocity_status" %in% colnames(root_index)) {
+  missing_velocity <- root_index[root_index$velocity_status %in% c("skipped_no_velocity", "skipped_empty_velocity"), , drop = FALSE]
+  for (i in seq_len(nrow(missing_velocity))) {
+    triage_rows[[length(triage_rows) + 1L]] <- make_triage_row(
+      sample_id = missing_velocity$pair_id[[i]],
+      severity = "warning",
+      signal_id = "trajectory_velocity_support_missing",
+      evidence = sprintf("split=%s velocity_status=%s", missing_velocity$split_value[[i]], missing_velocity$velocity_status[[i]]),
+      recommended_action = "Run module 10 velocity first, then rerun 09c and 09j if velocity-supported root direction is required."
     )
   }
 }
