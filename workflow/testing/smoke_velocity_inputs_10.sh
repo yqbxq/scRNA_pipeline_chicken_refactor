@@ -6,8 +6,9 @@ cd "${REPO_ROOT}"
 
 bash -n workflow/05single_script/10a_run_velocyto.sh
 bash -n workflow/03stages/10_velocity.sh
+python3 -m py_compile workflow/04python/10c_scvelo_dynamical.py workflow/04python/10e_scvelo_drivers.py
 
-Rscript -e 'invisible(parse(file = "workflow/05single_script/10b_prepare_velocity_reference.R")); invisible(parse(file = "workflow/05single_script/helpers/project_paths_10.R")); invisible(parse(file = "workflow/05single_script/helpers/velocity_utils_10.R"))'
+Rscript -e 'invisible(parse(file = "workflow/05single_script/10b_prepare_velocity_reference.R")); invisible(parse(file = "workflow/05single_script/10d_velocyto_steady_state.R")); invisible(parse(file = "workflow/05single_script/helpers/project_paths_10.R")); invisible(parse(file = "workflow/05single_script/helpers/velocity_utils_10.R"))'
 
 R --slave <<'RS'
 .script_dir <- normalizePath("workflow/05single_script", winslash = "/", mustWork = TRUE)
@@ -16,8 +17,13 @@ source(file.path(.script_dir, "helpers", "load_helpers_10.R"), encoding = "UTF-8
 cfg <- get_single_script_config_10()
 stopifnot(grepl("10a_run_velocyto", cfg$module_10a_manifest_path, fixed = TRUE))
 stopifnot(grepl("10b_prepare_velocity_reference", cfg$module_10b_manifest_path, fixed = TRUE))
+stopifnot(grepl("10c_scvelo_dynamical", cfg$module_10c_manifest_path, fixed = TRUE))
+stopifnot(grepl("10d_velocyto_steady_state", cfg$module_10d_manifest_path, fixed = TRUE))
+stopifnot(grepl("10e_scvelo_drivers", cfg$module_10e_manifest_path, fixed = TRUE))
 stopifnot(identical(velocity_unit_file_id_10("H06_GC_velocity_split__velocity", "syf"), "H06_GC_velocity_split__velocity__syf"))
 stopifnot(identical(velocity_reference_output_key_10("velocity_umap", "H06", "f5"), "velocity_umap__H06__f5"))
+stopifnot(grepl("scvelo_result_H06__f5.h5ad", velocity_scvelo_h5ad_path_10(cfg, "H06", "f5"), fixed = TRUE))
+stopifnot(grepl("velocyto_steady_direction_H06__f5.tsv", velocity_velocyto_direction_path_10(cfg, "H06", "f5"), fixed = TRUE))
 
 pairs <- velocity_read_pairs_10(cfg)
 if (nrow(pairs) > 0) {

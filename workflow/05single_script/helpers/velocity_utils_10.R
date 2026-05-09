@@ -18,12 +18,126 @@ velocity_reference_index_cols_10 <- c(
   "produced_at"
 )
 
+velocity_method_index_cols_10 <- c(
+  "pair_id", "split_value", "method", "methods_enabled", "input_path",
+  "output_path", "extra_path", "figure_path", "n_cells", "status",
+  "reason", "runtime_s"
+)
+
+velocity_scvelo_index_cols_10 <- c(
+  velocity_method_index_cols_10,
+  "qc_tsv", "stochastic_status"
+)
+
+velocity_scvelo_qc_cols_10 <- c(
+  "pair_id", "split_value", "n_cells", "n_genes", "spliced_total",
+  "unspliced_total", "unspliced_spliced_ratio", "fit_likelihood_mean",
+  "fit_likelihood_median", "fit_likelihood_max", "velocity_gene_n",
+  "velocity_confidence_mean", "velocity_confidence_median",
+  "velocity_confidence_q05", "velocity_confidence_q95",
+  "velocity_length_mean", "velocity_confidence_stochastic_mean",
+  "velocity_length_stochastic_mean", "status", "reason"
+)
+
+velocity_driver_index_cols_10 <- c(
+  velocity_method_index_cols_10,
+  "driver_tsv", "driver_n", "velocity_gene_n"
+)
+
+velocity_driver_overlap_cols_10 <- c(
+  "pair_id", "split_a", "split_b", "driver_n_a", "driver_n_b",
+  "overlap_n", "jaccard", "overlap_genes"
+)
+
+velocity_velocyto_steady_index_cols_10 <- c(
+  velocity_method_index_cols_10,
+  "direction_tsv"
+)
+
 velocity_read_pairs_10 <- function(cfg) {
   pairs <- trajectory_read_pairs_09(cfg)
   if (nrow(pairs) == 0) {
     return(pairs)
   }
   pairs[pairs$enabled != "no" & pairs$method == "velocity", , drop = FALSE]
+}
+
+velocity_manifest_output_optional_10 <- function(manifest_path, key) {
+  trajectory_manifest_output_optional_09(manifest_path, key)
+}
+
+velocity_read_loom_index_10 <- function(cfg) {
+  path <- velocity_manifest_output_optional_10(cfg$module_10a_manifest_path, "velocity_loom_index")
+  if (!nzchar(path)) {
+    path <- cfg$velocity_loom_index_tsv
+  }
+  idx <- read_tsv_optional(path)
+  if (nrow(idx) == 0) {
+    return(velocity_empty_df_10(velocity_loom_index_cols_10))
+  }
+  for (col in velocity_loom_index_cols_10) {
+    if (!col %in% colnames(idx)) {
+      idx[[col]] <- ""
+    }
+  }
+  idx
+}
+
+velocity_read_reference_index_10 <- function(cfg, include_not_ok = FALSE) {
+  path <- velocity_manifest_output_optional_10(cfg$module_10b_manifest_path, "velocity_reference_index")
+  if (!nzchar(path)) {
+    path <- cfg$velocity_reference_index_tsv
+  }
+  idx <- read_tsv_optional(path)
+  if (nrow(idx) == 0) {
+    return(velocity_empty_df_10(velocity_reference_index_cols_10))
+  }
+  for (col in velocity_reference_index_cols_10) {
+    if (!col %in% colnames(idx)) {
+      idx[[col]] <- ""
+    }
+  }
+  if (!isTRUE(include_not_ok)) {
+    idx <- idx[idx$status == "ok", , drop = FALSE]
+  }
+  idx
+}
+
+velocity_execution_units_10 <- function(cfg, include_not_ok = FALSE) {
+  pairs <- velocity_read_pairs_10(cfg)
+  ref <- velocity_read_reference_index_10(cfg, include_not_ok = include_not_ok)
+  if (nrow(pairs) == 0 || nrow(ref) == 0) {
+    return(data.frame(stringsAsFactors = FALSE))
+  }
+  colnames(pairs)[colnames(pairs) == "trajectory_id"] <- "pair_id"
+  merged <- merge(
+    ref,
+    pairs,
+    by = "pair_id",
+    all.x = TRUE,
+    suffixes = c("", ".pair"),
+    sort = FALSE
+  )
+  for (base_col in c("source_question_id", "layer_scope", "coarse_label_var", "fine_label_var", "split_mode", "tools_to_run", "methods_extra")) {
+    pair_col <- paste0(base_col, ".pair")
+    if (!base_col %in% colnames(merged)) {
+      merged[[base_col]] <- ""
+    }
+    if (pair_col %in% colnames(merged)) {
+      empty <- !nzchar(normalize_flag(merged[[base_col]], ""))
+      merged[[base_col]][empty] <- merged[[pair_col]][empty]
+    }
+  }
+  pair_cols <- grep("\\.pair$", colnames(merged), value = TRUE)
+  merged[, !colnames(merged) %in% pair_cols, drop = FALSE]
+}
+
+velocity_method_enabled_10 <- function(pair_row, method, default = TRUE) {
+  trajectory_method_enabled_09(pair_row, method, default = default)
+}
+
+velocity_method_disabled_reason_10 <- function(pair_row, method) {
+  trajectory_method_disabled_reason_09(pair_row, method)
 }
 
 velocity_pair_id_10 <- function(pair_row) {

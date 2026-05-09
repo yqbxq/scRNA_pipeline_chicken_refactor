@@ -365,7 +365,10 @@ gate 规则采用 Option B：
 - `workflow/03stages/10_velocity.sh`
   - `10a_run_velocyto.sh`：从 dnbc4tools `anno_decon_sorted.bam` 和 `filtered_feature_bc_matrix.h5` 生成 per-sample `.loom`
   - `10b_prepare_velocity_reference.R`：按 `trajectory_pairs.tsv` 中 `method=velocity` 的 H05/H06 行导出 UMAP 和 metadata reference
-  - 完成 10a/10b 后会把 `velocity_inputs` gate 置为 `pending`；10c+ 下游 velocity 方法在该 gate 审阅通过后继续
+  - 完成 10a/10b 后会把 `velocity_inputs` gate 置为 `pending`
+  - `10c_scvelo_dynamical.py`：按 pooled/split unit 运行 scVelo dynamical，并记录 stochastic 旁路指标
+  - `10d_velocyto_steady_state.R`：运行 velocyto.R steady-state 交叉验证
+  - `10e_scvelo_drivers.py`：导出 scVelo driver gene top list 和 split overlap
 
 ### 5.15 Regulation / SCENIC / decoupleR
 
