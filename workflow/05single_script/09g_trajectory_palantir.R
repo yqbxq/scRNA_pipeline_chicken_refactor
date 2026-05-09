@@ -19,8 +19,7 @@ prepare_dirs_09(cfg)
 
 palantir_index_cols <- c(trajectory_method_index_cols_09, "fate_path")
 units_all <- trajectory_execution_units_09(cfg)
-global_palantir_enabled <- !identical(tolower(normalize_scalar_value(Sys.getenv("RUN_PALANTIR", "yes"), "yes")), "no")
-enabled_mask <- if (global_palantir_enabled && nrow(units_all) > 0) {
+enabled_mask <- if (nrow(units_all) > 0) {
   vapply(seq_len(nrow(units_all)), function(i) {
     trajectory_method_enabled_09(units_all[i, , drop = FALSE], "palantir")
   }, logical(1))
@@ -134,11 +133,7 @@ if (nrow(units_all) > 0 && any(!enabled_mask)) {
   disabled <- units_all[!enabled_mask, , drop = FALSE]
   for (i in seq_len(nrow(disabled))) {
     unit <- disabled[i, , drop = FALSE]
-    reason <- if (!global_palantir_enabled) {
-      "RUN_PALANTIR=no"
-    } else {
-      trajectory_method_disabled_reason_09(unit, "palantir")
-    }
+    reason <- trajectory_method_disabled_reason_09(unit, "palantir")
     index_rows[[length(index_rows) + 1L]] <- data.frame(
       pair_id = unit$pair_id[[1]],
       split_value = display_scalar_value(unit$split_value[[1]], "pooled"),
