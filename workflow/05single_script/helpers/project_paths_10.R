@@ -25,7 +25,8 @@ get_single_script_config_10 <- function() {
     `10f_cellrank_fate` = env_or_default_03("MODULE_10F_VERSION", base$module_10_version),
     `10g_velocity_consistency` = env_or_default_03("MODULE_10G_VERSION", base$module_10_version),
     `10h_velocity_root_terminal` = env_or_default_03("MODULE_10H_VERSION", base$module_10_version),
-    `10i_velocity_eda` = env_or_default_03("MODULE_10I_VERSION", base$module_10_version)
+    `10i_velocity_eda` = env_or_default_03("MODULE_10I_VERSION", base$module_10_version),
+    `09_10_preflight` = env_or_default_03("MODULE_09_10_PREFLIGHT_VERSION", base$module_10_version)
   )
 
   base$module_10a_manifest_path <- file.path(base$manifest_dir, "10a_run_velocyto", "_manifest.json")
@@ -37,6 +38,7 @@ get_single_script_config_10 <- function() {
   base$module_10g_manifest_path <- file.path(base$manifest_dir, "10g_velocity_consistency", "_manifest.json")
   base$module_10h_manifest_path <- file.path(base$manifest_dir, "10h_velocity_root_terminal", "_manifest.json")
   base$module_10i_manifest_path <- file.path(base$manifest_dir, "10i_velocity_eda", "_manifest.json")
+  base$module_09_10_preflight_manifest_path <- file.path(base$manifest_dir, "09_10_preflight", "_manifest.json")
 
   base$velocity_dir <- env_or_default_03("VELOCITY_DIR", file.path(base$results_dir, "velocity"))
   base$velocity_input_dir <- env_or_default_03("VELOCITY_INPUT_DIR", file.path(base$velocity_dir, "input"))
@@ -75,6 +77,10 @@ get_single_script_config_10 <- function() {
   base$velocity_module_status_tsv <- file.path(base$velocity_final_table_dir, "velocity_module_status.tsv")
   base$velocity_triage_tsv <- file.path(base$velocity_final_table_dir, "velocity_triage.tsv")
   base$velocity_report_md <- file.path(base$velocity_report_dir, "report.md")
+  base$trajectory_velocity_preflight_table_dir <- file.path(base$table_dir, "trajectory_velocity_preflight")
+  base$trajectory_velocity_preflight_report_dir <- file.path(base$eda_report_dir, "trajectory_velocity_preflight")
+  base$trajectory_velocity_preflight_tsv <- file.path(base$trajectory_velocity_preflight_table_dir, "preflight_checks.tsv")
+  base$trajectory_velocity_preflight_report_md <- file.path(base$trajectory_velocity_preflight_report_dir, "report.md")
 
   base$dnbc4tools_out_dir <- env_or_default_03("DNBC4TOOLS_OUT_DIR", file.path(base$data_dir, "dnbc4tools_out"))
   base$velocity_bam_pattern <- env_or_default_03("VELOCITY_BAM_PATTERN", "anno_decon_sorted.bam")
@@ -143,7 +149,12 @@ prepare_dirs_10 <- function(cfg) {
     dirname(cfg$module_10f_manifest_path),
     dirname(cfg$module_10g_manifest_path),
     dirname(cfg$module_10h_manifest_path),
-    dirname(cfg$module_10i_manifest_path)
+    dirname(cfg$module_10i_manifest_path),
+    dirname(cfg$module_09_10_preflight_manifest_path),
+    cfg$trajectory_velocity_preflight_table_dir,
+    cfg$trajectory_velocity_preflight_report_dir,
+    dirname(cfg$trajectory_velocity_preflight_tsv),
+    dirname(cfg$trajectory_velocity_preflight_report_md)
   )
   invisible(lapply(ensure_dirs[nzchar(ensure_dirs)], ensure_dir))
 }

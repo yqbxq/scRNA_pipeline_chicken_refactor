@@ -44,6 +44,7 @@ assert_before() {
 }
 
 for shell_file in \
+  workflow/03stages/09_10_preflight.sh \
   workflow/03stages/09_trajectory.sh \
   workflow/03stages/10_velocity.sh \
   workflow/03stages/10_velocity_finalize.sh \
@@ -61,6 +62,10 @@ assert_contains workflow/02lib/stage.sh "10_velocity)"
 assert_contains workflow/02lib/stage.sh "10_velocity_finalize)"
 assert_contains workflow/02lib/stage.sh "status.10_velocity_stage3_completed"
 assert_contains workflow/02lib/stage.sh "\"10_velocity_completed\""
+
+assert_contains workflow/03stages/09_10_preflight.sh "09_10_preflight.R"
+assert_contains workflow/05single_script/09_10_preflight.R "velocity_cell_namespace_overlap"
+assert_contains workflow/05single_script/09_10_preflight.R "PREFLIGHT_STRICT"
 
 assert_before workflow/03stages/09_trajectory.sh "hold_for_gate trajectory_inputs" "09c_trajectory_root.R"
 assert_before workflow/03stages/09_trajectory.sh "hold_for_gate trajectory_methods" "09h_trajectory_tradeseq.R"

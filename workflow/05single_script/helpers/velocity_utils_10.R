@@ -216,6 +216,68 @@ velocity_method_disabled_reason_10 <- function(pair_row, method) {
   trajectory_method_disabled_reason_09(pair_row, method)
 }
 
+velocity_normalize_barcode_10 <- function(barcode) {
+  barcode <- normalize_scalar_value(barcode)
+  if (!nzchar(barcode)) {
+    return("")
+  }
+  if (endsWith(barcode, "x")) {
+    barcode <- paste0(substr(barcode, 1L, nchar(barcode) - 1L), "-1")
+  } else if (!grepl("-[0-9]+$", barcode)) {
+    barcode <- paste0(barcode, "-1")
+  }
+  barcode
+}
+
+velocity_cell_ids_from_meta_10 <- function(meta) {
+  raw_ids <- rownames(meta)
+  sample_ids <- rep("", length(raw_ids))
+  if ("sample_id" %in% colnames(meta)) {
+    sample_ids <- as.character(meta$sample_id)
+  } else if ("orig.ident" %in% colnames(meta)) {
+    sample_ids <- as.character(meta$orig.ident)
+  }
+  sample_ids[is.na(sample_ids)] <- ""
+
+  out <- mapply(function(raw_id, sample_id) {
+    raw_id <- normalize_scalar_value(raw_id)
+    sample_id <- normalize_scalar_value(sample_id)
+    if (!nzchar(raw_id)) {
+      return("")
+    }
+
+    if (grepl(":", raw_id, fixed = TRUE)) {
+      parts <- strsplit(raw_id, ":", fixed = TRUE)[[1]]
+      sample <- normalize_scalar_value(parts[[1]])
+      barcode <- paste(parts[-1], collapse = ":")
+      barcode <- velocity_normalize_barcode_10(barcode)
+      if (nzchar(sample) && nzchar(barcode)) {
+        return(paste(sample, barcode, sep = ":"))
+      }
+    }
+
+    if (nzchar(sample_id)) {
+      barcode <- raw_id
+      sample_prefixes <- c(paste0(sample_id, "_"), paste0(sample_id, ":"))
+      for (prefix in sample_prefixes) {
+        if (startsWith(barcode, prefix)) {
+          barcode <- substring(barcode, nchar(prefix) + 1L)
+          break
+        }
+      }
+      barcode <- velocity_normalize_barcode_10(barcode)
+      if (nzchar(barcode)) {
+        return(paste(sample_id, barcode, sep = ":"))
+      }
+    }
+
+    raw_id
+  }, raw_ids, sample_ids, USE.NAMES = FALSE)
+
+  names(out) <- raw_ids
+  out
+}
+
 velocity_pair_id_10 <- function(pair_row) {
   normalize_scalar_value(pair_row$trajectory_id[[1]])
 }

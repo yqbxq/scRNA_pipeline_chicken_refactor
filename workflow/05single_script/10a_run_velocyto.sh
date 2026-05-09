@@ -165,6 +165,31 @@ resolve_matrix_h5_10a() {
   echo "${path}"
 }
 
+find_first_loom_10a() {
+  local root="$1"
+  local sample_id="$2"
+  [[ -d "${root}" ]] || return 1
+  find "${root}" -type f -name "*.loom" -path "*/${sample_id}/*" -print -quit 2>/dev/null
+}
+
+resolve_existing_loom_10a() {
+  local sample_id="$1"
+  local path=""
+  path="$(first_existing_file_10a \
+    "${VELOCITY_LOOM_DIR}/${sample_id}.loom" \
+    "${DNBC4TOOLS_OUT_DIR}/${sample_id}/velocyto/${sample_id}.loom" \
+    "${DNBC4TOOLS_OUT_DIR}/${sample_id}/outs/velocyto/${sample_id}.loom" \
+    "${CELLRANGER_OUT_DIR}/${sample_id}/velocyto/${sample_id}.loom" \
+    "${CELLRANGER_OUT_DIR}/${sample_id}/outs/velocyto/${sample_id}.loom" || true)"
+  if [[ -z "${path}" ]]; then
+    path="$(find_first_loom_10a "${DNBC4TOOLS_OUT_DIR}" "${sample_id}" || true)"
+  fi
+  if [[ -z "${path}" && -n "${CELLRANGER_OUT_DIR}" ]]; then
+    path="$(find_first_loom_10a "${CELLRANGER_OUT_DIR}" "${sample_id}" || true)"
+  fi
+  echo "${path}"
+}
+
 extract_whitelist_10a() {
   local matrix_h5="$1"
   local whitelist_path="$2"
@@ -357,8 +382,21 @@ for sample_id in "${sample_ids[@]}"; do
   matrix_h5="$(resolve_matrix_h5_10a "${sample_id}")"
   whitelist_path="${VELOCITY_BARCODE_DIR}/${sample_id}_barcodes.tsv"
   loom_path="${VELOCITY_LOOM_DIR}/${sample_id}.loom"
+  existing_loom_path="$(resolve_existing_loom_10a "${sample_id}")"
   runtime_s=0
   command_text=""
+
+  if [[ -n "${existing_loom_path}" ]]; then
+    loom_path="${existing_loom_path}"
+    command_text="reuse_existing_loom"
+    reason="existing loom reused"
+    if [[ -z "${bam_path}" || -z "${matrix_h5}" ]]; then
+      reason="existing loom reused; BAM/H5 not resolved"
+    fi
+    append_index_row_10a "${sample_id}" "${bam_path}" "${matrix_h5}" "${whitelist_path}" "${loom_path}" "ok_existing" "${reason}" "${runtime_s}" "${command_text}"
+    append_job_row_10a "${sample_id}" "${bam_path}" "${matrix_h5}" "${whitelist_path}" "${loom_path}" "${command_text}"
+    continue
+  fi
 
   if [[ -z "${bam_path}" || -z "${matrix_h5}" ]]; then
     reason="missing BAM or filtered_feature_bc_matrix.h5"

@@ -362,9 +362,12 @@ gate 规则采用 Option B：
 
 ### 5.14 RNA velocity
 
+- `workflow/03stages/09_10_preflight.sh`
+  - 在重型运行前检查 `trajectory_pairs.tsv` schema、layer_scope、split values、root/terminal 标签、velocity loom/BAM/H5/GTF 和 Seurat/loom cell id 命名空间
+  - 输出 `results/tables/trajectory_velocity_preflight/preflight_checks.tsv` 和 `reports/eda/trajectory_velocity_preflight/report.md`
 - `workflow/03stages/10_velocity.sh`
-  - `10a_run_velocyto.sh`：从 dnbc4tools `anno_decon_sorted.bam` 和 `filtered_feature_bc_matrix.h5` 生成 per-sample `.loom`
-  - `10b_prepare_velocity_reference.R`：按 `trajectory_pairs.tsv` 中 `method=velocity` 的 H05/H06 行导出 UMAP 和 metadata reference
+  - `10a_run_velocyto.sh`：从 dnbc4tools/Cell Ranger BAM 和 `filtered_feature_bc_matrix.h5` 生成 per-sample `.loom`；如果已存在匹配 `.loom`，会直接复用并写入 index
+  - `10b_prepare_velocity_reference.R`：按 `trajectory_pairs.tsv` 中 `method=velocity` 的 H05/H06 行导出 UMAP 和 metadata reference，cell id 规范为 scVelo 使用的 `sample:barcode`
   - 完成 10a/10b 后会把 `velocity_inputs` gate 置为 `pending`
   - `10c_scvelo_dynamical.py`：按 pooled/split unit 运行 scVelo dynamical，并记录 stochastic 旁路指标
   - `10d_velocyto_steady_state.R`：运行 velocyto.R steady-state 交叉验证
@@ -449,6 +452,7 @@ bash workflow/01run.sh <stage>
 如果要 RNA velocity：
 
 ```bash
+bash workflow/03stages/09_10_preflight.sh
 bash workflow/03stages/09_10_trajectory_velocity.sh
 ```
 

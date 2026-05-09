@@ -57,7 +57,7 @@ velocity_subset_object_10b <- function(source_obj, split_var, split_value) {
 
 velocity_metadata_export_10b <- function(seu, pair_row, split_var) {
   meta <- seu@meta.data
-  meta$cell_id <- rownames(meta)
+  meta$cell_id <- velocity_cell_ids_from_meta_10(meta)
 
   coarse <- normalize_scalar_value(pair_row$coarse_label_var[[1]])
   fine <- normalize_scalar_value(pair_row$fine_label_var[[1]])
@@ -105,8 +105,9 @@ velocity_umap_export_10b <- function(seu) {
   if (length(cells) == 0) {
     stop("velocity reference UMAP has no overlap with object cells", call. = FALSE)
   }
+  cell_ids <- velocity_cell_ids_from_meta_10(seu@meta.data)
   data.frame(
-    cell_id = cells,
+    cell_id = unname(cell_ids[cells]),
     UMAP_1 = emb[cells, 1],
     UMAP_2 = emb[cells, 2],
     stringsAsFactors = FALSE,
@@ -137,6 +138,9 @@ prepare_one_velocity_reference_10b <- function(pair_row, layer_row, source_obj, 
 
   umap_df <- velocity_umap_export_10b(ref_obj)
   meta_df <- velocity_metadata_export_10b(ref_obj, pair_row, split_var)
+  if (anyDuplicated(meta_df$cell_id) > 0 || anyDuplicated(umap_df$cell_id) > 0) {
+    stop("normalized velocity cell_id values are duplicated", call. = FALSE)
+  }
   common_cells <- intersect(umap_df$cell_id, meta_df$cell_id)
   if (length(common_cells) == 0) {
     stop("velocity metadata and UMAP exports have no overlapping cell_id values", call. = FALSE)

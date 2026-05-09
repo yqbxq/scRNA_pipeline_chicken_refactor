@@ -5,12 +5,13 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${REPO_ROOT}"
 
 bash -n workflow/05single_script/10a_run_velocyto.sh
+bash -n workflow/03stages/09_10_preflight.sh
 bash -n workflow/03stages/10_velocity.sh
 bash -n workflow/03stages/10_velocity_finalize.sh
 bash -n workflow/03stages/09_10_trajectory_velocity.sh
 python3 -m py_compile workflow/04python/10c_scvelo_dynamical.py workflow/04python/10e_scvelo_drivers.py workflow/04python/10f_cellrank_fate.py
 
-Rscript -e 'invisible(parse(file = "workflow/05single_script/10b_prepare_velocity_reference.R")); invisible(parse(file = "workflow/05single_script/10d_velocyto_steady_state.R")); invisible(parse(file = "workflow/05single_script/10g_velocity_consistency.R")); invisible(parse(file = "workflow/05single_script/10h_velocity_root_terminal.R")); invisible(parse(file = "workflow/05single_script/10i_velocity_eda.R")); invisible(parse(file = "workflow/05single_script/helpers/project_paths_10.R")); invisible(parse(file = "workflow/05single_script/helpers/velocity_utils_10.R"))'
+Rscript -e 'invisible(parse(file = "workflow/05single_script/09_10_preflight.R")); invisible(parse(file = "workflow/05single_script/10b_prepare_velocity_reference.R")); invisible(parse(file = "workflow/05single_script/10d_velocyto_steady_state.R")); invisible(parse(file = "workflow/05single_script/10g_velocity_consistency.R")); invisible(parse(file = "workflow/05single_script/10h_velocity_root_terminal.R")); invisible(parse(file = "workflow/05single_script/10i_velocity_eda.R")); invisible(parse(file = "workflow/05single_script/helpers/project_paths_10.R")); invisible(parse(file = "workflow/05single_script/helpers/velocity_utils_10.R"))'
 
 R --slave <<'RS'
 .script_dir <- normalizePath("workflow/05single_script", winslash = "/", mustWork = TRUE)
@@ -26,8 +27,11 @@ stopifnot(grepl("10f_cellrank_fate", cfg$module_10f_manifest_path, fixed = TRUE)
 stopifnot(grepl("10g_velocity_consistency", cfg$module_10g_manifest_path, fixed = TRUE))
 stopifnot(grepl("10h_velocity_root_terminal", cfg$module_10h_manifest_path, fixed = TRUE))
 stopifnot(grepl("10i_velocity_eda", cfg$module_10i_manifest_path, fixed = TRUE))
+stopifnot(grepl("09_10_preflight", cfg$module_09_10_preflight_manifest_path, fixed = TRUE))
 stopifnot(identical(velocity_unit_file_id_10("H06_GC_velocity_split__velocity", "syf"), "H06_GC_velocity_split__velocity__syf"))
 stopifnot(identical(velocity_reference_output_key_10("velocity_umap", "H06", "f5"), "velocity_umap__H06__f5"))
+test_meta <- data.frame(sample_id = c("S1", "S1"), row.names = c("S1_AAACx", "S1_TTTT-1"))
+stopifnot(identical(unname(velocity_cell_ids_from_meta_10(test_meta)), c("S1:AAAC-1", "S1:TTTT-1")))
 stopifnot(grepl("scvelo_result_H06__f5.h5ad", velocity_scvelo_h5ad_path_10(cfg, "H06", "f5"), fixed = TRUE))
 stopifnot(grepl("velocyto_steady_direction_H06__f5.tsv", velocity_velocyto_direction_path_10(cfg, "H06", "f5"), fixed = TRUE))
 stopifnot(grepl("cellrank_fate_H06__f5.csv", velocity_cellrank_fate_path_10(cfg, "H06", "f5"), fixed = TRUE))
