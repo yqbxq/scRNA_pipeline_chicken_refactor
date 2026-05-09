@@ -372,6 +372,7 @@ gate 规则采用 Option B：
   - `10f_cellrank_fate.py`：默认运行 CellRank fate/macrostates，可用 `methods_extra=-cellrank` 禁用
   - `10g_velocity_consistency.R`：汇总 scVelo/stochastic/velocyto/Slingshot/CellRank 一致性和 split 比较
   - `10h_velocity_root_terminal.R`：输出 09c 可反向读取的 `velocity_root_terminal_<unit>.tsv`
+  - `10i_velocity_eda.R`：生成 `velocity_module_status.tsv`、`velocity_triage.tsv` 和 velocity finalize 报告；可通过 `10_velocity_finalize.sh` 单独刷新
 
 ### 5.15 Regulation / SCENIC / decoupleR
 

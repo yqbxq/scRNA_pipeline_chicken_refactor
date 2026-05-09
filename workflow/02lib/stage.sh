@@ -162,6 +162,12 @@ check_stage_deps() {
         "status.velocity_upstream_ready" \
         "10_velocity 需要 velocity_upstream_ready=true；请先完成 intake/audit 并确认 BAM 输入可用。"
       ;;
+    10_velocity_finalize)
+      sync_workflow_gate_statuses
+      require_status_flag_or_warn \
+        "status.10_velocity_stage3_completed" \
+        "10_velocity_finalize 需要先完成 10_velocity stage3。"
+      ;;
     *)
       warn "未定义 ${stage_id} 的依赖规则，按无依赖继续。"
       ;;
@@ -496,6 +502,8 @@ for key in (
     "10g_velocity_consistency_completed",
     "10h_velocity_root_terminal_completed",
     "10_velocity_stage3_completed",
+    "10i_velocity_eda_completed",
+    "10_velocity_completed",
     "main_upstream_ready",
     "velocity_upstream_ready",
     "ambient_upstream_ready",

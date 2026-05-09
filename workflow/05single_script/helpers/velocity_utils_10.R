@@ -85,6 +85,11 @@ velocity_root_terminal_cols_10 <- c(
   "terminal_probability", "latent_time_mean", "status", "reason"
 )
 
+velocity_module_status_cols_10 <- c(
+  "pair_id", "value", "method", "methods_enabled", "status",
+  "n_cells_used", "runtime_s", "metric_value", "notes"
+)
+
 velocity_read_pairs_10 <- function(cfg) {
   pairs <- trajectory_read_pairs_09(cfg)
   if (nrow(pairs) == 0) {

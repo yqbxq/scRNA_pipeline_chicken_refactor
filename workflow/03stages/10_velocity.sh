@@ -154,7 +154,7 @@ require_manifest_output "${MODULE_10H_MANIFEST}" "velocity_root_terminal_index_t
 sync_workflow_gate_statuses
 update_workflow_status \
   "10_velocity_stage3_completed" \
-  "continue module 10 with final velocity report component 10i" \
+  "run 10_velocity_finalize.sh to refresh 10g and generate 10i velocity EDA" \
   "status.10a_velocity_loom_completed=true" \
   "status.10b_velocity_reference_completed=true" \
   "status.10_velocity_inputs_completed=true" \

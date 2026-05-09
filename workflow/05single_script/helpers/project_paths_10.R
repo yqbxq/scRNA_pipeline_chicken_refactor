@@ -24,7 +24,8 @@ get_single_script_config_10 <- function() {
     `10e_scvelo_drivers` = env_or_default_03("MODULE_10E_VERSION", base$module_10_version),
     `10f_cellrank_fate` = env_or_default_03("MODULE_10F_VERSION", base$module_10_version),
     `10g_velocity_consistency` = env_or_default_03("MODULE_10G_VERSION", base$module_10_version),
-    `10h_velocity_root_terminal` = env_or_default_03("MODULE_10H_VERSION", base$module_10_version)
+    `10h_velocity_root_terminal` = env_or_default_03("MODULE_10H_VERSION", base$module_10_version),
+    `10i_velocity_eda` = env_or_default_03("MODULE_10I_VERSION", base$module_10_version)
   )
 
   base$module_10a_manifest_path <- file.path(base$manifest_dir, "10a_run_velocyto", "_manifest.json")
@@ -35,6 +36,7 @@ get_single_script_config_10 <- function() {
   base$module_10f_manifest_path <- file.path(base$manifest_dir, "10f_cellrank_fate", "_manifest.json")
   base$module_10g_manifest_path <- file.path(base$manifest_dir, "10g_velocity_consistency", "_manifest.json")
   base$module_10h_manifest_path <- file.path(base$manifest_dir, "10h_velocity_root_terminal", "_manifest.json")
+  base$module_10i_manifest_path <- file.path(base$manifest_dir, "10i_velocity_eda", "_manifest.json")
 
   base$velocity_dir <- env_or_default_03("VELOCITY_DIR", file.path(base$results_dir, "velocity"))
   base$velocity_input_dir <- env_or_default_03("VELOCITY_INPUT_DIR", file.path(base$velocity_dir, "input"))
@@ -49,10 +51,12 @@ get_single_script_config_10 <- function() {
   base$velocity_cellrank_table_dir <- file.path(base$velocity_methods_table_dir, "cellrank")
   base$velocity_consistency_table_dir <- file.path(base$velocity_methods_table_dir, "consistency")
   base$velocity_root_terminal_table_dir <- file.path(base$velocity_methods_table_dir, "root_terminal")
+  base$velocity_final_table_dir <- file.path(base$velocity_table_dir, "final")
   base$velocity_figure_dir <- file.path(base$figure_dir, "velocity")
   base$velocity_scvelo_figure_dir <- file.path(base$velocity_figure_dir, "scvelo")
   base$velocity_cellrank_figure_dir <- file.path(base$velocity_figure_dir, "cellrank")
   base$velocity_consistency_figure_dir <- file.path(base$velocity_figure_dir, "consistency")
+  base$velocity_report_dir <- env_or_default_03("VELOCITY_REPORT_DIR", file.path(base$eda_report_dir, "velocity"))
   base$velocity_barcode_dir <- file.path(base$velocity_input_dir, "barcodes")
 
   base$velocity_loom_jobs_tsv <- file.path(base$velocity_input_table_dir, "velocity_loom_jobs.tsv")
@@ -68,6 +72,9 @@ get_single_script_config_10 <- function() {
   base$velocity_consistency_summary_tsv <- file.path(base$velocity_consistency_table_dir, "velocity_consistency_summary.tsv")
   base$velocity_split_compare_tsv <- file.path(base$velocity_consistency_table_dir, "velocity_split_compare.tsv")
   base$velocity_root_terminal_index_tsv <- file.path(base$velocity_root_terminal_table_dir, "velocity_root_terminal_index.tsv")
+  base$velocity_module_status_tsv <- file.path(base$velocity_final_table_dir, "velocity_module_status.tsv")
+  base$velocity_triage_tsv <- file.path(base$velocity_final_table_dir, "velocity_triage.tsv")
+  base$velocity_report_md <- file.path(base$velocity_report_dir, "report.md")
 
   base$dnbc4tools_out_dir <- env_or_default_03("DNBC4TOOLS_OUT_DIR", file.path(base$data_dir, "dnbc4tools_out"))
   base$velocity_bam_pattern <- env_or_default_03("VELOCITY_BAM_PATTERN", "anno_decon_sorted.bam")
@@ -105,10 +112,12 @@ prepare_dirs_10 <- function(cfg) {
     cfg$velocity_cellrank_table_dir,
     cfg$velocity_consistency_table_dir,
     cfg$velocity_root_terminal_table_dir,
+    cfg$velocity_final_table_dir,
     cfg$velocity_figure_dir,
     cfg$velocity_scvelo_figure_dir,
     cfg$velocity_cellrank_figure_dir,
     cfg$velocity_consistency_figure_dir,
+    cfg$velocity_report_dir,
     cfg$velocity_barcode_dir,
     dirname(cfg$velocity_loom_jobs_tsv),
     dirname(cfg$velocity_loom_index_tsv),
@@ -123,6 +132,9 @@ prepare_dirs_10 <- function(cfg) {
     dirname(cfg$velocity_consistency_summary_tsv),
     dirname(cfg$velocity_split_compare_tsv),
     dirname(cfg$velocity_root_terminal_index_tsv),
+    dirname(cfg$velocity_module_status_tsv),
+    dirname(cfg$velocity_triage_tsv),
+    dirname(cfg$velocity_report_md),
     dirname(cfg$module_10a_manifest_path),
     dirname(cfg$module_10b_manifest_path),
     dirname(cfg$module_10c_manifest_path),
@@ -130,7 +142,8 @@ prepare_dirs_10 <- function(cfg) {
     dirname(cfg$module_10e_manifest_path),
     dirname(cfg$module_10f_manifest_path),
     dirname(cfg$module_10g_manifest_path),
-    dirname(cfg$module_10h_manifest_path)
+    dirname(cfg$module_10h_manifest_path),
+    dirname(cfg$module_10i_manifest_path)
   )
   invisible(lapply(ensure_dirs[nzchar(ensure_dirs)], ensure_dir))
 }

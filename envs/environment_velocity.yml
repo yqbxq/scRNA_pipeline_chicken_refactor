@@ -4,13 +4,13 @@ channels:
   - bioconda
 dependencies:
   - python=3.10
-  - scvelo=0.3.2
+  - scvelo=0.3.4
   - scanpy=1.10.3
   - anndata=0.10.8
   - loompy=3.0.8
   - velocyto.py=0.17.17
   - numpy=1.26
-  - scipy=1.11
+  - scipy=1.15
   - pandas=2.2
   - matplotlib=3.9
   - seaborn=0.13
@@ -23,3 +23,4 @@ dependencies:
       - scanorama==1.7.4
       - scrublet==0.2.3
       - palantir
+      - cellrank==2.0.7
