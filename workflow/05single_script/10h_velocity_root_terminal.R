@@ -43,6 +43,19 @@ scale01_10h <- function(x) {
   out
 }
 
+shrink_probability_10h <- function(prob, cell_n, min_cells) {
+  prob <- suppressWarnings(as.numeric(prob))
+  cell_n <- suppressWarnings(as.numeric(cell_n))
+  out <- prob
+  keep <- is.finite(prob) & is.finite(cell_n)
+  if (!any(keep)) {
+    return(out)
+  }
+  weight <- pmin(1, pmax(0, cell_n[keep] / max(1, min_cells)))
+  out[keep] <- 0.5 + (prob[keep] - 0.5) * weight
+  out
+}
+
 empty_index_row_10h <- function(unit, out_tsv, status, reason, runtime_s = 0) {
   data.frame(
     pair_id = unit$pair_id[[1]],
@@ -105,12 +118,19 @@ root_terminal_table_10h <- function(unit, cellrank_index) {
     )
   grouped$latent_time_mean[!is.finite(grouped$latent_time_mean)] <- NA_real_
   grouped$terminal_probability[!is.finite(grouped$terminal_probability)] <- NA_real_
-  grouped$initial_probability <- 1 - grouped$latent_time_mean
-  grouped$terminal_score <- ifelse(is.finite(grouped$terminal_probability), grouped$terminal_probability, grouped$latent_time_mean)
+  min_cells_for_score <- cfg$velocity_root_terminal_min_cells_per_cluster
+  grouped$initial_probability <- shrink_probability_10h(1 - grouped$latent_time_mean, grouped$cell_n, min_cells_for_score)
+  grouped$terminal_probability <- shrink_probability_10h(grouped$terminal_probability, grouped$cell_n, min_cells_for_score)
+  latent_terminal_score <- shrink_probability_10h(grouped$latent_time_mean, grouped$cell_n, min_cells_for_score)
+  grouped$terminal_score <- ifelse(is.finite(grouped$terminal_probability), grouped$terminal_probability, latent_terminal_score)
   grouped$initial_score <- grouped$initial_probability
   grouped$root_score <- grouped$initial_score
   grouped$status <- "ok"
-  grouped$reason <- ""
+  grouped$reason <- ifelse(
+    grouped$cell_n < min_cells_for_score,
+    sprintf("probabilities shrunk toward 0.5 because cell_n < %s", min_cells_for_score),
+    ""
+  )
   out <- data.frame(
     pair_id = pair_id,
     split_value = split_value,

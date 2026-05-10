@@ -179,6 +179,14 @@ write_direction_10d <- function(vfit, pair_id, split_value, path) {
   out
 }
 
+velocyto_core_count_10d <- function(cfg) {
+  cores <- suppressWarnings(as.integer(cfg$velocyto_threads))
+  if (length(cores) == 0 || is.na(cores)) {
+    cores <- 1L
+  }
+  max(1L, min(4L, cores))
+}
+
 run_unit_10d <- function(unit, loom_index) {
   pair_id <- unit$pair_id[[1]]
   split_value <- display_scalar_value(unit$split_value[[1]], "pooled")
@@ -216,7 +224,7 @@ run_unit_10d <- function(unit, loom_index) {
       deltaT = 1,
       kCells = k_cells,
       fit.quantile = 0.02,
-      n.cores = max(1L, min(4L, cfg$velocyto_threads %||% 1L))
+      n.cores = velocyto_core_count_10d(cfg)
     )
     ensure_dir(dirname(output_path))
     saveRDS(

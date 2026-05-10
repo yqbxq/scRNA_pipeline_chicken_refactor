@@ -11,6 +11,47 @@ bash -n workflow/03stages/10_velocity_finalize.sh
 bash -n workflow/03stages/09_10_trajectory_velocity.sh
 python3 -m py_compile workflow/04python/10c_scvelo_dynamical.py workflow/04python/10e_scvelo_drivers.py workflow/04python/10f_cellrank_fate.py
 
+python3 - <<'PY'
+from pathlib import Path
+
+checks = {
+    "workflow/04python/10c_scvelo_dynamical.py": [
+        "samples_from_metadata(meta_df)",
+        "cache=False",
+        "scv.tl.velocity_pseudotime(adata)",
+        "scv.tl.recover_dynamics(adata, n_jobs=args.threads)",
+    ],
+    "workflow/05single_script/10g_velocity_consistency.R": [
+        "merge_by_normalized_cell_10g",
+        "dynamical_vs_stochastic_cosine_frac_positive",
+    ],
+    "workflow/05single_script/10h_velocity_root_terminal.R": [
+        "shrink_probability_10h",
+        "velocity_root_terminal_min_cells_per_cluster",
+    ],
+    "workflow/04python/10f_cellrank_fate.py": [
+        "requires at least 50 cells",
+    ],
+}
+for path, patterns in checks.items():
+    text = Path(path).read_text(encoding="utf-8")
+    missing = [pattern for pattern in patterns if pattern not in text]
+    if missing:
+        raise SystemExit(f"{path} missing expected patterns: {missing}")
+
+for path in [
+    "workflow/04python/10c_scvelo_dynamical.py",
+    "workflow/04python/10e_scvelo_drivers.py",
+    "workflow/04python/10f_cellrank_fate.py",
+    "workflow/05single_script/helpers/velocity_utils_10.R",
+    "workflow/05single_script/10i_velocity_eda.R",
+]:
+    text = Path(path).read_text(encoding="utf-8")
+    forbidden = [pattern for pattern in ["ok_stochastic_only", "restore_stochastic_outputs"] if pattern in text]
+    if forbidden:
+        raise SystemExit(f"{path} contains forbidden fallback patterns: {forbidden}")
+PY
+
 Rscript -e 'invisible(parse(file = "workflow/05single_script/09_10_preflight.R")); invisible(parse(file = "workflow/05single_script/10b_prepare_velocity_reference.R")); invisible(parse(file = "workflow/05single_script/10d_velocyto_steady_state.R")); invisible(parse(file = "workflow/05single_script/10g_velocity_consistency.R")); invisible(parse(file = "workflow/05single_script/10h_velocity_root_terminal.R")); invisible(parse(file = "workflow/05single_script/10i_velocity_eda.R")); invisible(parse(file = "workflow/05single_script/helpers/project_paths_10.R")); invisible(parse(file = "workflow/05single_script/helpers/velocity_utils_10.R"))'
 
 R --slave <<'RS'

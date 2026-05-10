@@ -83,6 +83,60 @@ read_delim_optional_10g <- function(path) {
   }
 }
 
+normalize_barcode_10g <- function(cell_id) {
+  barcode <- trimws(as.character(cell_id))
+  if (grepl(":", barcode, fixed = TRUE)) {
+    parts <- strsplit(barcode, ":", fixed = TRUE)[[1]]
+    barcode <- paste(parts[-1], collapse = ":")
+  }
+  if (grepl("x$", barcode)) {
+    barcode <- sub("x$", "-1", barcode)
+  } else if (nzchar(barcode) && !grepl("-[0-9]+$", barcode)) {
+    barcode <- paste0(barcode, "-1")
+  }
+  barcode
+}
+
+normalize_cell_id_full_10g <- function(cell_id) {
+  cell_id <- trimws(as.character(cell_id))
+  if (!nzchar(cell_id)) {
+    return("")
+  }
+  if (grepl(":", cell_id, fixed = TRUE)) {
+    parts <- strsplit(cell_id, ":", fixed = TRUE)[[1]]
+    sample_id <- trimws(parts[[1]])
+    barcode <- normalize_barcode_10g(paste(parts[-1], collapse = ":"))
+    if (nzchar(sample_id) && nzchar(barcode)) {
+      return(paste0(sample_id, ":", barcode))
+    }
+  }
+  normalize_barcode_10g(cell_id)
+}
+
+merge_by_normalized_cell_10g <- function(left, right, left_cols, right_cols) {
+  left <- left[, unique(c("cell_id", left_cols)), drop = FALSE]
+  right <- right[, unique(c("cell_id", right_cols)), drop = FALSE]
+  left$cell_key <- vapply(left$cell_id, normalize_cell_id_full_10g, character(1))
+  right$cell_key <- vapply(right$cell_id, normalize_cell_id_full_10g, character(1))
+  merged <- merge(left, right, by = "cell_key", suffixes = c("_left", "_right"))
+  if (nrow(merged) > 0) {
+    return(list(data = merged, mode = "full", reason = ""))
+  }
+
+  left$cell_key <- vapply(left$cell_id, normalize_barcode_10g, character(1))
+  right$cell_key <- vapply(right$cell_id, normalize_barcode_10g, character(1))
+  left <- left[nzchar(left$cell_key), , drop = FALSE]
+  right <- right[nzchar(right$cell_key), , drop = FALSE]
+  if (anyDuplicated(left$cell_key) > 0 || anyDuplicated(right$cell_key) > 0) {
+    return(list(data = merged, mode = "none", reason = "no full cell_id overlap and barcode-only keys are duplicated"))
+  }
+  merged <- merge(left, right, by = "cell_key", suffixes = c("_left", "_right"))
+  if (nrow(merged) > 0) {
+    return(list(data = merged, mode = "barcode", reason = ""))
+  }
+  list(data = merged, mode = "none", reason = "no overlapping cells after normalized cell_id merge")
+}
+
 read_slingshot_index_10g <- function(cfg) {
   trajectory_read_method_index_09(
     cfg$module_09d_manifest_path,
@@ -170,6 +224,15 @@ for (i in seq_len(nrow(scvelo_rows))) {
         status = ifelse(any(finite_cos), "ok", "not_evaluated"),
         reason = ifelse(any(finite_cos), "", "no finite cosine values")
       )
+      rows[[length(rows) + 1L]] <- metric_row_10g(
+        pair_id,
+        split_value,
+        "dynamical_vs_stochastic_cosine_frac_positive",
+        if (any(finite_cos)) mean(cos[finite_cos] > 0) else NA_real_,
+        sum(finite_cos),
+        status = ifelse(any(finite_cos), "ok", "not_evaluated"),
+        reason = ifelse(any(finite_cos), "", "no finite cosine values")
+      )
     } else {
       rows[[length(rows) + 1L]] <- empty_metric_10g(pair_id, split_value, "dynamical_vs_stochastic_cosine", "not_evaluated", "vector_tsv lacks stochastic velocity columns")
     }
@@ -178,9 +241,19 @@ for (i in seq_len(nrow(scvelo_rows))) {
     if (!is.null(sling_row) && file.exists(sling_row$output_path[[1]]) && "latent_time" %in% colnames(vectors)) {
       sling <- read_delim_optional_10g(sling_row$output_path[[1]])
       if (all(c("cell_id", "pseudotime") %in% colnames(sling))) {
-        merged <- merge(vectors[, c("cell_id", "latent_time"), drop = FALSE], sling[, c("cell_id", "pseudotime"), drop = FALSE], by = "cell_id")
-        cor <- spearman_metric_10g(merged$latent_time, merged$pseudotime)
-        rows[[length(rows) + 1L]] <- metric_row_10g(pair_id, split_value, "latent_time_vs_slingshot_spearman", cor$value, cor$n, cor$status, cor$reason, cor$p_value)
+        merged_result <- merge_by_normalized_cell_10g(
+          vectors[, c("cell_id", "latent_time"), drop = FALSE],
+          sling[, c("cell_id", "pseudotime"), drop = FALSE],
+          left_cols = "latent_time",
+          right_cols = "pseudotime"
+        )
+        merged <- merged_result$data
+        if (nrow(merged) == 0) {
+          rows[[length(rows) + 1L]] <- empty_metric_10g(pair_id, split_value, "latent_time_vs_slingshot_spearman", "not_evaluated", merged_result$reason)
+        } else {
+          cor <- spearman_metric_10g(merged$latent_time, merged$pseudotime)
+          rows[[length(rows) + 1L]] <- metric_row_10g(pair_id, split_value, "latent_time_vs_slingshot_spearman", cor$value, cor$n, cor$status, cor$reason, cor$p_value)
+        }
       } else {
         rows[[length(rows) + 1L]] <- empty_metric_10g(pair_id, split_value, "latent_time_vs_slingshot_spearman", "not_evaluated", "Slingshot pseudotime table lacks cell_id/pseudotime")
       }
@@ -212,14 +285,20 @@ for (i in seq_len(nrow(scvelo_rows))) {
       fate$max_fate <- if (length(fate_cols) > 0) fate_cols[max.col(as.matrix(fate[, fate_cols, drop = FALSE]), ties.method = "first")] else ""
       sling <- read_delim_optional_10g(sling_row$output_path[[1]])
       if (all(c("cell_id", "label") %in% colnames(sling))) {
-        conf <- merge(fate[, c("cell_id", "max_fate"), drop = FALSE], sling[, c("cell_id", "label"), drop = FALSE], by = "cell_id")
+        conf_result <- merge_by_normalized_cell_10g(
+          fate[, c("cell_id", "max_fate"), drop = FALSE],
+          sling[, c("cell_id", "label"), drop = FALSE],
+          left_cols = "max_fate",
+          right_cols = "label"
+        )
+        conf <- conf_result$data
         if (nrow(conf) > 0) {
           tab <- as.data.frame(table(conf$label, conf$max_fate), stringsAsFactors = FALSE)
           for (j in seq_len(nrow(tab))) {
             rows[[length(rows) + 1L]] <- metric_row_10g(pair_id, split_value, "cellrank_fate_vs_slingshot_lineage_count", tab$Freq[[j]], tab$Freq[[j]], "ok", "", group_a = as.character(tab$Var1[[j]]), group_b = as.character(tab$Var2[[j]]))
           }
         } else {
-          rows[[length(rows) + 1L]] <- empty_metric_10g(pair_id, split_value, "cellrank_fate_vs_slingshot_lineage_count", "not_evaluated", "no overlapping CellRank/Slingshot cells")
+          rows[[length(rows) + 1L]] <- empty_metric_10g(pair_id, split_value, "cellrank_fate_vs_slingshot_lineage_count", "not_evaluated", conf_result$reason)
         }
       }
     } else {

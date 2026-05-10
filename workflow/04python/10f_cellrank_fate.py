@@ -206,6 +206,8 @@ def obs_col(adata, col):
 def run_cellrank(adata, n_states):
     import cellrank as cr
 
+    if adata.n_obs < 50:
+        raise ValueError(f"CellRank GPCCA requires at least 50 cells; found {adata.n_obs}")
     if "velocity_graph" not in adata.uns:
         raise ValueError("scVelo result lacks velocity_graph")
     kernel = cr.kernels.VelocityKernel(adata)

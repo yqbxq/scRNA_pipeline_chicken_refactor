@@ -98,6 +98,7 @@ get_single_script_config_10 <- function() {
   base$cellrank_min_cells <- env_integer_10("CELLRANK_MIN_CELLS", 200L)
   base$cellrank_min_velocity_confidence <- env_numeric_10("CELLRANK_MIN_VELOCITY_CONFIDENCE", 0.05)
   base$cellrank_n_states <- env_integer_10("CELLRANK_N_STATES", 6L)
+  base$velocity_root_terminal_min_cells_per_cluster <- env_integer_10("VELOCITY_ROOT_TERMINAL_MIN_CELLS_PER_CLUSTER", 10L)
 
   base
 }

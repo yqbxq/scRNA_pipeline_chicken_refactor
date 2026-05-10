@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import copy
 import csv
 import json
 import math
@@ -267,6 +268,10 @@ def load_loom_table(loom_index):
 
 
 def load_looms(loom_table, loom_dir, allowed_samples):
+    allowed_samples = {str(x) for x in allowed_samples if str(x)}
+    if not allowed_samples:
+        raise ValueError("Velocity metadata has no sample-prefixed cell IDs; refusing to load every loom in loom_dir.")
+
     loom_paths = []
     if not loom_table.empty:
         for _, row in loom_table.iterrows():
@@ -288,7 +293,7 @@ def load_looms(loom_table, loom_dir, allowed_samples):
     adata_list = []
     for loom_path in sorted(set(loom_paths)):
         sample_name = loom_path.stem
-        adata_i = scv.read(str(loom_path), cache=True)
+        adata_i = scv.read(str(loom_path), cache=False)
         adata_i.obs_names = [normalize_obs_name(barcode, fallback_sample=sample_name) for barcode in adata_i.obs_names]
         adata_i.var_names_make_unique()
         adata_i.obs["sample_id"] = sample_name
@@ -303,6 +308,19 @@ def read_unit_metadata(unit):
     meta_df.index = meta_df.index.astype(str)
     umap_df.index = umap_df.index.astype(str)
     return meta_df, umap_df
+
+
+def samples_from_metadata(meta_df):
+    cell_ids = pd.Index(meta_df.index.astype(str))
+    missing_prefix = [x for x in cell_ids if ":" not in x]
+    if missing_prefix:
+        preview = ", ".join(missing_prefix[:5])
+        raise ValueError(f"Velocity metadata cell_id values must include sample prefixes like sample:barcode; missing prefix examples: {preview}")
+    samples = {x.split(":", 1)[0] for x in cell_ids}
+    samples = {x for x in samples if x}
+    if not samples:
+        raise ValueError("Velocity metadata has no non-empty sample IDs.")
+    return samples
 
 
 def integrate_metadata(adata, meta_df, umap_df):
@@ -471,14 +489,27 @@ def copy_stochastic_outputs(adata):
     if "velocity" in adata.layers:
         adata.layers["velocity_stochastic"] = adata.layers["velocity"].copy()
         copied = True
-    for key in ("velocity_length", "velocity_confidence"):
+    for key in list(adata.obs.keys()):
+        if not str(key).startswith("velocity_") or str(key).endswith("_stochastic"):
+            continue
+        adata.obs[f"{key}_stochastic"] = adata.obs[key].values
+        copied = True
+    for key in ("root_cells", "end_points"):
         if key in adata.obs:
             adata.obs[f"{key}_stochastic"] = adata.obs[key].values
             copied = True
+    for key in list(adata.var.keys()):
+        if not (str(key).startswith("velocity_") or str(key).startswith("fit_")) or str(key).endswith("_stochastic"):
+            continue
+        adata.var[f"{key}_stochastic"] = adata.var[key].values
+        copied = True
     for key in ("velocity_graph", "velocity_graph_neg"):
         if key in adata.uns:
-            adata.uns[f"{key}_stochastic"] = adata.uns[key].copy()
+            adata.uns[f"{key}_stochastic"] = copy.deepcopy(adata.uns[key])
             copied = True
+    if "velocity_params" in adata.uns:
+        adata.uns["velocity_params_stochastic"] = copy.deepcopy(adata.uns["velocity_params"])
+        copied = True
     return copied
 
 
@@ -596,7 +627,7 @@ def run_unit(unit, args, loom_table):
 
     try:
         meta_df, umap_df = read_unit_metadata(unit)
-        samples = {str(x).split(":", 1)[0] for x in meta_df.index if ":" in str(x)}
+        samples = samples_from_metadata(meta_df)
         adata = load_looms(loom_table, args.loom_dir, samples)
         adata = integrate_metadata(adata, meta_df, umap_df)
         if adata.n_obs < 3 or adata.n_vars < 3:
@@ -604,19 +635,23 @@ def run_unit(unit, args, loom_table):
 
         scv.pp.filter_and_normalize(adata, min_shared_counts=args.min_shared_counts, n_top_genes=args.top_genes)
         compute_moments_compat(adata, n_pcs=args.n_pcs, n_neighbors=args.n_neighbors)
-        scv.tl.recover_dynamics(adata, n_jobs=args.threads)
 
         stochastic_status = "skipped_disabled"
         if method_enabled(unit, "scvelo_stochastic", default=True):
             scv.tl.velocity(adata, mode="stochastic")
             scv.tl.velocity_graph(adata)
             compute_velocity_embedding_safe(adata)
+            scv.tl.velocity_pseudotime(adata)
             scv.tl.velocity_confidence(adata)
-            stochastic_status = "ok" if copy_stochastic_outputs(adata) else "not_available"
+            if not copy_stochastic_outputs(adata):
+                raise RuntimeError("scVelo stochastic run did not produce copyable outputs.")
+            stochastic_status = "ok"
 
+        scv.tl.recover_dynamics(adata, n_jobs=args.threads)
         scv.tl.velocity(adata, mode="dynamical")
         scv.tl.velocity_graph(adata)
         compute_velocity_embedding_safe(adata)
+        scv.tl.velocity_pseudotime(adata)
         scv.tl.latent_time(adata)
         scv.tl.velocity_confidence(adata)
 
