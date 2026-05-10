@@ -18,6 +18,7 @@ source_utf8(file.path(.script_dir, "helpers", "metadata_fanout_regulation.R"))
 source_utf8(file.path(.script_dir, "helpers", "metadata_fanout_trajectory.R"))
 source_utf8(file.path(.script_dir, "helpers", "metadata_fanout_enrichment.R"))
 source_utf8(file.path(.script_dir, "helpers", "metadata_fanout_st.R"))
+source_utf8(file.path(.script_dir, "helpers", "metadata_fanout_scdesign3.R"))
 
 env_or <- function(name, default = "") {
   value <- Sys.getenv(name, unset = "")
@@ -121,6 +122,10 @@ enrichment_targets <- m3_fanout_enrichment(questions, comparisons)
 gene_program_targets <- m3_fanout_gene_program(comparisons, annotation_marker_targets)
 deconv_pairs <- m3_empty_df(m3_deconv_cols)
 spatial_pairs <- m3_empty_df(m3_spatial_cols)
+scdesign3_question_map <- m3_build_scdesign3_question_map(questions)
+scdesign3_targets <- m3_build_scdesign3_targets(scdesign3_question_map)
+scdesign3_simulation_designs <- m3_build_scdesign3_simulation_designs(scdesign3_targets)
+scdesign3_thresholds <- m3_build_scdesign3_thresholds()
 
 m3_assert_unique(comparisons, "comparison_id", "comparisons.tsv")
 m3_assert_unique(annotation_marker_targets, "target_id", "annotation_marker_targets.tsv")
@@ -129,6 +134,8 @@ m3_assert_unique(trajectory_pairs, "trajectory_id", "trajectory_pairs.tsv")
 m3_assert_unique(scenic_targets, "target_id", "scenic_targets.tsv")
 m3_assert_unique(enrichment_targets, "target_id", "enrichment_targets.tsv")
 m3_assert_unique(gene_program_targets, "comparison_id", "gene_program_targets.tsv")
+m3_assert_unique(scdesign3_question_map, "question_id", "scdesign3_question_map.tsv")
+m3_assert_unique(scdesign3_targets, "target_id", "scdesign3_targets.tsv")
 
 m3_write_generated_tsv(comparisons, file.path(metadata_dir, "comparisons.tsv"), m3_comparison_cols)
 m3_write_generated_tsv(annotation_marker_targets, file.path(metadata_dir, "annotation_marker_targets.tsv"), m3_annotation_marker_cols)
@@ -139,10 +146,26 @@ m3_write_generated_tsv(enrichment_targets, file.path(metadata_dir, "enrichment_t
 m3_write_generated_tsv(gene_program_targets, file.path(metadata_dir, "gene_program_targets.tsv"), m3_gene_program_cols)
 m3_write_generated_tsv(deconv_pairs, file.path(metadata_dir, "deconv_pairs.tsv"), m3_deconv_cols)
 m3_write_generated_tsv(spatial_pairs, file.path(metadata_dir, "spatial_pairs.tsv"), m3_spatial_cols)
+m3_write_generated_tsv(scdesign3_question_map, file.path(metadata_dir, "scdesign3_question_map.tsv"), m3_scdesign3_question_map_cols)
+m3_write_generated_tsv(scdesign3_targets, file.path(metadata_dir, "scdesign3_targets.tsv"), m3_scdesign3_target_cols)
+m3_write_generated_tsv(scdesign3_simulation_designs, file.path(metadata_dir, "scdesign3_simulation_designs.tsv"), m3_scdesign3_simulation_design_cols)
+m3_write_generated_tsv(scdesign3_thresholds, file.path(metadata_dir, "scdesign3_thresholds.tsv"), m3_scdesign3_threshold_cols)
 
 summary <- data.frame(
-  table = c("comparisons.tsv", "annotation_marker_targets.tsv", "communication_pairs.tsv", "trajectory_pairs.tsv", "scenic_targets.tsv", "enrichment_targets.tsv", "gene_program_targets.tsv", "deconv_pairs.tsv", "spatial_pairs.tsv"),
-  rows = c(nrow(comparisons), nrow(annotation_marker_targets), nrow(communication_pairs), nrow(trajectory_pairs), nrow(scenic_targets), nrow(enrichment_targets), nrow(gene_program_targets), nrow(deconv_pairs), nrow(spatial_pairs)),
+  table = c(
+    "comparisons.tsv", "annotation_marker_targets.tsv", "communication_pairs.tsv",
+    "trajectory_pairs.tsv", "scenic_targets.tsv", "enrichment_targets.tsv",
+    "gene_program_targets.tsv", "deconv_pairs.tsv", "spatial_pairs.tsv",
+    "scdesign3_question_map.tsv", "scdesign3_targets.tsv",
+    "scdesign3_simulation_designs.tsv", "scdesign3_thresholds.tsv"
+  ),
+  rows = c(
+    nrow(comparisons), nrow(annotation_marker_targets), nrow(communication_pairs),
+    nrow(trajectory_pairs), nrow(scenic_targets), nrow(enrichment_targets),
+    nrow(gene_program_targets), nrow(deconv_pairs), nrow(spatial_pairs),
+    nrow(scdesign3_question_map), nrow(scdesign3_targets),
+    nrow(scdesign3_simulation_designs), nrow(scdesign3_thresholds)
+  ),
   stringsAsFactors = FALSE
 )
 dir.create(dirname(summary_path), recursive = TRUE, showWarnings = FALSE)

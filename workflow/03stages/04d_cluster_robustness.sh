@@ -7,6 +7,7 @@ PIPELINE_ROOT="${PIPELINE_ROOT:-$(cd "${WORKFLOW_ROOT}/.." && pwd)}"
 
 source "${WORKFLOW_ROOT}/02lib/common.sh"
 
+ensure_metadata_fresh
 check_stage_deps "04d_cluster_robustness"
 
 MODULE_04B_MANIFEST="${MANIFEST_DIR}/04b_subcluster_annotate/_manifest.json"
@@ -25,8 +26,10 @@ run_stage_if_stale \
   "${MODULE_04B_MANIFEST}"
 
 require_manifest_output "${MODULE_04D_MANIFEST}" "metrics_tsv" >/dev/null
+require_manifest_output "${MODULE_04D_MANIFEST}" "question_gate_status_tsv" >/dev/null
+require_manifest_output "${MODULE_04D_MANIFEST}" "scdesign3_all_questions_status_tsv" >/dev/null
 
 update_workflow_status \
   "04d_cluster_robustness_completed" \
-  "next: implement real scDesign3 robustness in subsequent milestone" \
+  "next: review scDesign3 all-question gate status; run locked scDesign3 simulation engine after formal 04 objects exist" \
   "status.04d_cluster_robustness_completed=true"
