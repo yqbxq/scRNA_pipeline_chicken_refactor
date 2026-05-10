@@ -123,9 +123,10 @@ gene_program_targets <- m3_fanout_gene_program(comparisons, annotation_marker_ta
 deconv_pairs <- m3_empty_df(m3_deconv_cols)
 spatial_pairs <- m3_empty_df(m3_spatial_cols)
 scdesign3_question_map <- m3_build_scdesign3_question_map(questions)
-scdesign3_targets <- m3_build_scdesign3_targets(scdesign3_question_map)
+scdesign3_threshold_overrides <- m3_read_tsv(file.path(metadata_dir, "scdesign3_thresholds.tsv"))
+scdesign3_targets <- m3_build_scdesign3_targets(scdesign3_question_map, scdesign3_threshold_overrides)
 scdesign3_simulation_designs <- m3_build_scdesign3_simulation_designs(scdesign3_targets)
-scdesign3_thresholds <- m3_build_scdesign3_thresholds()
+scdesign3_thresholds <- m3_build_scdesign3_thresholds(scdesign3_threshold_overrides)
 
 m3_assert_unique(comparisons, "comparison_id", "comparisons.tsv")
 m3_assert_unique(annotation_marker_targets, "target_id", "annotation_marker_targets.tsv")

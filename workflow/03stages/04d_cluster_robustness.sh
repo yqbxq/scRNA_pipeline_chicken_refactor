@@ -29,6 +29,13 @@ require_manifest_output "${MODULE_04D_MANIFEST}" "metrics_tsv" >/dev/null
 require_manifest_output "${MODULE_04D_MANIFEST}" "question_gate_status_tsv" >/dev/null
 require_manifest_output "${MODULE_04D_MANIFEST}" "scdesign3_all_questions_status_tsv" >/dev/null
 
+set_eda_gate_status \
+  "scdesign3_targets" \
+  "pending" \
+  "" \
+  "review 04d target_gate_status.tsv and approve before running the 04e scDesign3 simulation engine"
+sync_workflow_gate_statuses
+
 update_workflow_status \
   "04d_cluster_robustness_completed" \
   "next: review scDesign3 all-question gate status; run locked scDesign3 simulation engine after formal 04 objects exist" \

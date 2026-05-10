@@ -57,6 +57,7 @@ bash "${PIPELINE_ROOT}/workflow/03stages/input_summary.sh" >/dev/null
 [[ -s "${TMP_ROOT}/project/reports/intake/branch_readiness.tsv" ]]
 [[ -s "${TMP_ROOT}/project/reports/intake/intake_summary.md" ]]
 grep -q $'^trajectory_methods\tpending' "${TMP_ROOT}/project/config/eda_gates.tsv"
+grep -q $'^scdesign3_targets\tpending' "${TMP_ROOT}/project/config/eda_gates.tsv"
 grep -q $'^panorama\tpanorama\tyes' "${TMP_ROOT}/project/config/object_layers.tsv"
 
 echo "smoke_init_project_ok"

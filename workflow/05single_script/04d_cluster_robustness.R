@@ -280,7 +280,7 @@ cluster_metrics <- target_gates %>%
   dplyr::transmute(
     target_id, target_type, layer_id,
     primary_metric,
-    metric_value = NA_real_,
+    metric_value = "pending_engine",
     gate_status, gate_level,
     engine_status = "not_run_metadata_gate",
     reason
@@ -295,7 +295,7 @@ composition_recovery_metrics <- target_gates %>%
   dplyr::filter(target_type == "composition_robustness") %>%
   dplyr::transmute(
     target_id, question_id = questions_covered,
-    metric = "composition_RMSE", metric_value = NA_real_,
+    metric = "composition_RMSE", metric_value = "pending_engine",
     status = gate_status, reason
   )
 
@@ -303,7 +303,7 @@ trajectory_recovery_metrics <- target_gates %>%
   dplyr::filter(target_type == "trajectory_robustness") %>%
   dplyr::transmute(
     target_id, question_id = questions_covered,
-    metric = "trajectory_order_accuracy", metric_value = NA_real_,
+    metric = "trajectory_order_accuracy", metric_value = "pending_engine",
     status = gate_status, reason
   )
 

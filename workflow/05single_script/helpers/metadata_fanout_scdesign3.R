@@ -414,7 +414,21 @@ m3_build_scdesign3_question_map <- function(questions) {
   out[, m3_scdesign3_question_map_cols, drop = FALSE]
 }
 
-m3_build_scdesign3_targets <- function(question_map) {
+m3_scdesign3_thresholds_from_table <- function(threshold_table, target_type, metric) {
+  if (!is.null(threshold_table) && nrow(threshold_table) > 0 && "target_type" %in% colnames(threshold_table)) {
+    hit <- threshold_table[threshold_table$target_type == target_type, , drop = FALSE]
+    if (nrow(hit) > 0) {
+      return(c(
+        pass = m3_trim(hit$pass_threshold[[1]]),
+        warn = m3_trim(hit$warn_threshold[[1]]),
+        fail = m3_trim(hit$fail_threshold[[1]])
+      ))
+    }
+  }
+  m3_scdesign3_thresholds(target_type, metric)
+}
+
+m3_build_scdesign3_targets <- function(question_map, thresholds_override = NULL) {
   if (nrow(question_map) == 0) {
     return(m3_empty_df(m3_scdesign3_target_cols))
   }
@@ -427,12 +441,13 @@ m3_build_scdesign3_targets <- function(question_map) {
   if (nrow(runnable) == 0) {
     return(m3_empty_df(m3_scdesign3_target_cols))
   }
+  threshold_table <- m3_build_scdesign3_thresholds(thresholds_override)
   rows <- list()
   for (target_id in sort(unique(runnable$validation_object))) {
     hit <- runnable[runnable$validation_object == target_id, , drop = FALSE]
     target_type <- m3_scdesign3_target_type(hit$scdesign3_role[[1]], hit$question_family[[1]], hit$validation_layer[[1]], m3_scdesign3_question_code(hit$question_id[[1]]))
     metric <- m3_scdesign3_primary_metric(target_type)
-    thresholds <- m3_scdesign3_thresholds(target_type, metric)
+    thresholds <- m3_scdesign3_thresholds_from_table(threshold_table, target_type, metric)
     status <- if (all(hit$enabled == "planned")) "planned" else "active"
     rows[[length(rows) + 1L]] <- data.frame(
       target_id = target_id,
@@ -441,7 +456,7 @@ m3_build_scdesign3_targets <- function(question_map) {
       input_object = m3_scdesign3_input_object(hit$validation_layer[[1]]),
       truth_col = hit$ground_truth_col[[1]],
       questions_covered = paste(sort(unique(hit$question_id)), collapse = ";"),
-      n_simulations = ifelse(target_type %in% c("deconv_validation", "spatial_validation"), "20", "10"),
+      n_simulations = "5",
       resolution_grid = ifelse(hit$validation_layer[[1]] == "ST", "", "0.2,0.4,0.6,0.8,1.0,1.2"),
       mixture_design = ifelse(target_type == "composition_robustness", "balanced;observed;perturbed", "observed_balanced"),
       primary_metric = metric,
@@ -490,7 +505,7 @@ m3_build_scdesign3_simulation_designs <- function(targets) {
   out[, m3_scdesign3_simulation_design_cols, drop = FALSE]
 }
 
-m3_build_scdesign3_thresholds <- function() {
+m3_build_scdesign3_thresholds <- function(thresholds_override = NULL) {
   target_types <- c(
     "cluster_robustness", "composition_robustness", "trajectory_robustness",
     "communication_robustness", "deconv_validation", "spatial_validation"
@@ -510,5 +525,34 @@ m3_build_scdesign3_thresholds <- function() {
     )
   })
   out <- do.call(rbind, rows)
+  if (!is.null(thresholds_override) && nrow(thresholds_override) > 0) {
+    for (col in m3_scdesign3_threshold_cols) {
+      if (!col %in% colnames(thresholds_override)) {
+        thresholds_override[[col]] <- ""
+      }
+    }
+    thresholds_override <- thresholds_override[, m3_scdesign3_threshold_cols, drop = FALSE]
+    for (idx in seq_len(nrow(thresholds_override))) {
+      target_type <- m3_trim(thresholds_override$target_type[[idx]])
+      if (!nzchar(target_type)) {
+        next
+      }
+      hit <- which(out$target_type == target_type)
+      if (length(hit) == 0) {
+        out <- rbind(out, thresholds_override[idx, , drop = FALSE])
+      } else {
+        for (col in c("primary_metric", "pass_threshold", "warn_threshold", "fail_threshold", "notes")) {
+          value <- m3_trim(thresholds_override[[col]][[idx]])
+          if (nzchar(value)) {
+            out[[col]][[hit[[1]]]] <- value
+          }
+        }
+        override_id <- m3_trim(thresholds_override$threshold_id[[idx]])
+        if (nzchar(override_id)) {
+          out$threshold_id[[hit[[1]]]] <- override_id
+        }
+      }
+    }
+  }
   out[, m3_scdesign3_threshold_cols, drop = FALSE]
 }

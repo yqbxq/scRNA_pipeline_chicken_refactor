@@ -26,10 +26,13 @@ dependencies:
   - r-data.table
   - r-future
   - r-future.apply
+  - r-aricode
+  - r-clue
   - r-fields
   - r-rocr
   - bioconductor-biocparallel
   - bioconductor-singlecellexperiment=1.28.0
+  - bioconductor-scdesign3
   - bioconductor-scater
   - bioconductor-scdblfinder
   - bioconductor-celda

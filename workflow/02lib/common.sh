@@ -82,8 +82,12 @@ export VARS_TO_REGRESS_DEFAULT="${VARS_TO_REGRESS_DEFAULT:-}"
 export RES_FINE_STEP="${RES_FINE_STEP:-0.005}"
 export PCA_DIMS_PANORAMA="${PCA_DIMS_PANORAMA:-${PCA_DIMS:-1:30}}"
 export PCA_DIMS_SUBCLUSTER="${PCA_DIMS_SUBCLUSTER:-1:20}"
-export SCDESIGN3_N_SIM="${SCDESIGN3_N_SIM:-1}"
+export SCDESIGN3_N_SIM="${SCDESIGN3_N_SIM:-5}"
 export SCDESIGN3_FAMILY="${SCDESIGN3_FAMILY:-nb}"
+export SCDESIGN3_N_CORES="${SCDESIGN3_N_CORES:-${MAIN_THREADS:-4}}"
+export SCDESIGN3_MAX_CELLS_PER_LABEL="${SCDESIGN3_MAX_CELLS_PER_LABEL:-2000}"
+export SCDESIGN3_N_HVG="${SCDESIGN3_N_HVG:-2000}"
+export SCDESIGN3_N_PCS="${SCDESIGN3_N_PCS:-30}"
 export PANORAMA_LAYER_ID="${PANORAMA_LAYER_ID:-panorama}"
 export ANNOTATION_HUB_PATH_CLUSTERED="${ANNOTATION_HUB_PATH_CLUSTERED:-${CHECKPOINT_DIR}/02_after_clustering.rds}"
 export MODULE_03_VERSION="${MODULE_03_VERSION:-1.0}"
@@ -328,11 +332,13 @@ ensure_eda_control_files() {
       printf 'trajectory_finalize\tpending\t\t\n'
       printf 'velocity_inputs\tpending\t\t\n'
       printf 'velocity_finalize\tpending\t\t\n'
+      printf 'scdesign3_targets\tpending\t\t\n'
+      printf 'scdesign3_validated\tpending\t\t\n'
     } > "${EDA_GATE_FILE}"
   fi
 
   local gate_id
-  for gate_id in pre_qc post_qc integration annotation subcluster deg communication regulation trajectory_inputs trajectory_methods trajectory_finalize velocity_inputs velocity_finalize; do
+  for gate_id in pre_qc post_qc integration annotation subcluster deg communication regulation trajectory_inputs trajectory_methods trajectory_finalize velocity_inputs velocity_finalize scdesign3_targets scdesign3_validated; do
     if ! awk -F '\t' -v gate="${gate_id}" 'NR > 1 && $1 == gate { found = 1 } END { exit(found ? 0 : 1) }' "${EDA_GATE_FILE}" >/dev/null 2>&1; then
       printf '%s\tpending\t\t\n' "${gate_id}" >> "${EDA_GATE_FILE}"
     fi

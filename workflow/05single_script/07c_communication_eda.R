@@ -43,9 +43,11 @@ pairs <- read_communication_pairs(cfg)
 
 read_scdesign3_communication_gate_07c <- function(cfg) {
   candidates <- c(
+    file.path(cfg$table_dir, "04f_scdesign3_finalize", "communication_scdesign3_gate_post_engine.tsv"),
+    file.path(cfg$table_dir, "04f_scdesign3_finalize", "question_gate_status_post_engine.tsv"),
+    file.path(cfg$table_dir, "scdesign3_all_questions_status.tsv"),
     file.path(cfg$table_dir, "04d_cluster_robustness", "communication_scdesign3_gate.tsv"),
-    file.path(cfg$table_dir, "04d_cluster_robustness", "question_gate_status.tsv"),
-    file.path(cfg$table_dir, "scdesign3_all_questions_status.tsv")
+    file.path(cfg$table_dir, "04d_cluster_robustness", "question_gate_status.tsv")
   )
   for (path in candidates) {
     df <- read_tsv_optional(path)

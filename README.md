@@ -249,6 +249,8 @@ Tier 2 表为自动生成文件，不应手工编辑。后续新增 ST 或联合
     - `workflow/01run.sh 02_qc`
     - `workflow/01run.sh 03_panorama`
     - `workflow/01run.sh 04_subcluster`
+    - `workflow/01run.sh 04d_cluster_robustness`
+    - `workflow/01run.sh 04_robustness`
     - `workflow/01run.sh 05_deg`
     - `workflow/01run.sh 06_enrichment`
     - `workflow/01run.sh 07_communication`
@@ -266,7 +268,10 @@ Tier 2 表为自动生成文件，不应手工编辑。后续新增 ST 或联合
   - `04b_subcluster_annotate.R`：对已经 finalize 的 `clustered_<layer_id>` 复用 annotation helper，写 `annotated_<layer_id>` 和跨层注释汇总，并把子层注释回填到 panorama 的 `cell_subtype` metadata。
   - `04c_subcluster_eda.R`：生成 subcluster review 报告，汇总 cluster count、注释置信度、condition split、panorama-vs-subcluster 对照。
 - `workflow/03stages/04d_cluster_robustness.sh`
-  - `04d_cluster_robustness.R`：当前是 runnable placeholder，只写空 metrics schema 和报告；真实 scDesign3 robustness 留到后续里程碑。
+  - `04d_cluster_robustness.R`：注册 question-driven scDesign3 gate、target、threshold 和 preflight 状态；cluster metrics 用 `pending_engine` 占位，避免被误读为真实 ARI/NMI。
+- `workflow/03stages/04_robustness.sh`
+  - `04e_scdesign3_engine.R`：在 `scdesign3_targets` gate 批准后，对 M1 `cluster_robustness` target 运行真实 scDesign3 fit/simulate/recluster/score 引擎；默认 `SCDESIGN3_N_SIM=5`。
+  - `04f_scdesign3_finalize.R`：把 04e 的 ARI/NMI/Jaccard 结果回填到 target/question gate，并覆盖 root `results/tables/scdesign3_all_questions_status.tsv`。
 
 gate 规则采用 Option B：
 
@@ -275,6 +280,8 @@ gate 规则采用 Option B：
 - 如果存在 candidate 模式 layer，`04a_review` 会把 `subcluster` gate 设为 `pending`；审阅 `subcluster_review_summary.tsv` 和各层 `selected_integration.txt` 后，把 `subcluster` gate 改为 `approved`，再重跑 `04_subcluster.sh`。
 - `04c` 完成后不会再次重置 `subcluster` gate；是否运行 04d 由你在审阅 04c 报告后决定。
 - 独立运行 `04d_cluster_robustness.sh` 时会同时校验 `subcluster_gate_passed=true` 和 `04_subcluster_completed=true`。
+- `04d` 完成后会把 `scdesign3_targets` gate 置为 `pending`；审阅 `results/tables/04d_cluster_robustness/target_gate_status.tsv` 后批准该 gate，才能运行 `04_robustness.sh`。
+- `04_robustness.sh` 完成后会把 `scdesign3_validated` gate 置为 `pending`；07 communication 会等待该 gate 批准后再进入核心解释。
 
 `comparisons.tsv` 在 04c 中支持可选子集列：
 
@@ -290,7 +297,10 @@ gate 规则采用 Option B：
 | `status.04b_subcluster_annotated` | `04b_subcluster_annotate.R` 完成后随 04c 完成态一起写入 |
 | `status.04c_subcluster_eda_completed` | `04c_subcluster_eda.R` 完成后写入 |
 | `status.04_subcluster_completed` | 04a→04b→04c 全链完成后写入 |
-| `status.04d_cluster_robustness_completed` | 独立 04d placeholder stage 完成后写入 |
+| `status.04d_cluster_robustness_completed` | 独立 04d scDesign3 gate 注册 stage 完成后写入 |
+| `status.04e_scdesign3_engine_completed` | 04e scDesign3 engine 完成后随 04_robustness 写入 |
+| `status.04f_scdesign3_finalize_completed` | 04f gate finalize 完成后随 04_robustness 写入 |
+| `status.04_robustness_completed` | 04e→04f 全链完成后写入 |
 
 ### 5.11 05 DEG 模块（workflow standalone）
 

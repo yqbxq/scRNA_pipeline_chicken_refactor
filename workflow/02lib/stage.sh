@@ -67,6 +67,18 @@ check_stage_deps() {
         "status.04_subcluster_completed" \
         "04d_cluster_robustness 需要 04_subcluster 完成。"
       ;;
+    04_robustness)
+      sync_workflow_gate_statuses
+      require_status_flag_or_warn \
+        "status.subcluster_gate_passed" \
+        "04_robustness 被 subcluster gate 阻断。请先审阅 04c subcluster EDA 报告，并在 eda_gates.tsv 中批准 subcluster。"
+      require_status_flag_or_warn \
+        "status.04_subcluster_completed" \
+        "04_robustness 需要 04_subcluster 完成。"
+      require_status_flag_or_warn \
+        "status.04d_cluster_robustness_completed" \
+        "04_robustness 需要先完成 04d_cluster_robustness，以生成 scDesign3 target gate 表。"
+      ;;
     05_deg)
       sync_workflow_gate_statuses
       require_status_flag_or_warn \
@@ -102,6 +114,9 @@ check_stage_deps() {
       require_status_flag_or_warn \
         "status.00_ortholog_completed" \
         "07_communication 需要先完成 00_ortholog，并通过 manifest 暴露 human_best。"
+      require_status_flag_or_warn \
+        "status.scdesign3_validated_gate_passed" \
+        "07_communication 被 scdesign3_validated gate 阻断。请先运行 04_robustness，审阅 04e/04f scDesign3 指标，并在 eda_gates.tsv 中批准 scdesign3_validated。"
       if [[ -f "${WORKFLOW_STATUS_FILE}" ]]; then
         local subcluster_done
         subcluster_done="$(workflow_status_get "status.04_subcluster_completed" 2>/dev/null || true)"
@@ -321,7 +336,9 @@ sync_workflow_gate_statuses() {
     "status.trajectory_methods_gate_passed=$(eda_gate_passed trajectory_methods && echo true || echo false)" \
     "status.trajectory_finalize_gate_passed=$(eda_gate_passed trajectory_finalize && echo true || echo false)" \
     "status.velocity_inputs_gate_passed=$(eda_gate_passed velocity_inputs && echo true || echo false)" \
-    "status.velocity_finalize_gate_passed=$(eda_gate_passed velocity_finalize && echo true || echo false)"
+    "status.velocity_finalize_gate_passed=$(eda_gate_passed velocity_finalize && echo true || echo false)" \
+    "status.scdesign3_targets_gate_passed=$(eda_gate_passed scdesign3_targets && echo true || echo false)" \
+    "status.scdesign3_validated_gate_passed=$(eda_gate_passed scdesign3_validated && echo true || echo false)"
 }
 
 update_workflow_status() {
@@ -473,7 +490,13 @@ for key in (
     "trajectory_finalize_gate_passed",
     "velocity_inputs_gate_passed",
     "velocity_finalize_gate_passed",
+    "scdesign3_targets_gate_passed",
+    "scdesign3_validated_gate_passed",
     "05_deg_completed",
+    "04d_cluster_robustness_completed",
+    "04e_scdesign3_engine_completed",
+    "04f_scdesign3_finalize_completed",
+    "04_robustness_completed",
     "09a_trajectory_inputs_completed",
     "09b_trajectory_inputs_eda_completed",
     "09_trajectory_inputs_completed",

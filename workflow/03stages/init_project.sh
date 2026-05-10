@@ -309,6 +309,8 @@ trajectory_methods	pending
 trajectory_finalize	pending
 velocity_inputs	pending
 velocity_finalize	pending
+scdesign3_targets	pending
+scdesign3_validated	pending
 EOF
   cat > "${WAIVER_FILE}" <<'EOF'
 check_id	scope	reason	approved_by
@@ -354,7 +356,9 @@ write_status_json() {
     "trajectory_methods": "pending",
     "trajectory_finalize": "pending",
     "velocity_inputs": "pending",
-    "velocity_finalize": "pending"
+    "velocity_finalize": "pending",
+    "scdesign3_targets": "pending",
+    "scdesign3_validated": "pending"
   },
   "waivers": []
 }
