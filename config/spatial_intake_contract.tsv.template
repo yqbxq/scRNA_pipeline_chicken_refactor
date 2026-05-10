@@ -1,0 +1,7 @@
+platform	bundle_layout	required_relpaths	optional_relpaths	standardized_outs_relpath	ready_status_when_present	notes
+visium	outs_visium	outs/filtered_feature_bc_matrix.h5,outs/spatial/tissue_positions_list.csv,outs/spatial/scalefactors_json.json,outs/spatial/tissue_lowres_image.png	outs/spatial/tissue_hires_image.png	outs	true	Standard 10x Visium bundle layout.
+saw	saw_bin50	saw_outs/<chip_id>.gef,saw_outs/<chip_id>.tissue.gef		data_pending_saw	true_pending_intake_python	BGI Stereo-seq SAW output; M2 checks presence only and does not parse GEF.
+saw	saw_bin100	saw_outs/<chip_id>.gef,saw_outs/<chip_id>.tissue.gef		data_pending_saw	true_pending_intake_python	BGI Stereo-seq SAW output; M2 checks presence only and does not parse GEF.
+saw	saw_cellbin	saw_outs/<chip_id>.cellbin.gef		data_pending_saw	true_pending_intake_python	BGI Stereo-seq cellbin output; M2 checks presence only and does not parse GEF.
+stomics	stomics_native	stomics_outs/<chip_id>.h5ad,stomics_outs/<chip_id>_image.tif		outs	true_pending_intake_python	STOmics native h5ad bundle; conversion is handled by future Python/R bridge stages.
+generic	spatial_matrix	counts.h5,coords.csv	scalefactors.json,image.png	outs	true	Generic spot-by-gene matrix plus coordinates.

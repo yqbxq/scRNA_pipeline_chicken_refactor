@@ -203,6 +203,16 @@ stage 不直接维护模块输入表，而是在运行前调用 `ensure_metadata
 
 Tier 2 表为自动生成文件，不应手工编辑。后续新增 ST 或联合分析 stage 时，按 `docs/st_stage_metadata_hook_template.md` 在 `source common.sh` 后接入同一行 hook。
 
+### 5.3b ST intake scaffold
+
+ST 作为第二个 modality 接入共享 intake：
+
+- `metadata/samples.tsv` 新增 `modality / section_id / chip_id / bundle_layout / image_path / run_spatial / run_deconv / run_joint`。
+- `metadata/sections.tsv` 登记物理切片，`metadata/spatial_reference_inventory.tsv` 登记联合分析使用的 scRNA reference。
+- `config/spatial_qc_thresholds.tsv.template`、`config/spatial_object_layers.tsv.template`、`config/spatial_intake_contract.tsv.template` 和 `config/marker_panels/spatial_region_panel.tsv.template` 是 ST 配置模板。
+- `workflow/04python/spatial_intake.py` 负责 ST bundle 文件发现、ready 状态和标准化链接/复制；SAW 在 M2 只做存在性检查，不解析 GEF。
+- `workflow/03stages/50_run_spatial_pipeline.sh`、`60_run_spatial_extensions.sh`、`70_run_joint_scrna_spatial.sh` 是非 R 入口脚手架；对应 R stage 尚未在本轮实现。
+
 ### 5.4 输入审计
 
 - `workflow/03stages/audit_inputs.sh`
@@ -231,6 +241,12 @@ Tier 2 表为自动生成文件，不应手工编辑。后续新增 ST 或联合
     - `r_decoupler`
     - `velocity`
     - `pyscenic`
+  - ST/联合分析相关环境可按需启用：
+    - `--with-spatial` 安装 `r_spatial,py_spatial`
+    - `--with-spatial-legacy` 安装 `py_spatial_legacy`
+    - `--with-cell2location` 安装 `py_cell2location`
+    - `--with-validation` 安装 `r_validation`
+    - `--with-saw` 安装 `py_saw`
   - 并下载 SCENIC 资源
 
 ### 5.8 从 FASTQ 开始跑 Cell Ranger

@@ -30,6 +30,11 @@ Input source options, choose at least one:
 
 Other options:
   --analysis-questions-source PATH   Copy an existing analysis_questions.tsv.
+  --spatial-sample-names CSV         Optional ST sample IDs to append to samples.tsv.
+  --spatial-bundle-root PATH         Optional root containing one ST bundle directory per ST sample.
+  --section-sheet PATH               Optional sections.tsv to copy into metadata/.
+  --with-saw                         Use SAW defaults for generated ST sample rows.
+  --with-cell2location               Mark generated ST rows as deconvolution-ready candidates.
   --input-standardize-mode MODE      symlink or copy. Default: symlink.
   --cellranger-bin PATH
   --sra-tools-dir PATH
@@ -160,6 +165,8 @@ write_project_config() {
     shell_export SAMPLE_SHEET "${SAMPLE_SHEET}"
     shell_export CANONICAL_SAMPLE_SHEET "${CANONICAL_SAMPLE_SHEET}"
     shell_export COMPARISON_SHEET "${COMPARISON_SHEET}"
+    shell_export SECTION_SHEET "${SECTION_SHEET}"
+    shell_export SPATIAL_REFERENCE_INVENTORY_FILE "${SPATIAL_REFERENCE_INVENTORY_FILE}"
     shell_export ANALYSIS_QUESTIONS_FILE "${ANALYSIS_QUESTIONS_FILE}"
     shell_export TRAJECTORY_PAIRS_SHEET "${TRAJECTORY_PAIRS_SHEET}"
     shell_export COMMUNICATION_PAIRS_SHEET "${COMMUNICATION_PAIRS_SHEET}"
@@ -173,12 +180,16 @@ write_project_config() {
     shell_export DELIVERY_MANIFEST "${DELIVERY_MANIFEST}"
     shell_export RECEIVED_FILES_MANIFEST "${RECEIVED_FILES_MANIFEST}"
     shell_export INPUT_INVENTORY_FILE "${INPUT_INVENTORY_FILE}"
+    shell_export SPATIAL_INPUT_INVENTORY_FILE "${SPATIAL_INPUT_INVENTORY_FILE}"
     shell_export BRANCH_READINESS_FILE "${BRANCH_READINESS_FILE}"
     shell_export INTAKE_SUMMARY_FILE "${INTAKE_SUMMARY_FILE}"
     shell_export WAIVER_FILE "${WAIVER_FILE}"
     shell_export QC_THRESHOLD_FILE "${QC_THRESHOLD_FILE}"
+    shell_export SPATIAL_QC_THRESHOLD_FILE "${SPATIAL_QC_THRESHOLD_FILE}"
     shell_export EDA_GATE_FILE "${EDA_GATE_FILE}"
     shell_export OBJECT_LAYER_CONFIG_FILE "${OBJECT_LAYER_CONFIG_FILE}"
+    shell_export SPATIAL_OBJECT_LAYER_FILE "${SPATIAL_OBJECT_LAYER_FILE}"
+    shell_export SPATIAL_INTAKE_CONTRACT_FILE "${SPATIAL_INTAKE_CONTRACT_FILE}"
     shell_export MARKER_PANEL_DIR "${MARKER_PANEL_DIR}"
     shell_export MITO_GENE_LIST_FILE "${MITO_GENE_LIST_FILE}"
     shell_export AMBIENT_REPORT_DIR "${AMBIENT_REPORT_DIR}"
@@ -193,6 +204,23 @@ write_project_config() {
     shell_export REGULATION_REPORT_DIR "${REGULATION_REPORT_DIR}"
     shell_export TRAJECTORY_REPORT_DIR "${TRAJECTORY_REPORT_DIR}"
     shell_export VELOCITY_REPORT_DIR "${VELOCITY_REPORT_DIR}"
+    shell_export ST_ENABLED "${ST_ENABLED}"
+    shell_export SPATIAL_RESULTS_DIR "${SPATIAL_RESULTS_DIR}"
+    shell_export SPATIAL_CHECKPOINT_DIR "${SPATIAL_CHECKPOINT_DIR}"
+    shell_export SPATIAL_FIGURE_DIR "${SPATIAL_FIGURE_DIR}"
+    shell_export SPATIAL_TABLE_DIR "${SPATIAL_TABLE_DIR}"
+    shell_export SPATIAL_REFERENCE_FREEZE_DIR "${SPATIAL_REFERENCE_FREEZE_DIR}"
+    shell_export JOINT_RESULTS_DIR "${JOINT_RESULTS_DIR}"
+    shell_export JOINT_CHECKPOINT_DIR "${JOINT_CHECKPOINT_DIR}"
+    shell_export JOINT_FIGURE_DIR "${JOINT_FIGURE_DIR}"
+    shell_export JOINT_TABLE_DIR "${JOINT_TABLE_DIR}"
+    shell_export SPATIAL_PRE_QC_REPORT_DIR "${SPATIAL_PRE_QC_REPORT_DIR}"
+    shell_export SPATIAL_POST_QC_REPORT_DIR "${SPATIAL_POST_QC_REPORT_DIR}"
+    shell_export SPATIAL_INTEGRATION_REPORT_DIR "${SPATIAL_INTEGRATION_REPORT_DIR}"
+    shell_export SPATIAL_REGION_ANNOTATION_REPORT_DIR "${SPATIAL_REGION_ANNOTATION_REPORT_DIR}"
+    shell_export SPATIAL_DECONV_REPORT_DIR "${SPATIAL_DECONV_REPORT_DIR}"
+    shell_export JOINT_TRAJECTORY_REPORT_DIR "${JOINT_TRAJECTORY_REPORT_DIR}"
+    shell_export JOINT_COMMUNICATION_REPORT_DIR "${JOINT_COMMUNICATION_REPORT_DIR}"
     shell_export SAMPLE_NAMES "${SAMPLE_NAMES}"
     shell_export RAW_SAMPLES "${RAW_SAMPLES}"
     shell_export RAW_GROUP_1_NAME "${GROUP1_NAME}"
@@ -212,6 +240,12 @@ write_project_config() {
     shell_export MAIN_THREADS "${MAIN_THREADS:-8}"
     shell_export VELOCYTO_THREADS "${VELOCYTO_THREADS:-${MAIN_THREADS:-8}}"
     shell_export SCVELO_THREADS "${SCVELO_THREADS:-${MAIN_THREADS:-8}}"
+    shell_export R_SPATIAL_ENV_PREFIX "${R_SPATIAL_ENV_PREFIX}"
+    shell_export PY_SPATIAL_ENV_PREFIX "${PY_SPATIAL_ENV_PREFIX}"
+    shell_export PY_SPATIAL_LEGACY_ENV_PREFIX "${PY_SPATIAL_LEGACY_ENV_PREFIX}"
+    shell_export PY_CELL2LOCATION_ENV_PREFIX "${PY_CELL2LOCATION_ENV_PREFIX}"
+    shell_export PY_SAW_ENV_PREFIX "${PY_SAW_ENV_PREFIX}"
+    shell_export R_VALIDATION_ENV_PREFIX "${R_VALIDATION_ENV_PREFIX}"
     shell_export USE_EXISTING_SIF "${USE_EXISTING_SIF:-no}"
     shell_export REFERENCE_VERSION "${REFERENCE_VERSION:-custom_reference}"
     shell_export PIPELINE_LOCALE "${PIPELINE_LOCALE:-C.UTF-8}"
@@ -222,7 +256,7 @@ write_samples_tsv() {
   local path="$1"
   local sample
   {
-    printf 'sample_id\tcondition\tbiological_replicate\ttechnical_replicate\tbatch\tinput_mode\tinput_source\tsource_path\tplatform\tgene_id_type\treference_version\tgroup_id\ttimepoint\ttissue\tchemistry\trun_main\trun_velocity\trun_scenic\n'
+    printf 'sample_id\tcondition\tbiological_replicate\ttechnical_replicate\tbatch\tinput_mode\tinput_source\tsource_path\tplatform\tgene_id_type\treference_version\tgroup_id\ttimepoint\ttissue\tchemistry\trun_main\trun_velocity\trun_scenic\tmodality\tsection_id\tchip_id\tbundle_layout\timage_path\trun_spatial\trun_deconv\trun_joint\tnotes\n'
     while IFS= read -r sample; do
       local condition=""
       local group_id=""
@@ -260,10 +294,95 @@ write_samples_tsv() {
           ;;
       esac
 
-      printf '%s\t%s\t%s\t1\tbatch1\t%s\tinit_project\t%s\t%s\tauto\t%s\t%s\t\t\t\tyes\t%s\tyes\n' \
+      printf '%s\t%s\t%s\t1\tbatch1\t%s\tinit_project\t%s\t%s\tauto\t%s\t%s\t\t\t\tyes\t%s\tyes\tscrna\t\t\t\t\tno\tno\tno\t\n' \
         "${sample}" "${condition}" "${sample}" "${PROJECT_INPUT_MODE}" "${source_path}" \
         "${platform}" "${REFERENCE_VERSION:-custom_reference}" "${group_id}" "${run_velocity}"
     done < <(split_csv "${SAMPLE_NAMES}")
+
+    if [[ -n "${SPATIAL_SAMPLE_NAMES}" ]]; then
+      while IFS= read -r sample; do
+        local condition=""
+        local group_id=""
+        local source_path=""
+        local section_id=""
+        local chip_id=""
+        local platform="visium"
+        local bundle_layout="outs_visium"
+        local run_deconv="auto"
+        [[ -n "${sample}" ]] || continue
+
+        if csv_contains "${sample}" "${GROUP1_SAMPLES}" || [[ "${sample,,}" == *"${GROUP1_NAME,,}"* ]]; then
+          condition="${GROUP1_NAME}"
+          group_id="${GROUP1_NAME}"
+        elif csv_contains "${sample}" "${GROUP2_SAMPLES}" || [[ "${sample,,}" == *"${GROUP2_NAME,,}"* ]]; then
+          condition="${GROUP2_NAME}"
+          group_id="${GROUP2_NAME}"
+        else
+          condition="spatial"
+          group_id="spatial"
+        fi
+
+        source_path="${SPATIAL_BUNDLE_ROOT}"
+        [[ -d "${SPATIAL_BUNDLE_ROOT}/${sample}" ]] && source_path="${SPATIAL_BUNDLE_ROOT}/${sample}"
+        section_id="$(safe_id "${sample}")"
+        chip_id="${section_id}_chip"
+        if [[ "${WITH_SAW}" == "yes" ]]; then
+          platform="saw"
+          bundle_layout="saw_bin50"
+        fi
+        if [[ "${WITH_CELL2LOCATION}" == "yes" ]]; then
+          run_deconv="yes"
+        fi
+
+        printf '%s\t%s\t%s\t1\tst_batch1\t%s\tinit_project\t%s\t%s\tauto\t%s\t%s\t\t\t\tno\tno\tno\tspatial\t%s\t%s\t%s\t%s\tyes\t%s\tauto\t\n' \
+          "${sample}" "${condition}" "${section_id}" \
+          "${platform}_bundle" "${source_path}" "${platform}" "${REFERENCE_VERSION:-custom_reference}" \
+          "${group_id}" "${section_id}" "${chip_id}" "${bundle_layout}" \
+          "${source_path}/outs/spatial/tissue_lowres_image.png" "${run_deconv}"
+      done < <(split_csv "${SPATIAL_SAMPLE_NAMES}")
+    fi
+  } > "${path}"
+}
+
+write_sections_tsv() {
+  local path="$1"
+  local sample
+
+  if [[ -n "${SECTION_SHEET_SOURCE}" ]]; then
+    cp "${SECTION_SHEET_SOURCE}" "${path}"
+    return 0
+  fi
+
+  {
+    printf 'section_id\tchip_id\ttissue_block\tcondition\tplatform\tbundle_root\timage_lowres\timage_hires\ttissue_positions\tscalefactors\tenabled\tnotes\n'
+    if [[ -n "${SPATIAL_SAMPLE_NAMES}" ]]; then
+      while IFS= read -r sample; do
+        local section_id=""
+        local chip_id=""
+        local condition=""
+        local source_path=""
+        local platform="visium"
+        [[ -n "${sample}" ]] || continue
+        section_id="$(safe_id "${sample}")"
+        chip_id="${section_id}_chip"
+        if csv_contains "${sample}" "${GROUP1_SAMPLES}" || [[ "${sample,,}" == *"${GROUP1_NAME,,}"* ]]; then
+          condition="${GROUP1_NAME}"
+        elif csv_contains "${sample}" "${GROUP2_SAMPLES}" || [[ "${sample,,}" == *"${GROUP2_NAME,,}"* ]]; then
+          condition="${GROUP2_NAME}"
+        else
+          condition="spatial"
+        fi
+        [[ "${WITH_SAW}" == "yes" ]] && platform="saw"
+        source_path="${DATA_DIR}/${sample}/outs"
+        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\tyes\tGenerated by init_project.\n' \
+          "${section_id}" "${chip_id}" "${section_id}_block" "${condition}" "${platform}" \
+          "${source_path}" \
+          "${source_path}/spatial/tissue_lowres_image.png" \
+          "${source_path}/spatial/tissue_hires_image.png" \
+          "${source_path}/spatial/tissue_positions_list.csv" \
+          "${source_path}/spatial/scalefactors_json.json"
+      done < <(split_csv "${SPATIAL_SAMPLE_NAMES}")
+    fi
   } > "${path}"
 }
 
@@ -272,8 +391,8 @@ write_comparisons_tsv() {
   local comparison_id
   comparison_id="$(safe_id "${GROUP1_NAME}_vs_${GROUP2_NAME}")"
   {
-    printf 'comparison_id\tsource_question_id\tdisplay_question_id\toutput_alias\treport_title\tlayer_scope\tcontrast_axis\tanalysis_mode\tanalysis_unit\tstat_level\tgroup_var\tident_1\tident_2\tsubset_column\tsubset_value\taggregation_group_var\tcomposition_group_var\tbatch_var\tenabled\tmin_biological_replicates\tforce_exploratory\tmin_cells_per_group\tlogfc_threshold\tproduces_gene_program\tgene_program_role\tnotes\n'
-    printf '%s\tD01_condition_DEG\tD01_condition_DEG\tD01_condition_DEG\tCondition DEG\tpanorama\tcondition_split\tcondition_pairwise\twhole_layer\tcell_level_exploratory\tcondition\t%s\t%s\t\t\tbiological_replicate\tcondition\tbatch\tyes\t2\tno\t3\t0\tyes\tcondition_deg\tGenerated by init_project.\n' \
+    printf 'comparison_id\tsource_question_id\tdisplay_question_id\toutput_alias\treport_title\tlayer_scope\tcontrast_axis\tanalysis_mode\tanalysis_modality\tanalysis_unit\tstat_level\tgroup_var\tident_1\tident_2\tsubset_column\tsubset_value\taggregation_group_var\tcomposition_group_var\tbatch_var\tenabled\tmin_biological_replicates\tforce_exploratory\tmin_cells_per_group\tlogfc_threshold\tproduces_gene_program\tgene_program_role\tnotes\n'
+    printf '%s\tD01_condition_DEG\tD01_condition_DEG\tD01_condition_DEG\tCondition DEG\tpanorama\tcondition_split\tcondition_pairwise\tscrna\twhole_layer\tcell_level_exploratory\tcondition\t%s\t%s\t\t\tbiological_replicate\tcondition\tbatch\tyes\t2\tno\t3\t0\tyes\tcondition_deg\tGenerated by init_project.\n' \
       "${comparison_id}" "${GROUP1_NAME}" "${GROUP2_NAME}"
   } > "${path}"
 }
@@ -293,24 +412,31 @@ write_analysis_questions_tsv() {
 
 write_gate_files() {
   cat > "${EDA_GATE_FILE}" <<'EOF'
-gate_id	status	reviewed_by	reviewed_at	notes
-ambient	pending
-pre_qc	pending
-post_qc	pending
-integration	pending
-annotation	pending
-subcluster	pending
-deg	pending
-enrichment	pending
-communication	pending
-regulation	pending
-trajectory_inputs	pending
-trajectory_methods	pending
-trajectory_finalize	pending
-velocity_inputs	pending
-velocity_finalize	pending
-scdesign3_targets	pending
-scdesign3_validated	pending
+gate_id	status	approved_by	approved_at	gate_profile	notes
+ambient	pending			default	Generated by init_project.
+pre_qc	pending			default	Generated by init_project.
+post_qc	pending			default	Generated by init_project.
+integration	pending			default	Generated by init_project.
+annotation	pending			default	Generated by init_project.
+subcluster	pending			default	Generated by init_project.
+deg	pending			default	Generated by init_project.
+enrichment	pending			default	Generated by init_project.
+communication	pending			default	Generated by init_project.
+regulation	pending			default	Generated by init_project.
+trajectory_inputs	pending			default	Generated by init_project.
+trajectory_methods	pending			default	Generated by init_project.
+trajectory_finalize	pending			default	Generated by init_project.
+velocity_inputs	pending			default	Generated by init_project.
+velocity_finalize	pending			default	Generated by init_project.
+scdesign3_targets	pending			default	Generated by init_project.
+scdesign3_validated	pending			default	Generated by init_project.
+spatial_pre_qc	pending			default	Generated by init_project.
+spatial_post_qc	pending			default	Generated by init_project.
+spatial_integration	pending			default	Generated by init_project.
+spatial_region_annotation	pending			default	Generated by init_project.
+spatial_deconv	pending			default	Generated by init_project.
+joint_trajectory	pending			default	Generated by init_project.
+joint_communication	pending			default	Generated by init_project.
 EOF
   cat > "${WAIVER_FILE}" <<'EOF'
 check_id	scope	reason	approved_by
@@ -324,6 +450,10 @@ layer_id	layer_role	enabled	parent_layer	sample_include	sample_exclude	selection
 panorama	panorama	yes					yes	2000	1:30	10	0.10,0.20,0.30,0.40,0.50,0.60,0.80,1.00,1.20	0.005	lognorm	harmony		Root panorama object built from all post-QC cells.
 subcluster_1	subcluster	no	panorama					yes	2000	1:20	8	0.10,0.15,0.20,0.25,0.30,0.35,0.40	0.005				Template subcluster row; set sample_include or selection_column/selection_values before enabling.
 EOF
+  cp -f "${PIPELINE_ROOT}/config/spatial_qc_thresholds.tsv.template" "${SPATIAL_QC_THRESHOLD_FILE}"
+  cp -f "${PIPELINE_ROOT}/config/spatial_object_layers.tsv.template" "${SPATIAL_OBJECT_LAYER_FILE}"
+  cp -f "${PIPELINE_ROOT}/config/spatial_intake_contract.tsv.template" "${SPATIAL_INTAKE_CONTRACT_FILE}"
+  cp -f "${PIPELINE_ROOT}/config/marker_panels/spatial_region_panel.tsv.template" "${MARKER_PANEL_DIR}/spatial_region_panel.tsv.template"
 }
 
 write_status_json() {
@@ -358,7 +488,14 @@ write_status_json() {
     "velocity_inputs": "pending",
     "velocity_finalize": "pending",
     "scdesign3_targets": "pending",
-    "scdesign3_validated": "pending"
+    "scdesign3_validated": "pending",
+    "spatial_pre_qc": "pending",
+    "spatial_post_qc": "pending",
+    "spatial_integration": "pending",
+    "spatial_region_annotation": "pending",
+    "spatial_deconv": "pending",
+    "joint_trajectory": "pending",
+    "joint_communication": "pending"
   },
   "waivers": []
 }
@@ -390,6 +527,11 @@ GROUP2_SAMPLES=""
 CELLRANGER_OUT_SOURCE_DIR=""
 MATRIX_SOURCE_DIR=""
 ANALYSIS_QUESTIONS_SOURCE=""
+SPATIAL_SAMPLE_NAMES=""
+SPATIAL_BUNDLE_ROOT=""
+SECTION_SHEET_SOURCE=""
+WITH_SAW="no"
+WITH_CELL2LOCATION="no"
 CELLRANGER_BIN=""
 SRA_TOOLS_DIR=""
 INPUT_STANDARDIZE_MODE="symlink"
@@ -410,6 +552,11 @@ while [[ $# -gt 0 ]]; do
     --cellranger-out-source-dir) CELLRANGER_OUT_SOURCE_DIR="$(abs_existing "$2")"; shift 2 ;;
     --matrix-source-dir|--external-matrix-source) MATRIX_SOURCE_DIR="$(abs_existing "$2")"; shift 2 ;;
     --analysis-questions-source) ANALYSIS_QUESTIONS_SOURCE="$(abs_existing "$2")"; shift 2 ;;
+    --spatial-sample-names) SPATIAL_SAMPLE_NAMES="$2"; shift 2 ;;
+    --spatial-bundle-root) SPATIAL_BUNDLE_ROOT="$(abs_existing "$2")"; shift 2 ;;
+    --section-sheet) SECTION_SHEET_SOURCE="$(abs_existing "$2")"; shift 2 ;;
+    --with-saw) WITH_SAW="yes"; shift ;;
+    --with-cell2location) WITH_CELL2LOCATION="yes"; shift ;;
     --cellranger-bin) CELLRANGER_BIN="$(abs_path "$2")"; shift 2 ;;
     --sra-tools-dir) SRA_TOOLS_DIR="$(abs_path "$2")"; shift 2 ;;
     --input-standardize-mode) INPUT_STANDARDIZE_MODE="$2"; shift 2 ;;
@@ -436,6 +583,9 @@ source_count=0
 [[ -n "${CELLRANGER_OUT_SOURCE_DIR}" ]] && source_count=$((source_count + 1))
 [[ -n "${MATRIX_SOURCE_DIR}" ]] && source_count=$((source_count + 1))
 [[ "${source_count}" -gt 0 ]] || die "Provide at least one input source: FASTQ, Cell Ranger output, or matrix source."
+if [[ -n "${SPATIAL_SAMPLE_NAMES}" && -z "${SPATIAL_BUNDLE_ROOT}" ]]; then
+  die "--spatial-sample-names requires --spatial-bundle-root."
+fi
 
 if [[ -n "${MATRIX_SOURCE_DIR}" ]]; then
   PROJECT_INPUT_MODE="matrix"
@@ -468,6 +618,16 @@ RESULTS_DIR="${PROJECT_ROOT}/results"
 CHECKPOINT_DIR="${RESULTS_DIR}/checkpoints"
 FIGURE_DIR="${RESULTS_DIR}/figures"
 TABLE_DIR="${RESULTS_DIR}/tables"
+ST_ENABLED="yes"
+SPATIAL_RESULTS_DIR="${RESULTS_DIR}/spatial"
+SPATIAL_CHECKPOINT_DIR="${SPATIAL_RESULTS_DIR}/checkpoints"
+SPATIAL_FIGURE_DIR="${SPATIAL_RESULTS_DIR}/figures"
+SPATIAL_TABLE_DIR="${SPATIAL_RESULTS_DIR}/tables"
+SPATIAL_REFERENCE_FREEZE_DIR="${RESULTS_DIR}/spatial_reference_frozen"
+JOINT_RESULTS_DIR="${RESULTS_DIR}/joint"
+JOINT_CHECKPOINT_DIR="${JOINT_RESULTS_DIR}/checkpoints"
+JOINT_FIGURE_DIR="${JOINT_RESULTS_DIR}/figures"
+JOINT_TABLE_DIR="${JOINT_RESULTS_DIR}/tables"
 LOG_DIR="${PROJECT_ROOT}/logs"
 ENV_DIR="${PROJECT_ROOT}/envs"
 RESOURCE_DIR="${PROJECT_ROOT}/resources"
@@ -487,6 +647,8 @@ DNBC4TOOLS_OUT_DIR="${DATA_DIR}/dnbc4tools_out"
 SAMPLE_SHEET="${METADATA_DIR}/samples.tsv"
 CANONICAL_SAMPLE_SHEET="${METADATA_DIR}/samples.canonical.tsv"
 COMPARISON_SHEET="${METADATA_DIR}/comparisons.tsv"
+SECTION_SHEET="${METADATA_DIR}/sections.tsv"
+SPATIAL_REFERENCE_INVENTORY_FILE="${METADATA_DIR}/spatial_reference_inventory.tsv"
 ANALYSIS_QUESTIONS_FILE="${METADATA_DIR}/analysis_questions.tsv"
 TRAJECTORY_PAIRS_SHEET="${METADATA_DIR}/trajectory_pairs.tsv"
 COMMUNICATION_PAIRS_SHEET="${METADATA_DIR}/communication_pairs.tsv"
@@ -500,12 +662,16 @@ SCDESIGN3_THRESHOLDS_SHEET="${METADATA_DIR}/scdesign3_thresholds.tsv"
 DELIVERY_MANIFEST="${METADATA_DIR}/delivery_manifest.tsv"
 RECEIVED_FILES_MANIFEST="${METADATA_DIR}/received_files_manifest.tsv"
 INPUT_INVENTORY_FILE="${INTAKE_REPORT_DIR}/input_inventory.tsv"
+SPATIAL_INPUT_INVENTORY_FILE="${INTAKE_REPORT_DIR}/spatial_input_inventory.tsv"
 BRANCH_READINESS_FILE="${INTAKE_REPORT_DIR}/branch_readiness.tsv"
 INTAKE_SUMMARY_FILE="${INTAKE_REPORT_DIR}/intake_summary.md"
 WAIVER_FILE="${PROJECT_CONFIG_DIR}/waivers.tsv"
 QC_THRESHOLD_FILE="${PROJECT_CONFIG_DIR}/qc_thresholds.tsv"
+SPATIAL_QC_THRESHOLD_FILE="${PROJECT_CONFIG_DIR}/spatial_qc_thresholds.tsv"
 EDA_GATE_FILE="${PROJECT_CONFIG_DIR}/eda_gates.tsv"
 OBJECT_LAYER_CONFIG_FILE="${PROJECT_CONFIG_DIR}/object_layers.tsv"
+SPATIAL_OBJECT_LAYER_FILE="${PROJECT_CONFIG_DIR}/spatial_object_layers.tsv"
+SPATIAL_INTAKE_CONTRACT_FILE="${PROJECT_CONFIG_DIR}/spatial_intake_contract.tsv"
 MARKER_PANEL_DIR="${PROJECT_CONFIG_DIR}/marker_panels"
 MITO_GENE_LIST_FILE="${PROJECT_CONFIG_DIR}/mito_gene_list.txt"
 AMBIENT_REPORT_DIR="${EDA_REPORT_DIR}/ambient"
@@ -520,9 +686,22 @@ COMMUNICATION_REPORT_DIR="${EDA_REPORT_DIR}/communication"
 REGULATION_REPORT_DIR="${EDA_REPORT_DIR}/regulation"
 TRAJECTORY_REPORT_DIR="${EDA_REPORT_DIR}/trajectory"
 VELOCITY_REPORT_DIR="${EDA_REPORT_DIR}/velocity"
+SPATIAL_PRE_QC_REPORT_DIR="${EDA_REPORT_DIR}/spatial_pre_qc"
+SPATIAL_POST_QC_REPORT_DIR="${EDA_REPORT_DIR}/spatial_post_qc"
+SPATIAL_INTEGRATION_REPORT_DIR="${EDA_REPORT_DIR}/spatial_integration"
+SPATIAL_REGION_ANNOTATION_REPORT_DIR="${EDA_REPORT_DIR}/spatial_region_annotation"
+SPATIAL_DECONV_REPORT_DIR="${EDA_REPORT_DIR}/spatial_deconv"
+JOINT_TRAJECTORY_REPORT_DIR="${EDA_REPORT_DIR}/joint_trajectory"
+JOINT_COMMUNICATION_REPORT_DIR="${EDA_REPORT_DIR}/joint_communication"
 PROJECT_CONFIG_FILE="${PROJECT_CONFIG_DIR}/project_config.sh"
 RAW_SAMPLES="${SAMPLE_NAMES}"
 REFERENCE_VERSION="${REFERENCE_VERSION:-custom_reference}"
+R_SPATIAL_ENV_PREFIX="${ENV_DIR}/conda/r_spatial"
+PY_SPATIAL_ENV_PREFIX="${ENV_DIR}/conda/py_spatial"
+PY_SPATIAL_LEGACY_ENV_PREFIX="${ENV_DIR}/conda/py_spatial_legacy"
+PY_CELL2LOCATION_ENV_PREFIX="${ENV_DIR}/conda/py_cell2location"
+PY_SAW_ENV_PREFIX="${ENV_DIR}/conda/py_saw"
+R_VALIDATION_ENV_PREFIX="${ENV_DIR}/conda/r_validation"
 
 if [[ -e "${PROJECT_CONFIG_FILE}" && "${FORCE}" != "yes" ]]; then
   die "Project config already exists. Use --force to overwrite generated files: ${PROJECT_CONFIG_FILE}"
@@ -530,13 +709,20 @@ fi
 
 mkdir -p \
   "${PROJECT_CONFIG_DIR}" "${DATA_DIR}" "${RESULTS_DIR}" "${CHECKPOINT_DIR}" "${FIGURE_DIR}" \
-  "${TABLE_DIR}" "${LOG_DIR}" "${ENV_DIR}" "${RESOURCE_DIR}" "${MANIFEST_DIR}" \
+  "${TABLE_DIR}" "${SPATIAL_RESULTS_DIR}" "${SPATIAL_CHECKPOINT_DIR}" "${SPATIAL_FIGURE_DIR}" \
+  "${SPATIAL_TABLE_DIR}" "${SPATIAL_REFERENCE_FREEZE_DIR}" "${JOINT_RESULTS_DIR}" \
+  "${JOINT_CHECKPOINT_DIR}" "${JOINT_FIGURE_DIR}" "${JOINT_TABLE_DIR}" \
+  "${LOG_DIR}" "${ENV_DIR}" "${RESOURCE_DIR}" "${MANIFEST_DIR}" \
   "${RAW_DIR}" "${RAW_RECEIVED_DIR}" "${METADATA_DIR}" "${REPORT_DIR}" "${INTAKE_REPORT_DIR}" \
   "${EDA_REPORT_DIR}" "${STATUS_DIR}" "${REFERENCE_DIR}" "${MARKER_PANEL_DIR}" \
   "${AMBIENT_REPORT_DIR}" "${PRE_QC_REPORT_DIR}" "${POST_QC_REPORT_DIR}" \
   "${INTEGRATION_REPORT_DIR}" "${ANNOTATION_REPORT_DIR}" "${SUBCLUSTER_REPORT_DIR}" \
   "${DEG_REPORT_DIR}" "${ENRICHMENT_REPORT_DIR}" "${COMMUNICATION_REPORT_DIR}" \
   "${REGULATION_REPORT_DIR}" "${TRAJECTORY_REPORT_DIR}" "${VELOCITY_REPORT_DIR}" \
+  "${SPATIAL_PRE_QC_REPORT_DIR}" "${SPATIAL_POST_QC_REPORT_DIR}" \
+  "${SPATIAL_INTEGRATION_REPORT_DIR}" "${SPATIAL_REGION_ANNOTATION_REPORT_DIR}" \
+  "${SPATIAL_DECONV_REPORT_DIR}" "${JOINT_TRAJECTORY_REPORT_DIR}" \
+  "${JOINT_COMMUNICATION_REPORT_DIR}" \
   "${DNBC4TOOLS_OUT_DIR}"
 
 GENOME_FASTA_LINK="${REFERENCE_DIR}/$(basename "${GENOME_FASTA}")"
@@ -566,11 +752,14 @@ if [[ -n "${MATRIX_SOURCE_DIR}" ]]; then
 fi
 
 write_samples_tsv "${SAMPLE_SHEET}"
+write_sections_tsv "${SECTION_SHEET}"
 write_comparisons_tsv "${COMPARISON_SHEET}"
 write_analysis_questions_tsv "${ANALYSIS_QUESTIONS_FILE}"
 write_gate_files
 write_status_json
 write_project_config "${PROJECT_CONFIG_FILE}"
+
+cp -f "${PIPELINE_ROOT}/metadata/spatial_reference_inventory.tsv" "${SPATIAL_REFERENCE_INVENTORY_FILE}"
 
 cat > "${MARKER_PANEL_DIR}/README.md" <<'EOF'
 # Marker Panels

@@ -1,0 +1,2 @@
+inspected_file	object_class	key_columns_or_items	selected_reference	selected_annotation_col	pseudotime_evidence	communication_evidence	frozen_reference_id	reference_sha256	reference_freeze_timestamp
+results/checkpoints/03_after_annotation.rds	Seurat	cell_type,cell_subtype	results/checkpoints/03_after_annotation.rds	cell_subtype	none	none

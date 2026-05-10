@@ -232,6 +232,11 @@ run_py_cell2location() {
   run_in_conda_prefix "${PY_CELL2LOCATION_ENV_PREFIX}" "$@"
 }
 
+run_py_saw() {
+  [[ -d "${PY_SAW_ENV_PREFIX}" ]] || die "SAW/STOmics Python 环境不存在: ${PY_SAW_ENV_PREFIX}"
+  run_in_conda_prefix "${PY_SAW_ENV_PREFIX}" "$@"
+}
+
 run_r_validation() {
   [[ -d "${R_VALIDATION_ENV_PREFIX}" ]] || die "验证分析 R 环境不存在: ${R_VALIDATION_ENV_PREFIX}"
   run_in_conda_prefix "${R_VALIDATION_ENV_PREFIX}" Rscript "$@"

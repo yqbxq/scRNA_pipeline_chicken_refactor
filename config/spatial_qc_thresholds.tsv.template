@@ -1,0 +1,4 @@
+section_id	qc_min_nfeature	qc_min_ncount	qc_max_mito_pct	mito_set_override
+__DEFAULT__	200	500	20
+syf_1	200	500	20
+f5_1	200	500	20

@@ -6,6 +6,62 @@ source "$(cd "$(dirname "$0")/../02lib" && pwd)/common.sh"
 INSTALL_TARGETS="${INSTALL_TARGETS:-r_main,r_legacy,r_scenic,r_decoupler,velocity,pyscenic}"
 INSTALL_SCENIC_RESOURCES="${INSTALL_SCENIC_RESOURCES:-no}"
 
+append_install_target() {
+  local target="$1"
+  local requested=",${INSTALL_TARGETS// /},"
+  if [[ "${requested}" != *",${target},"* && "${requested}" != *",all,"* ]]; then
+    INSTALL_TARGETS="${INSTALL_TARGETS},${target}"
+  fi
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --targets)
+      INSTALL_TARGETS="$2"
+      shift 2
+      ;;
+    --with-spatial)
+      append_install_target "r_spatial"
+      append_install_target "py_spatial"
+      shift
+      ;;
+    --with-spatial-legacy)
+      append_install_target "py_spatial_legacy"
+      shift
+      ;;
+    --with-cell2location)
+      append_install_target "py_cell2location"
+      shift
+      ;;
+    --with-validation)
+      append_install_target "r_validation"
+      shift
+      ;;
+    --with-saw)
+      append_install_target "py_saw"
+      shift
+      ;;
+    --install-scenic-resources)
+      INSTALL_SCENIC_RESOURCES="yes"
+      shift
+      ;;
+    -h|--help)
+      cat <<'USAGE'
+Usage:
+  install_envs.sh [--targets CSV] [--with-spatial] [--with-spatial-legacy]
+                  [--with-cell2location] [--with-validation] [--with-saw]
+                  [--install-scenic-resources]
+
+Environment variables INSTALL_TARGETS and INSTALL_SCENIC_RESOURCES are still supported.
+USAGE
+      exit 0
+      ;;
+    *)
+      die "Unknown argument: $1"
+      ;;
+  esac
+done
+
 ensure_dir \
   "${PROJECT_ROOT}" \
   "${ENV_DIR}" \
@@ -130,6 +186,13 @@ if target_enabled "py_cell2location"; then
     create_or_update_conda_env "${PY_CELL2LOCATION_ENV_PREFIX}" "${PIPELINE_ROOT}/envs/environment_py_cell2location.yml"
   run_with_log "${LOG_DIR}/install_py_cell2location_pkgs.log" \
     run_in_conda_prefix "${PY_CELL2LOCATION_ENV_PREFIX}" bash "${PIPELINE_ROOT}/envs/install_py_cell2location_packages.sh"
+fi
+
+if target_enabled "py_saw"; then
+  run_with_log "${LOG_DIR}/install_py_saw_env.log" \
+    create_or_update_conda_env "${PY_SAW_ENV_PREFIX}" "${PIPELINE_ROOT}/envs/environment_py_saw.yml"
+  run_with_log "${LOG_DIR}/install_py_saw_pkgs.log" \
+    run_in_conda_prefix "${PY_SAW_ENV_PREFIX}" bash "${PIPELINE_ROOT}/envs/install_py_saw_packages.sh"
 fi
 
 if target_enabled "r_validation"; then

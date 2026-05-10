@@ -46,7 +46,19 @@ inventory_path = Path(os.environ["INPUT_INVENTORY_FILE"])
 readiness_path = Path(os.environ["BRANCH_READINESS_FILE"])
 
 with input_sheet.open("r", encoding="utf-8", newline="") as handle:
-    sample_rows = list(csv.DictReader(handle, delimiter="\t"))
+    sample_rows_all = list(csv.DictReader(handle, delimiter="\t"))
+
+def is_spatial_row(row: dict[str, str]) -> bool:
+    modality = normalize_value(row.get("modality")).lower() or "scrna"
+    platform = normalize_value(row.get("platform")).lower()
+    input_mode = normalize_value(row.get("input_mode")).lower()
+    return (
+        modality == "spatial"
+        or platform in {"visium", "saw", "stomics", "generic"}
+        or input_mode in {"visium_bundle", "saw_bundle", "stomics_bundle", "spatial_matrix"}
+    )
+
+sample_rows = [row for row in sample_rows_all if not is_spatial_row(row)]
 
 with comparison_sheet.open("r", encoding="utf-8", newline="") as handle:
     comparison_rows = list(csv.DictReader(handle, delimiter="\t"))
@@ -181,13 +193,13 @@ for row in sample_rows:
 
 enabled_comparisons = [
     row for row in comparison_rows
-    if row.get("enabled", "").strip().lower() in {"yes", "true"}
+    if normalize_value(row.get("enabled")).lower() in {"yes", "true"}
 ]
 de_replicate_ready = True
 if enabled_comparisons:
     for row in enabled_comparisons:
-        ident_1 = row["ident_1"].strip()
-        ident_2 = row["ident_2"].strip()
+        ident_1 = normalize_value(row.get("ident_1"))
+        ident_2 = normalize_value(row.get("ident_2"))
         if len(conditions_to_reps.get(ident_1, set())) < 2 or len(conditions_to_reps.get(ident_2, set())) < 2:
             de_replicate_ready = False
             break
@@ -321,6 +333,16 @@ with readiness_path.open("w", encoding="utf-8", newline="") as handle:
     writer.writeheader()
     writer.writerows(readiness_rows)
 PY
+
+if [[ "${ST_ENABLED:-yes}" != "no" ]]; then
+  "${python_bin}" "${PIPELINE_ROOT}/workflow/04python/spatial_intake.py" audit \
+    --samples "${INPUT_SHEET}" \
+    --sections "${SECTION_SHEET}" \
+    --contract "${SPATIAL_INTAKE_CONTRACT_FILE}" \
+    --output "${SPATIAL_INPUT_INVENTORY_FILE}" \
+    --readiness "${BRANCH_READINESS_FILE}" \
+    --data-dir "${DATA_DIR}"
+fi
 
 update_workflow_status \
   "input_audited" \

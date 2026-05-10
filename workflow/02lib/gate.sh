@@ -58,21 +58,20 @@ with gate_file.open("r", encoding="utf-8", newline="") as handle:
     approved_field = "approved_by" if "approved_by" in fieldnames else ("reviewed_by" if "reviewed_by" in fieldnames else "approved_by")
     if approved_field not in fieldnames:
         fieldnames.append(approved_field)
-    if "approved_at" not in fieldnames and "reviewed_at" not in fieldnames:
+    if "approved_at" not in fieldnames:
         fieldnames.append("approved_at")
-    timestamp_field = "approved_at" if "approved_at" in fieldnames else "reviewed_at"
     if "gate_profile" not in fieldnames:
         fieldnames.append("gate_profile")
     if "notes" not in fieldnames:
         fieldnames.append("notes")
     for row in reader:
-        row.setdefault(timestamp_field, "")
+        row.setdefault("approved_at", "")
         row.setdefault("gate_profile", "default")
         if row["gate_id"] == target_gate_id:
             row["status"] = target_gate_status
             row[approved_field] = target_approved_by
-            if target_gate_status.lower() in {"approved", "yes", "true"} and not row.get(timestamp_field):
-                row[timestamp_field] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
+            if target_gate_status.lower() in {"approved", "yes", "true"} and not row.get("approved_at"):
+                row["approved_at"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
             row["notes"] = target_notes
         rows.append(row)
 
@@ -84,7 +83,7 @@ if not any(row["gate_id"] == target_gate_id for row in rows):
         "gate_id": target_gate_id,
         "status": target_gate_status,
         approved_field: target_approved_by,
-        timestamp_field: approved_at,
+        "approved_at": approved_at,
         "gate_profile": "default",
         "notes": target_notes,
     })

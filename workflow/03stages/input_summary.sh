@@ -20,6 +20,7 @@ env \
   INPUT_SHEET="${INPUT_SHEET}" \
   DATA_DIR="${DATA_DIR}" \
   INPUT_INVENTORY_FILE="${INPUT_INVENTORY_FILE}" \
+  SPATIAL_INPUT_INVENTORY_FILE="${SPATIAL_INPUT_INVENTORY_FILE}" \
   BRANCH_READINESS_FILE="${BRANCH_READINESS_FILE}" \
   INTAKE_SUMMARY_FILE="${INTAKE_SUMMARY_FILE}" \
   SUMMARY_ENV_FILE="${SUMMARY_ENV_FILE}" \
@@ -38,6 +39,7 @@ from intake_contract import is_mex_matrix_dir
 input_sheet = Path(os.environ["INPUT_SHEET"])
 data_dir = Path(os.environ["DATA_DIR"])
 inventory_path = Path(os.environ["INPUT_INVENTORY_FILE"])
+spatial_inventory_path = Path(os.environ["SPATIAL_INPUT_INVENTORY_FILE"])
 readiness_path = Path(os.environ["BRANCH_READINESS_FILE"])
 summary_path = Path(os.environ["INTAKE_SUMMARY_FILE"])
 env_path = Path(os.environ["SUMMARY_ENV_FILE"])
@@ -71,10 +73,22 @@ def describe_notes(raw: str) -> list[str]:
         notes.append(NOTE_LABELS.get(note, note))
     return notes
 
+
+def cell(row: dict[str, str], key: str, default: str = "") -> str:
+    value = row.get(key, default)
+    if value is None:
+        return default
+    return str(value)
+
+
 with input_sheet.open("r", encoding="utf-8", newline="") as handle:
     sample_rows = list(csv.DictReader(handle, delimiter="\t"))
 with inventory_path.open("r", encoding="utf-8", newline="") as handle:
     inventory_rows = list(csv.DictReader(handle, delimiter="\t"))
+spatial_inventory_rows = []
+if spatial_inventory_path.exists() and spatial_inventory_path.stat().st_size > 0:
+    with spatial_inventory_path.open("r", encoding="utf-8", newline="") as handle:
+        spatial_inventory_rows = list(csv.DictReader(handle, delimiter="\t"))
 with readiness_path.open("r", encoding="utf-8", newline="") as handle:
     readiness_rows = list(csv.DictReader(handle, delimiter="\t"))
 
@@ -82,16 +96,42 @@ project_row = next((row for row in readiness_rows if row["sample_id"] == "__PROJ
 if project_row is None:
     raise SystemExit("branch_readiness.tsv 缺少 __PROJECT__ 汇总行。")
 
-run_main_samples = [row for row in sample_rows if row.get("run_main", "yes").lower() == "yes"]
-project_input_modes = {row.get("input_mode", "").strip() for row in run_main_samples if row.get("input_mode", "").strip()}
-standardized_ok = all(is_mex_matrix_dir(data_dir / row["sample_id"]) for row in run_main_samples)
+def is_spatial_row(row: dict[str, str]) -> bool:
+    modality = cell(row, "modality", "scrna").strip().lower() or "scrna"
+    platform = cell(row, "platform").strip().lower()
+    input_mode = cell(row, "input_mode").strip().lower()
+    run_spatial = cell(row, "run_spatial").strip().lower()
+    return (
+        modality == "spatial"
+        or platform in {"visium", "saw", "stomics", "generic"}
+        or input_mode in {"visium_bundle", "saw_bundle", "stomics_bundle", "spatial_matrix"}
+        or run_spatial == "yes"
+    )
 
-inventory_by_sample = {row["sample_id"]: row for row in inventory_rows}
-readiness_by_sample = {row["sample_id"]: row for row in readiness_rows}
+run_main_samples = [
+    row for row in sample_rows
+    if not is_spatial_row(row) and cell(row, "run_main", "yes").lower() == "yes"
+]
+spatial_samples = [row for row in sample_rows if is_spatial_row(row)]
+project_input_modes = {cell(row, "input_mode").strip() for row in run_main_samples if cell(row, "input_mode").strip()}
+standardized_ok = all(is_mex_matrix_dir(data_dir / cell(row, "sample_id")) for row in run_main_samples)
+spatial_upstream_ready = cell(project_row, "spatial_upstream_ready", "false")
+spatial_standardized_ok = True
+for row in spatial_inventory_rows:
+    if cell(row, "ready") != "true":
+        spatial_standardized_ok = False
+        continue
+    if cell(row, "ready_status") == "true_pending_intake_python":
+        continue
+    if not Path(cell(row, "standardized_outs")).exists():
+        spatial_standardized_ok = False
+
+inventory_by_sample = {cell(row, "sample_id"): row for row in inventory_rows}
+readiness_by_sample = {cell(row, "sample_id"): row for row in readiness_rows}
 blocked_samples = []
 for row in run_main_samples:
-    sample_id = row["sample_id"]
-    ready = inventory_by_sample.get(sample_id, {}).get("has_filtered_matrix", "false") == "true"
+    sample_id = cell(row, "sample_id")
+    ready = cell(inventory_by_sample.get(sample_id, {}), "has_filtered_matrix", "false") == "true"
     standardized = is_mex_matrix_dir(data_dir / sample_id)
     if not ready or not standardized:
         blocked_samples.append(sample_id)
@@ -117,12 +157,15 @@ lines.append("# Intake Summary")
 lines.append("")
 lines.append(f"- 样本数: `{len(sample_rows)}`")
 lines.append(f"- 主流程待标准化样本数: `{len(run_main_samples)}`")
+lines.append(f"- ST 样本数: `{len(spatial_samples)}`")
 lines.append(f"- main_upstream_ready: `{main_upstream_ready}`")
 lines.append(f"- standardized_inputs: `{'true' if standardized_ok else 'false'}`")
+lines.append(f"- spatial_upstream_ready: `{spatial_upstream_ready}`")
+lines.append(f"- spatial_standardized_inputs: `{'true' if spatial_standardized_ok else 'false'}`")
 lines.append(f"- velocity_upstream_ready: `{velocity_upstream_ready}`")
 lines.append(f"- ambient_upstream_ready: `{ambient_upstream_ready}`")
-lines.append(f"- ambient_raw_available: `{project_row.get('raw_matrix_available', 'false')}`")
-lines.append(f"- ambient_preferred_method: `{project_row.get('ambient_preferred_method', 'mixed')}`")
+lines.append(f"- ambient_raw_available: `{cell(project_row, 'raw_matrix_available', 'false')}`")
+lines.append(f"- ambient_preferred_method: `{cell(project_row, 'ambient_preferred_method', 'mixed')}`")
 lines.append(f"- scenic_upstream_ready: `{scenic_upstream_ready}`")
 lines.append(f"- de_replicate_ready: `{de_replicate_ready}`")
 lines.append("")
@@ -132,36 +175,60 @@ if blocked_samples:
         lines.append(f"- `{sample_id}` 缺少可用标准输入或标准化目录。")
 else:
     lines.append("- 当前没有主流程输入 blocker。")
-if project_row.get("notes"):
+spatial_blocked = [
+    row for row in spatial_inventory_rows
+    if cell(row, "ready") != "true" or (
+        cell(row, "ready_status") != "true_pending_intake_python"
+        and cell(row, "ready") == "true"
+        and not Path(cell(row, "standardized_outs")).exists()
+    )
+]
+if spatial_blocked:
+    for row in spatial_blocked:
+        lines.append(f"- `{cell(row, 'sample_id')}` ST 输入未就绪: `{cell(row, 'notes') or cell(row, 'missing_required_relpaths')}`")
+if cell(project_row, "notes"):
     lines.append("")
     lines.append("## Project Notes")
-    for note in describe_notes(project_row["notes"]):
+    for note in describe_notes(cell(project_row, "notes")):
         lines.append(f"- {note}")
 lines.append("")
 lines.append("## Sample Contracts")
 for row in run_main_samples:
-    sample_id = row["sample_id"]
+    sample_id = cell(row, "sample_id")
     inventory_row = inventory_by_sample.get(sample_id, {})
     readiness_row = readiness_by_sample.get(sample_id, {})
-    lines.append(f"- `{sample_id}`: platform=`{inventory_row.get('platform_resolved', '')}`; profile=`{inventory_row.get('feature_name_profile', '')}`; gene_id_type=`{inventory_row.get('gene_id_type_resolved', '')}`; reference_version=`{inventory_row.get('reference_version', '') or 'NA'}`")
-    lines.append(f"  filtered_matrix_dir: `{inventory_row.get('filtered_matrix_dir', '') or 'NA'}`")
-    lines.append(f"  raw_matrix_dir: `{inventory_row.get('raw_matrix_dir', '') or 'NA'}`")
-    lines.append(f"  metrics_path: `{inventory_row.get('metrics_path', '') or 'NA'}`")
-    lines.append(f"  bam_path: `{inventory_row.get('bam_path', '') or 'NA'}`")
+    lines.append(f"- `{sample_id}`: platform=`{cell(inventory_row, 'platform_resolved')}`; profile=`{cell(inventory_row, 'feature_name_profile')}`; gene_id_type=`{cell(inventory_row, 'gene_id_type_resolved')}`; reference_version=`{cell(inventory_row, 'reference_version') or 'NA'}`")
+    lines.append(f"  filtered_matrix_dir: `{cell(inventory_row, 'filtered_matrix_dir') or 'NA'}`")
+    lines.append(f"  raw_matrix_dir: `{cell(inventory_row, 'raw_matrix_dir') or 'NA'}`")
+    lines.append(f"  metrics_path: `{cell(inventory_row, 'metrics_path') or 'NA'}`")
+    lines.append(f"  bam_path: `{cell(inventory_row, 'bam_path') or 'NA'}`")
     lines.append(
         "  ambient: "
-        f"preferred=`{readiness_row.get('ambient_preferred_method', 'none')}`; "
-        f"fallback=`{readiness_row.get('ambient_fallback_method', 'none')}`; "
-        f"soupx_ready=`{readiness_row.get('ambient_soupx_ready', 'false')}`; "
-        f"decontx_ready=`{readiness_row.get('ambient_decontx_ready', 'false')}`; "
-        f"cellbender_ready=`{readiness_row.get('ambient_cellbender_ready', 'false')}`"
+        f"preferred=`{cell(readiness_row, 'ambient_preferred_method', 'none')}`; "
+        f"fallback=`{cell(readiness_row, 'ambient_fallback_method', 'none')}`; "
+        f"soupx_ready=`{cell(readiness_row, 'ambient_soupx_ready', 'false')}`; "
+        f"decontx_ready=`{cell(readiness_row, 'ambient_decontx_ready', 'false')}`; "
+        f"cellbender_ready=`{cell(readiness_row, 'ambient_cellbender_ready', 'false')}`"
     )
-    sample_notes = describe_notes(readiness_row.get("notes", ""))
+    sample_notes = describe_notes(cell(readiness_row, "notes"))
     if sample_notes:
         lines.append(f"  notes: `{'; '.join(sample_notes)}`")
-    ambient_notes = [note for note in readiness_row.get("ambient_notes", "").split(";") if note.strip()]
+    ambient_notes = [note for note in cell(readiness_row, "ambient_notes").split(";") if note.strip()]
     if ambient_notes:
         lines.append(f"  ambient_notes: `{'; '.join(ambient_notes)}`")
+if spatial_inventory_rows:
+    lines.append("")
+    lines.append("## Spatial Contracts")
+    for row in spatial_inventory_rows:
+        lines.append(
+            f"- `{cell(row, 'sample_id')}`: section=`{cell(row, 'section_id')}`; "
+            f"platform=`{cell(row, 'platform')}`; layout=`{cell(row, 'bundle_layout')}`; "
+            f"ready_status=`{cell(row, 'ready_status')}`"
+        )
+        lines.append(f"  source_path: `{cell(row, 'source_path') or 'NA'}`")
+        lines.append(f"  standardized_outs: `{cell(row, 'standardized_outs') or 'NA'}`")
+        if cell(row, "missing_required_relpaths"):
+            lines.append(f"  missing_required: `{cell(row, 'missing_required_relpaths')}`")
 lines.append("")
 lines.append("## Next Step")
 lines.append(f"- `{next_step}`")
@@ -175,6 +242,8 @@ env_lines = [
     f"SCENIC_UPSTREAM_READY={shlex.quote(scenic_upstream_ready)}",
     f"DE_REPLICATE_READY={shlex.quote(de_replicate_ready)}",
     f"STANDARDIZED_INPUTS={shlex.quote('true' if standardized_ok else 'false')}",
+    f"SPATIAL_UPSTREAM_READY={shlex.quote(spatial_upstream_ready)}",
+    f"SPATIAL_STANDARDIZED_INPUTS={shlex.quote('true' if spatial_standardized_ok else 'false')}",
     f"NEXT_STEP={shlex.quote(next_step)}",
 ]
 env_path.write_text("\n".join(env_lines) + "\n", encoding="utf-8")
@@ -194,6 +263,8 @@ update_workflow_status \
   "status.scenic_upstream_ready=$(bool_string "${SCENIC_UPSTREAM_READY}")" \
   "status.de_replicate_ready=$(bool_string "${DE_REPLICATE_READY}")" \
   "status.standardized_inputs=$(bool_string "${STANDARDIZED_INPUTS}")" \
+  "status.spatial_upstream_ready=$(bool_string "${SPATIAL_UPSTREAM_READY}")" \
+  "status.spatial_standardized_inputs=$(bool_string "${SPATIAL_STANDARDIZED_INPUTS}")" \
   "status.input_eda_complete=true"
 
 echo "intake summary 已生成: ${INTAKE_SUMMARY_FILE}"

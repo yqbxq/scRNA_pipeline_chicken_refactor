@@ -183,6 +183,27 @@ check_stage_deps() {
         "status.10_velocity_stage3_completed" \
         "10_velocity_finalize 需要先完成 10_velocity stage3。"
       ;;
+    50_spatial)
+      sync_workflow_gate_statuses
+      require_status_flag_or_warn \
+        "status.spatial_upstream_ready" \
+        "50_spatial 需要 spatial_upstream_ready=true。请先完成 validate/audit/standardize/input_summary，并确认 ST bundle 可用。"
+      ;;
+    60_spatial_extensions)
+      sync_workflow_gate_statuses
+      require_status_flag_or_warn \
+        "status.spatial_main_completed" \
+        "60_spatial_extensions 需要先完成 50_spatial 主流程。"
+      ;;
+    70_joint_scrna_spatial)
+      sync_workflow_gate_statuses
+      require_status_flag_or_warn \
+        "status.spatial_main_completed" \
+        "70_joint_scrna_spatial 需要先完成 50_spatial 主流程。"
+      require_status_flag_or_warn \
+        "status.03_panorama_completed" \
+        "70_joint_scrna_spatial 需要 scRNA panorama/annotation 完成。"
+      ;;
     *)
       warn "未定义 ${stage_id} 的依赖规则，按无依赖继续。"
       ;;
@@ -338,7 +359,14 @@ sync_workflow_gate_statuses() {
     "status.velocity_inputs_gate_passed=$(eda_gate_passed velocity_inputs && echo true || echo false)" \
     "status.velocity_finalize_gate_passed=$(eda_gate_passed velocity_finalize && echo true || echo false)" \
     "status.scdesign3_targets_gate_passed=$(eda_gate_passed scdesign3_targets && echo true || echo false)" \
-    "status.scdesign3_validated_gate_passed=$(eda_gate_passed scdesign3_validated && echo true || echo false)"
+    "status.scdesign3_validated_gate_passed=$(eda_gate_passed scdesign3_validated && echo true || echo false)" \
+    "status.spatial_pre_qc_gate_passed=$(eda_gate_passed spatial_pre_qc && echo true || echo false)" \
+    "status.spatial_post_qc_gate_passed=$(eda_gate_passed spatial_post_qc && echo true || echo false)" \
+    "status.spatial_integration_gate_passed=$(eda_gate_passed spatial_integration && echo true || echo false)" \
+    "status.spatial_region_annotation_gate_passed=$(eda_gate_passed spatial_region_annotation && echo true || echo false)" \
+    "status.spatial_deconv_gate_passed=$(eda_gate_passed spatial_deconv && echo true || echo false)" \
+    "status.joint_trajectory_gate_passed=$(eda_gate_passed joint_trajectory && echo true || echo false)" \
+    "status.joint_communication_gate_passed=$(eda_gate_passed joint_communication && echo true || echo false)"
 }
 
 update_workflow_status() {
@@ -482,6 +510,8 @@ for key in (
     "annotation_eda_complete",
     "annotation_gate_passed",
     "subcluster_gate_passed",
+    "scdesign3_targets_gate_passed",
+    "scdesign3_validated_gate_passed",
     "deg_gate_passed",
     "communication_gate_passed",
     "regulation_gate_passed",
@@ -490,8 +520,6 @@ for key in (
     "trajectory_finalize_gate_passed",
     "velocity_inputs_gate_passed",
     "velocity_finalize_gate_passed",
-    "scdesign3_targets_gate_passed",
-    "scdesign3_validated_gate_passed",
     "05_deg_completed",
     "04d_cluster_robustness_completed",
     "04e_scdesign3_engine_completed",

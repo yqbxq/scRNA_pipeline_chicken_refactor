@@ -43,6 +43,16 @@ export RESULTS_DIR="${RESULTS_DIR:-${PROJECT_ROOT}/results}"
 export CHECKPOINT_DIR="${CHECKPOINT_DIR:-${RESULTS_DIR}/checkpoints}"
 export FIGURE_DIR="${FIGURE_DIR:-${RESULTS_DIR}/figures}"
 export TABLE_DIR="${TABLE_DIR:-${RESULTS_DIR}/tables}"
+export ST_ENABLED="${ST_ENABLED:-yes}"
+export SPATIAL_RESULTS_DIR="${SPATIAL_RESULTS_DIR:-${RESULTS_DIR}/spatial}"
+export SPATIAL_CHECKPOINT_DIR="${SPATIAL_CHECKPOINT_DIR:-${SPATIAL_RESULTS_DIR}/checkpoints}"
+export SPATIAL_FIGURE_DIR="${SPATIAL_FIGURE_DIR:-${SPATIAL_RESULTS_DIR}/figures}"
+export SPATIAL_TABLE_DIR="${SPATIAL_TABLE_DIR:-${SPATIAL_RESULTS_DIR}/tables}"
+export SPATIAL_REFERENCE_FREEZE_DIR="${SPATIAL_REFERENCE_FREEZE_DIR:-${RESULTS_DIR}/spatial_reference_frozen}"
+export JOINT_RESULTS_DIR="${JOINT_RESULTS_DIR:-${RESULTS_DIR}/joint}"
+export JOINT_CHECKPOINT_DIR="${JOINT_CHECKPOINT_DIR:-${JOINT_RESULTS_DIR}/checkpoints}"
+export JOINT_FIGURE_DIR="${JOINT_FIGURE_DIR:-${JOINT_RESULTS_DIR}/figures}"
+export JOINT_TABLE_DIR="${JOINT_TABLE_DIR:-${JOINT_RESULTS_DIR}/tables}"
 export LOG_DIR="${LOG_DIR:-${PROJECT_ROOT}/logs}"
 export ENV_DIR="${ENV_DIR:-${PROJECT_ROOT}/envs}"
 export RESOURCE_DIR="${RESOURCE_DIR:-${PROJECT_ROOT}/resources}"
@@ -105,6 +115,12 @@ export R_SCENIC_ENV_PREFIX="${R_SCENIC_ENV_PREFIX:-${ENV_DIR}/conda/r_scenic}"
 export R_INTERACTION_ENV_PREFIX="${R_INTERACTION_ENV_PREFIX:-${ENV_DIR}/conda/r_interaction}"
 export R_DECOUPLER_ENV_PREFIX="${R_DECOUPLER_ENV_PREFIX:-${ENV_DIR}/conda/r_decoupler}"
 export R_LEGACY_ENV_PREFIX="${R_LEGACY_ENV_PREFIX:-${ENV_DIR}/conda/r_legacy}"
+export R_SPATIAL_ENV_PREFIX="${R_SPATIAL_ENV_PREFIX:-${ENV_DIR}/conda/r_spatial}"
+export PY_SPATIAL_ENV_PREFIX="${PY_SPATIAL_ENV_PREFIX:-${ENV_DIR}/conda/py_spatial}"
+export PY_SPATIAL_LEGACY_ENV_PREFIX="${PY_SPATIAL_LEGACY_ENV_PREFIX:-${ENV_DIR}/conda/py_spatial_legacy}"
+export PY_CELL2LOCATION_ENV_PREFIX="${PY_CELL2LOCATION_ENV_PREFIX:-${ENV_DIR}/conda/py_cell2location}"
+export PY_SAW_ENV_PREFIX="${PY_SAW_ENV_PREFIX:-${ENV_DIR}/conda/py_saw}"
+export R_VALIDATION_ENV_PREFIX="${R_VALIDATION_ENV_PREFIX:-${ENV_DIR}/conda/r_validation}"
 export PYSCENIC_ENV_PREFIX="${PYSCENIC_ENV_PREFIX:-${ENV_DIR}/conda/pyscenic}"
 export VELOCITY_ENV_PREFIX="${VELOCITY_ENV_PREFIX:-${ENV_DIR}/conda/velocity}"
 export SCVELO_ENV_PREFIX="${SCVELO_ENV_PREFIX:-${ENV_DIR}/conda/scvelo}"
@@ -155,6 +171,8 @@ export WORKFLOW_STATUS_FILE="${WORKFLOW_STATUS_FILE:-${STATUS_DIR}/workflow_stat
 export SAMPLE_SHEET="${SAMPLE_SHEET:-${METADATA_DIR}/samples.tsv}"
 export CANONICAL_SAMPLE_SHEET="${CANONICAL_SAMPLE_SHEET:-${METADATA_DIR}/samples.canonical.tsv}"
 export COMPARISON_SHEET="${COMPARISON_SHEET:-${METADATA_DIR}/comparisons.tsv}"
+export SECTION_SHEET="${SECTION_SHEET:-${METADATA_DIR}/sections.tsv}"
+export SPATIAL_REFERENCE_INVENTORY_FILE="${SPATIAL_REFERENCE_INVENTORY_FILE:-${METADATA_DIR}/spatial_reference_inventory.tsv}"
 export COMMUNICATION_PAIRS_SHEET="${COMMUNICATION_PAIRS_SHEET:-${METADATA_DIR}/communication_pairs.tsv}"
 export TRAJECTORY_PAIRS_SHEET="${TRAJECTORY_PAIRS_SHEET:-${METADATA_DIR}/trajectory_pairs.tsv}"
 export SCENIC_TARGETS_SHEET="${SCENIC_TARGETS_SHEET:-${METADATA_DIR}/scenic_targets.tsv}"
@@ -169,12 +187,16 @@ export SCDESIGN3_THRESHOLDS_SHEET="${SCDESIGN3_THRESHOLDS_SHEET:-${METADATA_DIR}
 export DELIVERY_MANIFEST="${DELIVERY_MANIFEST:-${METADATA_DIR}/delivery_manifest.tsv}"
 export RECEIVED_FILES_MANIFEST="${RECEIVED_FILES_MANIFEST:-${METADATA_DIR}/received_files_manifest.tsv}"
 export INPUT_INVENTORY_FILE="${INPUT_INVENTORY_FILE:-${INTAKE_REPORT_DIR}/input_inventory.tsv}"
+export SPATIAL_INPUT_INVENTORY_FILE="${SPATIAL_INPUT_INVENTORY_FILE:-${INTAKE_REPORT_DIR}/spatial_input_inventory.tsv}"
 export BRANCH_READINESS_FILE="${BRANCH_READINESS_FILE:-${INTAKE_REPORT_DIR}/branch_readiness.tsv}"
 export INTAKE_SUMMARY_FILE="${INTAKE_SUMMARY_FILE:-${INTAKE_REPORT_DIR}/intake_summary.md}"
 export WAIVER_FILE="${WAIVER_FILE:-${PROJECT_CONFIG_DIR}/waivers.tsv}"
 export QC_THRESHOLD_FILE="${QC_THRESHOLD_FILE:-${PROJECT_CONFIG_DIR}/qc_thresholds.tsv}"
+export SPATIAL_QC_THRESHOLD_FILE="${SPATIAL_QC_THRESHOLD_FILE:-${PROJECT_CONFIG_DIR}/spatial_qc_thresholds.tsv}"
 export EDA_GATE_FILE="${EDA_GATE_FILE:-${PROJECT_CONFIG_DIR}/eda_gates.tsv}"
 export OBJECT_LAYER_CONFIG_FILE="${OBJECT_LAYER_CONFIG_FILE:-${PROJECT_CONFIG_DIR}/object_layers.tsv}"
+export SPATIAL_OBJECT_LAYER_FILE="${SPATIAL_OBJECT_LAYER_FILE:-${PROJECT_CONFIG_DIR}/spatial_object_layers.tsv}"
+export SPATIAL_INTAKE_CONTRACT_FILE="${SPATIAL_INTAKE_CONTRACT_FILE:-${PROJECT_CONFIG_DIR}/spatial_intake_contract.tsv}"
 export MARKER_PANEL_DIR="${MARKER_PANEL_DIR:-${PROJECT_CONFIG_DIR}/marker_panels}"
 export MITO_GENE_LIST_FILE="${MITO_GENE_LIST_FILE:-${PROJECT_CONFIG_DIR}/mito_gene_list.txt}"
 export AMBIENT_REPORT_DIR="${AMBIENT_REPORT_DIR:-${EDA_REPORT_DIR}/ambient}"
@@ -271,6 +293,23 @@ export MODULE_09_VERSION="${MODULE_09_VERSION:-1.0}"
 export TRAJECTORY_DIR="${TRAJECTORY_DIR:-${RESULTS_DIR}/trajectory}"
 export TRAJECTORY_REPORT_DIR="${TRAJECTORY_REPORT_DIR:-${EDA_REPORT_DIR}/trajectory}"
 export VELOCITY_REPORT_DIR="${VELOCITY_REPORT_DIR:-${EDA_REPORT_DIR}/velocity}"
+export SPATIAL_PRE_QC_REPORT_DIR="${SPATIAL_PRE_QC_REPORT_DIR:-${EDA_REPORT_DIR}/spatial_pre_qc}"
+export SPATIAL_POST_QC_REPORT_DIR="${SPATIAL_POST_QC_REPORT_DIR:-${EDA_REPORT_DIR}/spatial_post_qc}"
+export SPATIAL_INTEGRATION_REPORT_DIR="${SPATIAL_INTEGRATION_REPORT_DIR:-${EDA_REPORT_DIR}/spatial_integration}"
+export SPATIAL_REGION_ANNOTATION_REPORT_DIR="${SPATIAL_REGION_ANNOTATION_REPORT_DIR:-${EDA_REPORT_DIR}/spatial_region_annotation}"
+export SPATIAL_DECONV_REPORT_DIR="${SPATIAL_DECONV_REPORT_DIR:-${EDA_REPORT_DIR}/spatial_deconv}"
+export JOINT_TRAJECTORY_REPORT_DIR="${JOINT_TRAJECTORY_REPORT_DIR:-${EDA_REPORT_DIR}/joint_trajectory}"
+export JOINT_COMMUNICATION_REPORT_DIR="${JOINT_COMMUNICATION_REPORT_DIR:-${EDA_REPORT_DIR}/joint_communication}"
+export SPATIAL_QC_MIN_NFEATURE="${SPATIAL_QC_MIN_NFEATURE:-200}"
+export SPATIAL_QC_MIN_NCOUNT="${SPATIAL_QC_MIN_NCOUNT:-500}"
+export SPATIAL_QC_MAX_MITO_PCT="${SPATIAL_QC_MAX_MITO_PCT:-20}"
+export SPATIAL_SCT_VST_FLAVOR="${SPATIAL_SCT_VST_FLAVOR:-v2}"
+export SPATIAL_DEFAULT_CLUSTER_RESOLUTION="${SPATIAL_DEFAULT_CLUSTER_RESOLUTION:-0.6}"
+export SPATIAL_CLUSTER_RESOLUTIONS="${SPATIAL_CLUSTER_RESOLUTIONS:-0.4,0.6,0.8}"
+export SPATIAL_INTEGRATION_MODE="${SPATIAL_INTEGRATION_MODE:-none}"
+export SPATIAL_DECONV_PRIMARY="${SPATIAL_DECONV_PRIMARY:-rctd}"
+export SPATIAL_DECONV_FALLBACK="${SPATIAL_DECONV_FALLBACK:-seurat_transfer,card,cell2location}"
+export SPATIAL_SVG_METHOD="${SPATIAL_SVG_METHOD:-spatialde}"
 export TRAJECTORY_HVG_NFEATURES="${TRAJECTORY_HVG_NFEATURES:-${HVG_NFEATURES:-2000}}"
 export TRAJECTORY_PCA_DIMS="${TRAJECTORY_PCA_DIMS:-1:30}"
 export TRAJECTORY_UMAP_N_NEIGHBORS="${TRAJECTORY_UMAP_N_NEIGHBORS:-30}"
@@ -314,33 +353,49 @@ ensure_eda_control_files() {
     "${COMMUNICATION_REPORT_DIR}" \
     "${REGULATION_REPORT_DIR}" \
     "${TRAJECTORY_REPORT_DIR}" \
-    "${VELOCITY_REPORT_DIR}"
+    "${VELOCITY_REPORT_DIR}" \
+    "${SPATIAL_PRE_QC_REPORT_DIR}" \
+    "${SPATIAL_POST_QC_REPORT_DIR}" \
+    "${SPATIAL_INTEGRATION_REPORT_DIR}" \
+    "${SPATIAL_REGION_ANNOTATION_REPORT_DIR}" \
+    "${SPATIAL_DECONV_REPORT_DIR}" \
+    "${JOINT_TRAJECTORY_REPORT_DIR}" \
+    "${JOINT_COMMUNICATION_REPORT_DIR}"
 
   if [[ ! -s "${EDA_GATE_FILE}" ]]; then
     {
-      printf 'gate_id\tstatus\tapproved_by\tnotes\n'
-      printf 'pre_qc\tpending\t\t\n'
-      printf 'post_qc\tpending\t\t\n'
-      printf 'integration\tpending\t\t\n'
-      printf 'annotation\tpending\t\t\n'
-      printf 'subcluster\tpending\t\t\n'
-      printf 'deg\tpending\t\t\n'
-      printf 'communication\tpending\t\t\n'
-      printf 'regulation\tpending\t\t\n'
-      printf 'trajectory_inputs\tpending\t\t\n'
-      printf 'trajectory_methods\tpending\t\t\n'
-      printf 'trajectory_finalize\tpending\t\t\n'
-      printf 'velocity_inputs\tpending\t\t\n'
-      printf 'velocity_finalize\tpending\t\t\n'
-      printf 'scdesign3_targets\tpending\t\t\n'
-      printf 'scdesign3_validated\tpending\t\t\n'
+      printf 'gate_id\tstatus\tapproved_by\tapproved_at\tgate_profile\tnotes\n'
+      printf 'ambient\tpending\t\t\tdefault\t\n'
+      printf 'pre_qc\tpending\t\t\tdefault\t\n'
+      printf 'post_qc\tpending\t\t\tdefault\t\n'
+      printf 'integration\tpending\t\t\tdefault\t\n'
+      printf 'annotation\tpending\t\t\tdefault\t\n'
+      printf 'subcluster\tpending\t\t\tdefault\t\n'
+      printf 'deg\tpending\t\t\tdefault\t\n'
+      printf 'enrichment\tpending\t\t\tdefault\t\n'
+      printf 'communication\tpending\t\t\tdefault\t\n'
+      printf 'regulation\tpending\t\t\tdefault\t\n'
+      printf 'trajectory_inputs\tpending\t\t\tdefault\t\n'
+      printf 'trajectory_methods\tpending\t\t\tdefault\t\n'
+      printf 'trajectory_finalize\tpending\t\t\tdefault\t\n'
+      printf 'velocity_inputs\tpending\t\t\tdefault\t\n'
+      printf 'velocity_finalize\tpending\t\t\tdefault\t\n'
+      printf 'scdesign3_targets\tpending\t\t\tdefault\t\n'
+      printf 'scdesign3_validated\tpending\t\t\tdefault\t\n'
+      printf 'spatial_pre_qc\tpending\t\t\tdefault\t\n'
+      printf 'spatial_post_qc\tpending\t\t\tdefault\t\n'
+      printf 'spatial_integration\tpending\t\t\tdefault\t\n'
+      printf 'spatial_region_annotation\tpending\t\t\tdefault\t\n'
+      printf 'spatial_deconv\tpending\t\t\tdefault\t\n'
+      printf 'joint_trajectory\tpending\t\t\tdefault\t\n'
+      printf 'joint_communication\tpending\t\t\tdefault\t\n'
     } > "${EDA_GATE_FILE}"
   fi
 
   local gate_id
-  for gate_id in pre_qc post_qc integration annotation subcluster deg communication regulation trajectory_inputs trajectory_methods trajectory_finalize velocity_inputs velocity_finalize scdesign3_targets scdesign3_validated; do
+  for gate_id in ambient pre_qc post_qc integration annotation subcluster deg enrichment communication regulation trajectory_inputs trajectory_methods trajectory_finalize velocity_inputs velocity_finalize scdesign3_targets scdesign3_validated spatial_pre_qc spatial_post_qc spatial_integration spatial_region_annotation spatial_deconv joint_trajectory joint_communication; do
     if ! awk -F '\t' -v gate="${gate_id}" 'NR > 1 && $1 == gate { found = 1 } END { exit(found ? 0 : 1) }' "${EDA_GATE_FILE}" >/dev/null 2>&1; then
-      printf '%s\tpending\t\t\n' "${gate_id}" >> "${EDA_GATE_FILE}"
+      printf '%s\tpending\t\t\tdefault\t\n' "${gate_id}" >> "${EDA_GATE_FILE}"
     fi
   done
 
@@ -394,6 +449,29 @@ ensure_object_layer_config_file() {
   } > "${OBJECT_LAYER_CONFIG_FILE}"
 }
 
+ensure_spatial_config_files() {
+  ensure_dir "${PROJECT_CONFIG_DIR}" "${MARKER_PANEL_DIR}" "${METADATA_DIR}"
+
+  if [[ ! -s "${SPATIAL_QC_THRESHOLD_FILE}" && -f "${PIPELINE_ROOT}/config/spatial_qc_thresholds.tsv.template" ]]; then
+    cp -f "${PIPELINE_ROOT}/config/spatial_qc_thresholds.tsv.template" "${SPATIAL_QC_THRESHOLD_FILE}"
+  fi
+  if [[ ! -s "${SPATIAL_OBJECT_LAYER_FILE}" && -f "${PIPELINE_ROOT}/config/spatial_object_layers.tsv.template" ]]; then
+    cp -f "${PIPELINE_ROOT}/config/spatial_object_layers.tsv.template" "${SPATIAL_OBJECT_LAYER_FILE}"
+  fi
+  if [[ ! -s "${SPATIAL_INTAKE_CONTRACT_FILE}" && -f "${PIPELINE_ROOT}/config/spatial_intake_contract.tsv.template" ]]; then
+    cp -f "${PIPELINE_ROOT}/config/spatial_intake_contract.tsv.template" "${SPATIAL_INTAKE_CONTRACT_FILE}"
+  fi
+  if [[ ! -s "${MARKER_PANEL_DIR}/spatial_region_panel.tsv.template" && -f "${PIPELINE_ROOT}/config/marker_panels/spatial_region_panel.tsv.template" ]]; then
+    cp -f "${PIPELINE_ROOT}/config/marker_panels/spatial_region_panel.tsv.template" "${MARKER_PANEL_DIR}/spatial_region_panel.tsv.template"
+  fi
+  if [[ ! -s "${SECTION_SHEET}" && -f "${PIPELINE_ROOT}/metadata/templates/sections.tsv.template" ]]; then
+    cp -f "${PIPELINE_ROOT}/metadata/templates/sections.tsv.template" "${SECTION_SHEET}"
+  fi
+  if [[ ! -s "${SPATIAL_REFERENCE_INVENTORY_FILE}" && -f "${PIPELINE_ROOT}/metadata/spatial_reference_inventory.tsv" ]]; then
+    cp -f "${PIPELINE_ROOT}/metadata/spatial_reference_inventory.tsv" "${SPATIAL_REFERENCE_INVENTORY_FILE}"
+  fi
+}
+
 ensure_marker_panel_dir() {
   ensure_dir "${MARKER_PANEL_DIR}"
 
@@ -438,6 +516,7 @@ detect_python() {
   for candidate in \
     "${R_MAIN_ENV_PREFIX:-}/bin/python" \
     "${R_SCENIC_ENV_PREFIX:-}/bin/python" \
+    "${PY_SPATIAL_ENV_PREFIX:-}/bin/python" \
     "${VELOCITY_ENV_PREFIX:-}/bin/python"; do
     if [[ -n "${candidate}" && -x "${candidate}" ]]; then
       echo "${candidate}"
@@ -558,11 +637,28 @@ prepare_project_state_dirs() {
     "${REGULATION_REPORT_DIR}" \
     "${TRAJECTORY_REPORT_DIR}" \
     "${VELOCITY_REPORT_DIR}" \
+    "${SPATIAL_RESULTS_DIR}" \
+    "${SPATIAL_CHECKPOINT_DIR}" \
+    "${SPATIAL_FIGURE_DIR}" \
+    "${SPATIAL_TABLE_DIR}" \
+    "${SPATIAL_REFERENCE_FREEZE_DIR}" \
+    "${JOINT_RESULTS_DIR}" \
+    "${JOINT_CHECKPOINT_DIR}" \
+    "${JOINT_FIGURE_DIR}" \
+    "${JOINT_TABLE_DIR}" \
+    "${SPATIAL_PRE_QC_REPORT_DIR}" \
+    "${SPATIAL_POST_QC_REPORT_DIR}" \
+    "${SPATIAL_INTEGRATION_REPORT_DIR}" \
+    "${SPATIAL_REGION_ANNOTATION_REPORT_DIR}" \
+    "${SPATIAL_DECONV_REPORT_DIR}" \
+    "${JOINT_TRAJECTORY_REPORT_DIR}" \
+    "${JOINT_COMMUNICATION_REPORT_DIR}" \
     "${STATUS_DIR}" \
     "${MANIFEST_DIR}" \
     "${LOG_DIR}"
   ensure_eda_control_files
   ensure_object_layer_config_file
+  ensure_spatial_config_files
   ensure_marker_panel_dir
   ensure_mito_gene_list_file
 }

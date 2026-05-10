@@ -1,0 +1,9 @@
+layer_id	celltype	gene	evidence_source	tissue	panel_name	evidence_note	confidence_ceiling
+panorama_st	GC_rich	AMH	literature	chicken_ovary	syf_f5_v1	Granulosa marker	confirmed
+panorama_st	GC_rich	FOXL2	literature	chicken_ovary	syf_f5_v1	Granulosa marker	confirmed
+panorama_st	TC_rich	STAR	literature	chicken_ovary	syf_f5_v1	Theca steroidogenic marker	confirmed
+panorama_st	TC_rich	CYP17A1	literature	chicken_ovary	syf_f5_v1	Theca steroidogenic marker	confirmed
+panorama_st	stroma	COL1A1	literature	chicken_ovary	syf_f5_v1	Stromal collagen marker	tentative
+panorama_st	stroma	DCN	literature	chicken_ovary	syf_f5_v1	Stromal proteoglycan marker	tentative
+panorama_st	vasculature	PECAM1	literature	chicken_ovary	syf_f5_v1	Endothelial marker	tentative
+panorama_st	uncertain	*	candidate	chicken_ovary	syf_f5_v1	Reserved bucket	open

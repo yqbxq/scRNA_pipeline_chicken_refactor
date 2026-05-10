@@ -64,17 +64,27 @@ def replace_path(dst: Path, src: Path):
 with input_sheet.open("r", encoding="utf-8", newline="") as handle:
     sample_rows = list(csv.DictReader(handle, delimiter="\t"))
 
+
+def cell(row: dict[str, str], key: str, default: str = "") -> str:
+    value = row.get(key, default)
+    if value is None:
+        return default
+    return str(value)
+
+
 inventory_by_sample = {}
 if inventory_path.exists():
     with inventory_path.open("r", encoding="utf-8", newline="") as handle:
         inventory_rows = list(csv.DictReader(handle, delimiter="\t"))
-    inventory_by_sample = {row["sample_id"]: row for row in inventory_rows if row.get("sample_id")}
+    inventory_by_sample = {cell(row, "sample_id"): row for row in inventory_rows if cell(row, "sample_id")}
 
 for row in sample_rows:
-    if row.get("run_main", "yes").strip().lower() != "yes":
+    if cell(row, "modality", "scrna").strip().lower() == "spatial":
+        continue
+    if cell(row, "run_main", "yes").strip().lower() != "yes":
         continue
 
-    sample_id = row["sample_id"].strip()
+    sample_id = cell(row, "sample_id").strip()
     inventory_row = inventory_by_sample.get(sample_id)
     matrix_dir = None
     raw_matrix_dir = None
@@ -106,6 +116,12 @@ for row in sample_rows:
         raw_dst_dir = data_dir / f"{sample_id}_raw"
         replace_path(raw_dst_dir, raw_matrix_dir)
 PY
+
+if [[ "${ST_ENABLED:-yes}" != "no" && -s "${SPATIAL_INPUT_INVENTORY_FILE}" ]]; then
+  "${python_bin}" "${PIPELINE_ROOT}/workflow/04python/spatial_intake.py" standardize \
+    --inventory "${SPATIAL_INPUT_INVENTORY_FILE}" \
+    --mode "${INPUT_STANDARDIZE_MODE}"
+fi
 
 update_workflow_status \
   "inputs_standardized" \
