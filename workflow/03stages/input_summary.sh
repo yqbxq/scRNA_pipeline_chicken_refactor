@@ -31,7 +31,7 @@ import shlex
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(os.environ["PIPELINE_ROOT"]) / "shell" / "04python"))
+sys.path.insert(0, str(Path(os.environ["PIPELINE_ROOT"]) / "workflow" / "04python"))
 
 from intake_contract import is_mex_matrix_dir
 
