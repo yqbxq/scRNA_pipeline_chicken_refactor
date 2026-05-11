@@ -26,10 +26,13 @@ dependencies:
   - r-data.table
   - r-future
   - r-future.apply
+  - r-aricode
+  - r-clue
   - r-fields
   - r-rocr
   - bioconductor-biocparallel
   - bioconductor-singlecellexperiment=1.28.0
+  - bioconductor-scdesign3
   - bioconductor-scater
   - bioconductor-scdblfinder
   - bioconductor-celda
@@ -39,6 +42,7 @@ dependencies:
   - bioconductor-speckle
   - bioconductor-slingshot=2.14.0
   - bioconductor-tradeseq=1.20.0
+  - bioconductor-monocle
   - bioconductor-clusterprofiler=4.14.0
   - bioconductor-org.gg.eg.db
   - bioconductor-biomart=2.62.0

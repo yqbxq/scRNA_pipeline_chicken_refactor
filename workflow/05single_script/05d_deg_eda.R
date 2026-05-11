@@ -38,6 +38,69 @@ pb_df <- read_tsv_optional(pseudobulk_manifest_tsv)
 comp_df <- read_tsv_optional(composition_manifest_tsv)
 gene_program_targets <- read_tsv_optional(cfg$gene_program_targets_sheet)
 
+read_scdesign3_question_gates_05d <- function(cfg) {
+  candidates <- c(
+    file.path(cfg$table_dir, "scdesign3_all_questions_status.tsv"),
+    file.path(cfg$table_dir, "04d_cluster_robustness", "question_gate_status.tsv")
+  )
+  for (path in candidates) {
+    df <- read_tsv_optional(path)
+    if (nrow(df) > 0 && "question_id" %in% colnames(df)) {
+      for (col in c("gate_status", "interpretation_allowed", "reason")) {
+        if (!col %in% colnames(df)) df[[col]] <- ""
+      }
+      return(df[, c("question_id", "gate_status", "interpretation_allowed", "reason"), drop = FALSE])
+    }
+  }
+  empty_df_05(c("question_id", "gate_status", "interpretation_allowed", "reason"))
+}
+
+attach_scdesign3_gate_to_registry_05d <- function(registry, cfg) {
+  gate_cols <- c(
+    "scdesign3_gate_status", "scdesign3_gate_reason",
+    "allowed_for_enrichment", "allowed_for_nichenet",
+    "interpretation_level"
+  )
+  if (nrow(registry) == 0) {
+    for (col in gate_cols) registry[[col]] <- character(0)
+    return(registry)
+  }
+  gates <- read_scdesign3_question_gates_05d(cfg)
+  if (nrow(gates) == 0) {
+    registry$scdesign3_gate_status <- "NOT_RUN"
+    registry$scdesign3_gate_reason <- "scDesign3 question gate has not been generated."
+    registry$allowed_for_enrichment <- ifelse(registry$enrichment_eligible %in% c("yes", "contextual"), "yes", "no")
+    registry$allowed_for_nichenet <- ifelse(registry$nichenet_eligible == "yes", "yes", "no")
+    registry$interpretation_level <- ifelse(registry$preferred_for_downstream %in% c("contextual", "no"), registry$preferred_for_downstream, "ungated")
+    return(registry)
+  }
+  registry %>%
+    dplyr::left_join(gates, by = c("source_question_id" = "question_id")) %>%
+    dplyr::mutate(
+      scdesign3_gate_status = dplyr::coalesce(gate_status, "MISSING_GATE"),
+      scdesign3_gate_reason = dplyr::coalesce(reason, "No matching scDesign3 gate for source_question_id."),
+      interpretation_level = dplyr::case_when(
+        scdesign3_gate_status == "PASS" ~ "core",
+        scdesign3_gate_status == "WARN" ~ "exploratory",
+        scdesign3_gate_status %in% c("NOT_APPLICABLE", "DERIVED") ~ "context_or_inherit",
+        TRUE ~ "blocked_or_pending"
+      ),
+      allowed_for_enrichment = dplyr::if_else(
+        interpretation_level %in% c("core", "exploratory", "context_or_inherit") &
+          enrichment_eligible %in% c("yes", "contextual"),
+        "yes",
+        "no"
+      ),
+      allowed_for_nichenet = dplyr::if_else(
+        interpretation_level %in% c("core", "exploratory") &
+          nichenet_eligible == "yes",
+        "yes",
+        "no"
+      )
+    ) %>%
+    dplyr::select(-gate_status, -interpretation_allowed, -reason)
+}
+
 resolve_manifest_output_05d <- function(manifest_path, keys) {
   if (!file.exists(manifest_path)) {
     return("")
@@ -183,7 +246,9 @@ registry_cols <- c(
   "result_level", "formal_status", "result_status", "skip_reason",
   "eligible_reason", "ineligible_reason", "deg_tsv", "marker_tsv",
   "annotation_evidence_tsv", "composition_tsv", "top_gene_tsv",
-  "n_significant", "warning"
+  "n_significant", "warning", "scdesign3_gate_status",
+  "scdesign3_gate_reason", "allowed_for_enrichment",
+  "allowed_for_nichenet", "interpretation_level"
 )
 
 if (nrow(gene_program_targets) == 0) {
@@ -305,6 +370,7 @@ if (nrow(gene_program_targets) == 0) {
   }
   registry_df <- dplyr::bind_rows(registry_rows)
 }
+registry_df <- attach_scdesign3_gate_to_registry_05d(registry_df, cfg)
 write_tsv_local(registry_df, paths$gene_program_registry_tsv)
 
 forced_or_exploratory <- status_df[

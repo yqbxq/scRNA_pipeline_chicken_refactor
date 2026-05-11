@@ -53,7 +53,12 @@ m3_write_generated_tsv <- function(df, path, cols) {
   df <- df[, cols, drop = FALSE]
   con <- file(path, open = "w", encoding = "UTF-8")
   on.exit(close(con), add = TRUE)
-  writeLines("# AUTO-GENERATED. Edit metadata/analysis_questions.tsv instead.", con, useBytes = TRUE)
+  comment <- if (basename(path) == "scdesign3_thresholds.tsv") {
+    "# Project-level scDesign3 gate thresholds. Edit this file to override generated defaults."
+  } else {
+    "# AUTO-GENERATED. Edit metadata/analysis_questions.tsv instead."
+  }
+  writeLines(comment, con, useBytes = TRUE)
   utils::write.table(df, con, sep = "\t", quote = FALSE, row.names = FALSE, col.names = TRUE, na = "")
 }
 

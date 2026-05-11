@@ -82,8 +82,12 @@ export VARS_TO_REGRESS_DEFAULT="${VARS_TO_REGRESS_DEFAULT:-}"
 export RES_FINE_STEP="${RES_FINE_STEP:-0.005}"
 export PCA_DIMS_PANORAMA="${PCA_DIMS_PANORAMA:-${PCA_DIMS:-1:30}}"
 export PCA_DIMS_SUBCLUSTER="${PCA_DIMS_SUBCLUSTER:-1:20}"
-export SCDESIGN3_N_SIM="${SCDESIGN3_N_SIM:-1}"
+export SCDESIGN3_N_SIM="${SCDESIGN3_N_SIM:-5}"
 export SCDESIGN3_FAMILY="${SCDESIGN3_FAMILY:-nb}"
+export SCDESIGN3_N_CORES="${SCDESIGN3_N_CORES:-${MAIN_THREADS:-4}}"
+export SCDESIGN3_MAX_CELLS_PER_LABEL="${SCDESIGN3_MAX_CELLS_PER_LABEL:-2000}"
+export SCDESIGN3_N_HVG="${SCDESIGN3_N_HVG:-2000}"
+export SCDESIGN3_N_PCS="${SCDESIGN3_N_PCS:-30}"
 export PANORAMA_LAYER_ID="${PANORAMA_LAYER_ID:-panorama}"
 export ANNOTATION_HUB_PATH_CLUSTERED="${ANNOTATION_HUB_PATH_CLUSTERED:-${CHECKPOINT_DIR}/02_after_clustering.rds}"
 export MODULE_03_VERSION="${MODULE_03_VERSION:-1.0}"
@@ -95,9 +99,11 @@ export EXISTING_R_SIF="${EXISTING_R_SIF:-}"
 export R_LIBS_MAIN="${R_LIBS_MAIN:-}"
 export R_LIBS_SCENIC="${R_LIBS_SCENIC:-}"
 export R_LIBS_INTERACTION="${R_LIBS_INTERACTION:-}"
+export R_LIBS_DECOUPLER="${R_LIBS_DECOUPLER:-}"
 export R_MAIN_ENV_PREFIX="${R_MAIN_ENV_PREFIX:-${ENV_DIR}/conda/r_main}"
 export R_SCENIC_ENV_PREFIX="${R_SCENIC_ENV_PREFIX:-${ENV_DIR}/conda/r_scenic}"
 export R_INTERACTION_ENV_PREFIX="${R_INTERACTION_ENV_PREFIX:-${ENV_DIR}/conda/r_interaction}"
+export R_DECOUPLER_ENV_PREFIX="${R_DECOUPLER_ENV_PREFIX:-${ENV_DIR}/conda/r_decoupler}"
 export R_LEGACY_ENV_PREFIX="${R_LEGACY_ENV_PREFIX:-${ENV_DIR}/conda/r_legacy}"
 export PYSCENIC_ENV_PREFIX="${PYSCENIC_ENV_PREFIX:-${ENV_DIR}/conda/pyscenic}"
 export VELOCITY_ENV_PREFIX="${VELOCITY_ENV_PREFIX:-${ENV_DIR}/conda/velocity}"
@@ -106,6 +112,23 @@ export VELOCITY_DIR="${VELOCITY_DIR:-${RESULTS_DIR}/velocity}"
 export VELOCITY_INPUT_DIR="${VELOCITY_INPUT_DIR:-${VELOCITY_DIR}/input}"
 export VELOCITY_LOOM_DIR="${VELOCITY_LOOM_DIR:-${VELOCITY_DIR}/loom}"
 export VELOCITY_OUTPUT_DIR="${VELOCITY_OUTPUT_DIR:-${VELOCITY_DIR}/output}"
+export SCVELO_THREADS="${SCVELO_THREADS:-${MAIN_THREADS:-8}}"
+export MODULE_10_VERSION="${MODULE_10_VERSION:-1.0}"
+export VELOCITY_SAMPLE_IDS="${VELOCITY_SAMPLE_IDS:-}"
+export VELOCITY_BAM_PATTERN="${VELOCITY_BAM_PATTERN:-anno_decon_sorted.bam}"
+export VELOCITY_H5_PATTERN="${VELOCITY_H5_PATTERN:-filtered_feature_bc_matrix.h5}"
+export VELOCITY_GTF="${VELOCITY_GTF:-${CLEAN_GTF}}"
+export VELOCYTO_REPEAT_MASK_GTF="${VELOCYTO_REPEAT_MASK_GTF:-}"
+export VELOCYTO_THREADS="${VELOCYTO_THREADS:-${MAIN_THREADS:-8}}"
+export VELOCITY_MIN_REFERENCE_CELLS="${VELOCITY_MIN_REFERENCE_CELLS:-10}"
+export SCVELO_MIN_SHARED_COUNTS="${SCVELO_MIN_SHARED_COUNTS:-20}"
+export SCVELO_TOP_GENES="${SCVELO_TOP_GENES:-2000}"
+export SCVELO_N_PCS="${SCVELO_N_PCS:-30}"
+export SCVELO_N_NEIGHBORS="${SCVELO_N_NEIGHBORS:-30}"
+export VELOCITY_DRIVER_TOP_N="${VELOCITY_DRIVER_TOP_N:-200}"
+export CELLRANK_MIN_CELLS="${CELLRANK_MIN_CELLS:-200}"
+export CELLRANK_MIN_VELOCITY_CONFIDENCE="${CELLRANK_MIN_VELOCITY_CONFIDENCE:-0.05}"
+export CELLRANK_N_STATES="${CELLRANK_N_STATES:-6}"
 export SCENIC_DB_DIR="${SCENIC_DB_DIR:-${RESOURCE_DIR}/scenic_db}"
 export SCENIC_INPUT_DIR="${SCENIC_INPUT_DIR:-${RESULTS_DIR}/scenic_input}"
 export SCENIC_OUTPUT_DIR="${SCENIC_OUTPUT_DIR:-${RESULTS_DIR}/scenic_output}"
@@ -115,6 +138,7 @@ export SCENIC_DB_500BP="${SCENIC_DB_500BP:-${SCENIC_DB_DIR}/hg38__refseq-r80__50
 export SCENIC_DB_10KB="${SCENIC_DB_10KB:-${SCENIC_DB_DIR}/hg38__refseq-r80__10kb_up_and_down_tss.mc9nr.genes_vs_motifs.rankings.feather}"
 export SCENIC_RESOURCE_MANIFEST="${SCENIC_RESOURCE_MANIFEST:-${SCENIC_DB_DIR}/scenic_resources_manifest.json}"
 export SCENIC_ORTHOLOG_MAP_FILE="${SCENIC_ORTHOLOG_MAP_FILE:-}"
+export DECOUPLER_RESOURCE_DIR="${DECOUPLER_RESOURCE_DIR:-${RESOURCE_DIR}/decoupler}"
 export ENSEMBL_MIRROR="${ENSEMBL_MIRROR:-asia}"
 export ORTHOLOG_CACHE_DIR="${ORTHOLOG_CACHE_DIR:-${RESULTS_DIR}/ortholog_cache}"
 export ORTHOLOG_MANIFEST="${ORTHOLOG_MANIFEST:-${ORTHOLOG_CACHE_DIR}/_manifest.json}"
@@ -138,6 +162,10 @@ export ENRICHMENT_TARGETS_SHEET="${ENRICHMENT_TARGETS_SHEET:-${METADATA_DIR}/enr
 export GENE_PROGRAM_TARGETS_SHEET="${GENE_PROGRAM_TARGETS_SHEET:-${METADATA_DIR}/gene_program_targets.tsv}"
 export DECONV_PAIRS_SHEET="${DECONV_PAIRS_SHEET:-${METADATA_DIR}/deconv_pairs.tsv}"
 export SPATIAL_PAIRS_SHEET="${SPATIAL_PAIRS_SHEET:-${METADATA_DIR}/spatial_pairs.tsv}"
+export SCDESIGN3_QUESTION_MAP="${SCDESIGN3_QUESTION_MAP:-${METADATA_DIR}/scdesign3_question_map.tsv}"
+export SCDESIGN3_TARGETS_SHEET="${SCDESIGN3_TARGETS_SHEET:-${METADATA_DIR}/scdesign3_targets.tsv}"
+export SCDESIGN3_SIMULATION_DESIGNS_SHEET="${SCDESIGN3_SIMULATION_DESIGNS_SHEET:-${METADATA_DIR}/scdesign3_simulation_designs.tsv}"
+export SCDESIGN3_THRESHOLDS_SHEET="${SCDESIGN3_THRESHOLDS_SHEET:-${METADATA_DIR}/scdesign3_thresholds.tsv}"
 export DELIVERY_MANIFEST="${DELIVERY_MANIFEST:-${METADATA_DIR}/delivery_manifest.tsv}"
 export RECEIVED_FILES_MANIFEST="${RECEIVED_FILES_MANIFEST:-${METADATA_DIR}/received_files_manifest.tsv}"
 export INPUT_INVENTORY_FILE="${INPUT_INVENTORY_FILE:-${INTAKE_REPORT_DIR}/input_inventory.tsv}"
@@ -202,6 +230,15 @@ export SCENIC_NES_THRESHOLD="${SCENIC_NES_THRESHOLD:-3}"
 export SCENIC_AUC_MAX_RANK_FRACTION="${SCENIC_AUC_MAX_RANK_FRACTION:-0.05}"
 export SCENIC_THREADS="${SCENIC_THREADS:-8}"
 export SCENIC_ORTHOLOG_MIN_COVERAGE="${SCENIC_ORTHOLOG_MIN_COVERAGE:-0.30}"
+export DECOUPLER_TF_METHOD="${DECOUPLER_TF_METHOD:-wmean}"
+export DECOUPLER_PATHWAY_METHOD="${DECOUPLER_PATHWAY_METHOD:-ulm}"
+export DECOUPLER_TOP_TF_N="${DECOUPLER_TOP_TF_N:-25}"
+export DECOUPLER_MIN_TARGETS="${DECOUPLER_MIN_TARGETS:-5}"
+export DECOUPLER_CONFIDENCE_LEVELS="${DECOUPLER_CONFIDENCE_LEVELS:-A,B,C}"
+export DECOUPLER_USE_CACHE="${DECOUPLER_USE_CACHE:-yes}"
+export DECOUPLER_ACTIVITY_LEVEL="${DECOUPLER_ACTIVITY_LEVEL:-group_average}"
+export DECOUPLER_GROUP_COL="${DECOUPLER_GROUP_COL:-auto}"
+export ALLOW_REGULATION_EMPTY_REPORT="${ALLOW_REGULATION_EMPTY_REPORT:-no}"
 export TRIAGE_FRAC_BELOW_CUTOFF="${TRIAGE_FRAC_BELOW_CUTOFF:-0.35}"
 export TRIAGE_FRAC_ABOVE_MITO="${TRIAGE_FRAC_ABOVE_MITO:-0.25}"
 export TRIAGE_DENSITY_PEAKS="${TRIAGE_DENSITY_PEAKS:-2}"
@@ -230,6 +267,17 @@ export TARGET_CLUSTERS="${TARGET_CLUSTERS:-15}"
 export RES_RANGE="${RES_RANGE:-0.20,0.25,0.30,0.35,0.40,0.45,0.50,0.55,0.60}"
 export TRAJECTORY_START="${TRAJECTORY_START:-}"
 export TRADESEQ_KNOTS="${TRADESEQ_KNOTS:-6}"
+export MODULE_09_VERSION="${MODULE_09_VERSION:-1.0}"
+export TRAJECTORY_DIR="${TRAJECTORY_DIR:-${RESULTS_DIR}/trajectory}"
+export TRAJECTORY_REPORT_DIR="${TRAJECTORY_REPORT_DIR:-${EDA_REPORT_DIR}/trajectory}"
+export VELOCITY_REPORT_DIR="${VELOCITY_REPORT_DIR:-${EDA_REPORT_DIR}/velocity}"
+export TRAJECTORY_HVG_NFEATURES="${TRAJECTORY_HVG_NFEATURES:-${HVG_NFEATURES:-2000}}"
+export TRAJECTORY_PCA_DIMS="${TRAJECTORY_PCA_DIMS:-1:30}"
+export TRAJECTORY_UMAP_N_NEIGHBORS="${TRAJECTORY_UMAP_N_NEIGHBORS:-30}"
+export TRAJECTORY_SPLIT_MIN_CELLS="${TRAJECTORY_SPLIT_MIN_CELLS:-50}"
+export TRAJECTORY_BALANCE_WARN_FRACTION="${TRAJECTORY_BALANCE_WARN_FRACTION:-0.30}"
+export TRAJECTORY_CONSENSUS_MIN_METHODS="${TRAJECTORY_CONSENSUS_MIN_METHODS:-2}"
+export TRAJECTORY_CONSENSUS_CONFLICT_RHO="${TRAJECTORY_CONSENSUS_CONFLICT_RHO:-0.30}"
 
 export PATH="${SRA_TOOLS_DIR:+${SRA_TOOLS_DIR}:}${PATH}"
 
@@ -243,7 +291,11 @@ warn() {
 }
 
 ensure_dir() {
-  mkdir -p "$@"
+  local path
+  for path in "$@"; do
+    [[ -n "${path}" ]] || continue
+    mkdir -p "${path}"
+  done
 }
 
 ensure_eda_control_files() {
@@ -260,7 +312,9 @@ ensure_eda_control_files() {
     "${DEG_REPORT_DIR}" \
     "${ENRICHMENT_REPORT_DIR}" \
     "${COMMUNICATION_REPORT_DIR}" \
-    "${REGULATION_REPORT_DIR}"
+    "${REGULATION_REPORT_DIR}" \
+    "${TRAJECTORY_REPORT_DIR}" \
+    "${VELOCITY_REPORT_DIR}"
 
   if [[ ! -s "${EDA_GATE_FILE}" ]]; then
     {
@@ -273,11 +327,18 @@ ensure_eda_control_files() {
       printf 'deg\tpending\t\t\n'
       printf 'communication\tpending\t\t\n'
       printf 'regulation\tpending\t\t\n'
+      printf 'trajectory_inputs\tpending\t\t\n'
+      printf 'trajectory_methods\tpending\t\t\n'
+      printf 'trajectory_finalize\tpending\t\t\n'
+      printf 'velocity_inputs\tpending\t\t\n'
+      printf 'velocity_finalize\tpending\t\t\n'
+      printf 'scdesign3_targets\tpending\t\t\n'
+      printf 'scdesign3_validated\tpending\t\t\n'
     } > "${EDA_GATE_FILE}"
   fi
 
   local gate_id
-  for gate_id in pre_qc post_qc integration annotation subcluster deg communication regulation; do
+  for gate_id in pre_qc post_qc integration annotation subcluster deg communication regulation trajectory_inputs trajectory_methods trajectory_finalize velocity_inputs velocity_finalize scdesign3_targets scdesign3_validated; do
     if ! awk -F '\t' -v gate="${gate_id}" 'NR > 1 && $1 == gate { found = 1 } END { exit(found ? 0 : 1) }' "${EDA_GATE_FILE}" >/dev/null 2>&1; then
       printf '%s\tpending\t\t\n' "${gate_id}" >> "${EDA_GATE_FILE}"
     fi
@@ -447,6 +508,10 @@ ensure_metadata_fresh() {
     "${GENE_PROGRAM_TARGETS_SHEET}"
     "${DECONV_PAIRS_SHEET}"
     "${SPATIAL_PAIRS_SHEET}"
+    "${SCDESIGN3_QUESTION_MAP}"
+    "${SCDESIGN3_TARGETS_SHEET}"
+    "${SCDESIGN3_SIMULATION_DESIGNS_SHEET}"
+    "${SCDESIGN3_THRESHOLDS_SHEET}"
   )
   local generator="${PIPELINE_ROOT}/workflow/03stages/95_run_metadata_generator.sh"
   local validator="${PIPELINE_ROOT}/workflow/03stages/96_validate_metadata.sh"
@@ -491,6 +556,8 @@ prepare_project_state_dirs() {
     "${ENRICHMENT_REPORT_DIR}" \
     "${COMMUNICATION_REPORT_DIR}" \
     "${REGULATION_REPORT_DIR}" \
+    "${TRAJECTORY_REPORT_DIR}" \
+    "${VELOCITY_REPORT_DIR}" \
     "${STATUS_DIR}" \
     "${MANIFEST_DIR}" \
     "${LOG_DIR}"

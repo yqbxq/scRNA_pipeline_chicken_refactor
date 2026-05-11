@@ -3,7 +3,7 @@ set -euo pipefail
 
 source "$(cd "$(dirname "$0")/../02lib" && pwd)/common.sh"
 
-INSTALL_TARGETS="${INSTALL_TARGETS:-r_main,r_legacy,r_scenic,velocity,pyscenic}"
+INSTALL_TARGETS="${INSTALL_TARGETS:-r_main,r_legacy,r_scenic,r_decoupler,velocity,pyscenic}"
 INSTALL_SCENIC_RESOURCES="${INSTALL_SCENIC_RESOURCES:-no}"
 
 ensure_dir \
@@ -20,8 +20,10 @@ ensure_dir \
   "${VELOCITY_OUTPUT_DIR}" \
   "${SCENIC_INPUT_DIR}" \
   "${SCENIC_OUTPUT_DIR}" \
+  "${DECOUPLER_RESOURCE_DIR}" \
   "${R_LIBS_MAIN}" \
-  "${R_LIBS_SCENIC}"
+  "${R_LIBS_SCENIC}" \
+  "${R_LIBS_DECOUPLER}"
 
 run_with_log() {
   local log_file="$1"
@@ -93,6 +95,13 @@ if target_enabled "r_interaction"; then
     create_or_update_conda_env "${R_INTERACTION_ENV_PREFIX}" "${PIPELINE_ROOT}/envs/environment_r_interaction.yml"
   run_with_log "${LOG_DIR}/install_r_interaction_pkgs.log" \
     run_in_conda_prefix "${R_INTERACTION_ENV_PREFIX}" Rscript "${PIPELINE_ROOT}/envs/install_r_interaction_packages.R"
+fi
+
+if target_enabled "r_decoupler"; then
+  run_with_log "${LOG_DIR}/install_r_decoupler_env.log" \
+    create_or_update_conda_env "${R_DECOUPLER_ENV_PREFIX}" "${PIPELINE_ROOT}/envs/environment_r_decoupler.yml"
+  run_with_log "${LOG_DIR}/install_r_decoupler_pkgs.log" \
+    run_r_decoupler "${PIPELINE_ROOT}/envs/install_r_decoupler_packages.R"
 fi
 
 if target_enabled "r_spatial"; then

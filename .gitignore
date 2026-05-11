@@ -5,6 +5,7 @@ __pycache__/
 .RData
 
 logs/
+envs/conda/
 data/
 results/
 reports/
@@ -24,6 +25,7 @@ metadata/*
 !metadata/gene_program_targets.tsv
 !metadata/deconv_pairs.tsv
 !metadata/spatial_pairs.tsv
+!metadata/scdesign3_thresholds.tsv
 raw/
 fastq/
 cellranger_out/

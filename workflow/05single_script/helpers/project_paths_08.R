@@ -15,6 +15,8 @@ get_single_script_config_08 <- function() {
   base$module_08b_manifest_path <- file.path(base$manifest_dir, "08b_scenic_grn", "_manifest.json")
   base$module_08c_manifest_path <- file.path(base$manifest_dir, "08c_scenic_regulons", "_manifest.json")
   base$module_08d_manifest_path <- file.path(base$manifest_dir, "08d_scenic_downstream", "_manifest.json")
+  base$module_08e_manifest_path <- file.path(base$manifest_dir, "08e_decoupler", "_manifest.json")
+  base$module_08f_manifest_path <- file.path(base$manifest_dir, "08f_regulation_eda", "_manifest.json")
 
   base$scenic_input_dir <- env_or_default_03("SCENIC_INPUT_DIR", file.path(base$results_dir, "scenic_input"))
   base$scenic_output_dir <- env_or_default_03("SCENIC_OUTPUT_DIR", file.path(base$results_dir, "scenic_output"))
@@ -32,6 +34,10 @@ get_single_script_config_08 <- function() {
   base$scenic_table_dir <- file.path(base$regulation_table_dir, "scenic")
   base$scenic_figure_dir <- file.path(base$regulation_figure_dir, "scenic")
   base$scenic_checkpoint_dir <- file.path(base$regulation_checkpoint_dir, "scenic")
+  base$decoupler_table_dir <- file.path(base$regulation_table_dir, "decoupler")
+  base$decoupler_figure_dir <- file.path(base$regulation_figure_dir, "decoupler")
+  base$decoupler_checkpoint_dir <- file.path(base$regulation_checkpoint_dir, "decoupler")
+  base$decoupler_resource_dir <- env_or_default_03("DECOUPLER_RESOURCE_DIR", file.path(base$project_root, "resources", "decoupler"))
 
   base$scenic_export_index_tsv <- file.path(base$scenic_table_dir, "scenic_export_index.tsv")
   base$scenic_export_mapping_summary_tsv <- file.path(base$scenic_table_dir, "mapping_summary.tsv")
@@ -39,6 +45,20 @@ get_single_script_config_08 <- function() {
   base$scenic_grn_index_tsv <- file.path(base$scenic_table_dir, "scenic_grn_index.tsv")
   base$scenic_regulons_index_tsv <- file.path(base$scenic_table_dir, "scenic_regulons_index.tsv")
   base$scenic_downstream_index_tsv <- file.path(base$scenic_table_dir, "scenic_downstream_index.tsv")
+  base$decoupler_index_tsv <- file.path(base$decoupler_table_dir, "decoupler_index.tsv")
+  base$decoupler_network_mapping_summary_tsv <- file.path(base$decoupler_table_dir, "network_mapping_summary.tsv")
+  base$decoupler_tf_activity_tsv <- file.path(base$decoupler_table_dir, "tf_activity.tsv")
+  base$decoupler_pathway_activity_tsv <- file.path(base$decoupler_table_dir, "pathway_activity.tsv")
+  base$decoupler_resource_fingerprint_tsv <- file.path(base$decoupler_table_dir, "resource_fingerprint.tsv")
+  base$regulation_report_md <- file.path(base$regulation_report_dir, "report.md")
+  base$regulation_module_status_tsv <- file.path(base$regulation_table_dir, "module_status.tsv")
+  base$regulation_resource_fingerprint_tsv <- file.path(base$regulation_table_dir, "resource_fingerprint.tsv")
+  base$regulation_ortholog_coverage_tsv <- file.path(base$regulation_table_dir, "ortholog_mapping_coverage.tsv")
+  base$regulation_scenic_summary_tsv <- file.path(base$regulation_table_dir, "scenic_summary.tsv")
+  base$regulation_decoupler_summary_tsv <- file.path(base$regulation_table_dir, "decoupler_summary.tsv")
+  base$regulation_tf_overlap_tsv <- file.path(base$regulation_table_dir, "scenic_decoupler_tf_overlap.tsv")
+  base$regulation_triage_tsv <- file.path(base$regulation_table_dir, "triage.tsv")
+  base$regulation_tf_overlap_png <- file.path(base$regulation_figure_dir, "scenic_decoupler_tf_overlap.png")
 
   base$regulation_layers <- split_csv_local(env_or_default_03("REGULATION_LAYERS", base$panorama_layer_id))
   if (length(base$regulation_layers) == 0) {
@@ -51,6 +71,18 @@ get_single_script_config_08 <- function() {
   base$scenic_auc_max_rank_fraction <- env_numeric_08("SCENIC_AUC_MAX_RANK_FRACTION", 0.05)
   base$scenic_threads <- env_integer_08("SCENIC_THREADS", 8L)
   base$scenic_ortholog_min_coverage <- env_numeric_08("SCENIC_ORTHOLOG_MIN_COVERAGE", 0.30)
+  base$decoupler_tf_method <- env_or_default_03("DECOUPLER_TF_METHOD", "wmean")
+  base$decoupler_pathway_method <- env_or_default_03("DECOUPLER_PATHWAY_METHOD", "ulm")
+  base$decoupler_top_tf_n <- env_integer_08("DECOUPLER_TOP_TF_N", 25L)
+  base$decoupler_min_targets <- env_integer_08("DECOUPLER_MIN_TARGETS", 5L)
+  base$decoupler_confidence_levels <- split_csv_local(env_or_default_03("DECOUPLER_CONFIDENCE_LEVELS", "A,B,C"))
+  if (length(base$decoupler_confidence_levels) == 0) {
+    base$decoupler_confidence_levels <- c("A", "B", "C")
+  }
+  base$decoupler_use_cache <- env_or_default_03("DECOUPLER_USE_CACHE", "yes")
+  base$decoupler_activity_level <- env_or_default_03("DECOUPLER_ACTIVITY_LEVEL", "group_average")
+  base$decoupler_group_col <- env_or_default_03("DECOUPLER_GROUP_COL", "auto")
+  base$allow_regulation_empty_report <- env_or_default_03("ALLOW_REGULATION_EMPTY_REPORT", "no")
   base$module_version <- env_or_default_03("MODULE_08_VERSION", "1.0")
   base
 }
@@ -67,16 +99,36 @@ prepare_dirs_08 <- function(cfg) {
     cfg$scenic_table_dir,
     cfg$scenic_figure_dir,
     cfg$scenic_checkpoint_dir,
+    cfg$decoupler_table_dir,
+    cfg$decoupler_figure_dir,
+    cfg$decoupler_checkpoint_dir,
+    cfg$decoupler_resource_dir,
     dirname(cfg$module_08a_manifest_path),
     dirname(cfg$module_08b_manifest_path),
     dirname(cfg$module_08c_manifest_path),
     dirname(cfg$module_08d_manifest_path),
+    dirname(cfg$module_08e_manifest_path),
+    dirname(cfg$module_08f_manifest_path),
     dirname(cfg$scenic_export_index_tsv),
     dirname(cfg$scenic_export_mapping_summary_tsv),
     dirname(cfg$scenic_export_triage_tsv),
     dirname(cfg$scenic_grn_index_tsv),
     dirname(cfg$scenic_regulons_index_tsv),
-    dirname(cfg$scenic_downstream_index_tsv)
+    dirname(cfg$scenic_downstream_index_tsv),
+    dirname(cfg$decoupler_index_tsv),
+    dirname(cfg$decoupler_network_mapping_summary_tsv),
+    dirname(cfg$decoupler_tf_activity_tsv),
+    dirname(cfg$decoupler_pathway_activity_tsv),
+    dirname(cfg$decoupler_resource_fingerprint_tsv),
+    dirname(cfg$regulation_report_md),
+    dirname(cfg$regulation_module_status_tsv),
+    dirname(cfg$regulation_resource_fingerprint_tsv),
+    dirname(cfg$regulation_ortholog_coverage_tsv),
+    dirname(cfg$regulation_scenic_summary_tsv),
+    dirname(cfg$regulation_decoupler_summary_tsv),
+    dirname(cfg$regulation_tf_overlap_tsv),
+    dirname(cfg$regulation_triage_tsv),
+    dirname(cfg$regulation_tf_overlap_png)
   )
   invisible(lapply(ensure_dirs[nzchar(ensure_dirs)], ensure_dir))
 }
@@ -132,5 +184,21 @@ scenic_downstream_paths_08 <- function(cfg, layer_id) {
     figure_6b_pdf = file.path(cfg$scenic_figure_dir, safe_layer, "Figure_6B_RSS_Ranks.pdf"),
     figure_6c_png = file.path(cfg$scenic_figure_dir, safe_layer, "Figure_6C_CSI_Clustering_Heatmap.png"),
     figure_6d_png = file.path(cfg$scenic_figure_dir, safe_layer, "Figure_6D_CSI_Module_Activity_Heatmap.png")
+  )
+}
+
+decoupler_paths_08 <- function(cfg, layer_id) {
+  safe_layer <- safe_id_08(layer_id)
+  list(
+    table_dir = file.path(cfg$decoupler_table_dir, safe_layer),
+    figure_dir = file.path(cfg$decoupler_figure_dir, safe_layer),
+    checkpoint_dir = file.path(cfg$decoupler_checkpoint_dir, safe_layer),
+    tf_activity_tsv = file.path(cfg$decoupler_table_dir, safe_layer, "tf_activity.tsv"),
+    pathway_activity_tsv = file.path(cfg$decoupler_table_dir, safe_layer, "pathway_activity.tsv"),
+    network_mapping_summary_tsv = file.path(cfg$decoupler_table_dir, safe_layer, "network_mapping_summary.tsv"),
+    resource_fingerprint_tsv = file.path(cfg$decoupler_table_dir, safe_layer, "resource_fingerprint.tsv"),
+    tf_activity_heatmap_png = file.path(cfg$decoupler_figure_dir, safe_layer, "tf_activity_heatmap.png"),
+    pathway_activity_heatmap_png = file.path(cfg$decoupler_figure_dir, safe_layer, "pathway_activity_heatmap.png"),
+    decoupler_object_rds = file.path(cfg$decoupler_checkpoint_dir, safe_layer, "decoupler_object.rds")
   )
 }

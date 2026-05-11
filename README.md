@@ -228,6 +228,7 @@ Tier 2 表为自动生成文件，不应手工编辑。后续新增 ST 或联合
     - `r_main`
     - `r_legacy`
     - `r_scenic`
+    - `r_decoupler`
     - `velocity`
     - `pyscenic`
   - 并下载 SCENIC 资源
@@ -248,6 +249,8 @@ Tier 2 表为自动生成文件，不应手工编辑。后续新增 ST 或联合
     - `workflow/01run.sh 02_qc`
     - `workflow/01run.sh 03_panorama`
     - `workflow/01run.sh 04_subcluster`
+    - `workflow/01run.sh 04d_cluster_robustness`
+    - `workflow/01run.sh 04_robustness`
     - `workflow/01run.sh 05_deg`
     - `workflow/01run.sh 06_enrichment`
     - `workflow/01run.sh 07_communication`
@@ -265,7 +268,10 @@ Tier 2 表为自动生成文件，不应手工编辑。后续新增 ST 或联合
   - `04b_subcluster_annotate.R`：对已经 finalize 的 `clustered_<layer_id>` 复用 annotation helper，写 `annotated_<layer_id>` 和跨层注释汇总，并把子层注释回填到 panorama 的 `cell_subtype` metadata。
   - `04c_subcluster_eda.R`：生成 subcluster review 报告，汇总 cluster count、注释置信度、condition split、panorama-vs-subcluster 对照。
 - `workflow/03stages/04d_cluster_robustness.sh`
-  - `04d_cluster_robustness.R`：当前是 runnable placeholder，只写空 metrics schema 和报告；真实 scDesign3 robustness 留到后续里程碑。
+  - `04d_cluster_robustness.R`：注册 question-driven scDesign3 gate、target、threshold 和 preflight 状态；cluster metrics 用 `pending_engine` 占位，避免被误读为真实 ARI/NMI。
+- `workflow/03stages/04_robustness.sh`
+  - `04e_scdesign3_engine.R`：在 `scdesign3_targets` gate 批准后，对 M1 `cluster_robustness` target 运行真实 scDesign3 fit/simulate/recluster/score 引擎；默认 `SCDESIGN3_N_SIM=5`。
+  - `04f_scdesign3_finalize.R`：把 04e 的 ARI/NMI/Jaccard 结果回填到 target/question gate，并覆盖 root `results/tables/scdesign3_all_questions_status.tsv`。
 
 gate 规则采用 Option B：
 
@@ -274,6 +280,8 @@ gate 规则采用 Option B：
 - 如果存在 candidate 模式 layer，`04a_review` 会把 `subcluster` gate 设为 `pending`；审阅 `subcluster_review_summary.tsv` 和各层 `selected_integration.txt` 后，把 `subcluster` gate 改为 `approved`，再重跑 `04_subcluster.sh`。
 - `04c` 完成后不会再次重置 `subcluster` gate；是否运行 04d 由你在审阅 04c 报告后决定。
 - 独立运行 `04d_cluster_robustness.sh` 时会同时校验 `subcluster_gate_passed=true` 和 `04_subcluster_completed=true`。
+- `04d` 完成后会把 `scdesign3_targets` gate 置为 `pending`；审阅 `results/tables/04d_cluster_robustness/target_gate_status.tsv` 后批准该 gate，才能运行 `04_robustness.sh`。
+- `04_robustness.sh` 完成后会把 `scdesign3_validated` gate 置为 `pending`；07 communication 会等待该 gate 批准后再进入核心解释。
 
 `comparisons.tsv` 在 04c 中支持可选子集列：
 
@@ -289,7 +297,10 @@ gate 规则采用 Option B：
 | `status.04b_subcluster_annotated` | `04b_subcluster_annotate.R` 完成后随 04c 完成态一起写入 |
 | `status.04c_subcluster_eda_completed` | `04c_subcluster_eda.R` 完成后写入 |
 | `status.04_subcluster_completed` | 04a→04b→04c 全链完成后写入 |
-| `status.04d_cluster_robustness_completed` | 独立 04d placeholder stage 完成后写入 |
+| `status.04d_cluster_robustness_completed` | 独立 04d scDesign3 gate 注册 stage 完成后写入 |
+| `status.04e_scdesign3_engine_completed` | 04e scDesign3 engine 完成后随 04_robustness 写入 |
+| `status.04f_scdesign3_finalize_completed` | 04f gate finalize 完成后随 04_robustness 写入 |
+| `status.04_robustness_completed` | 04e→04f 全链完成后写入 |
 
 ### 5.11 05 DEG 模块（workflow standalone）
 
@@ -361,28 +372,52 @@ gate 规则采用 Option B：
 
 ### 5.14 RNA velocity
 
+- `workflow/03stages/09_10_preflight.sh`
+  - 在重型运行前检查 `trajectory_pairs.tsv` schema、layer_scope、split values、root/terminal 标签、velocity loom/BAM/H5/GTF 和 Seurat/loom cell id 命名空间
+  - 输出 `results/tables/trajectory_velocity_preflight/preflight_checks.tsv` 和 `reports/eda/trajectory_velocity_preflight/report.md`
 - `workflow/03stages/10_velocity.sh`
-  - 需要：
-    - `outs/possorted_genome_bam.bam`
-    - `outs/filtered_feature_bc_matrix`
-  - 生成 `.loom`
+  - `10a_run_velocyto.sh`：从 dnbc4tools/Cell Ranger BAM 和 `filtered_feature_bc_matrix.h5` 生成 per-sample `.loom`；如果已存在匹配 `.loom`，会直接复用并写入 index
+  - `10b_prepare_velocity_reference.R`：按 `trajectory_pairs.tsv` 中 `method=velocity` 的 H05/H06 行导出 UMAP 和 metadata reference，cell id 规范为 scVelo 使用的 `sample:barcode`
+  - 完成 10a/10b 后会把 `velocity_inputs` gate 置为 `pending`
+  - `10c_scvelo_dynamical.py`：按 pooled/split unit 运行 scVelo dynamical，并记录 stochastic 旁路指标
+  - `10d_velocyto_steady_state.R`：运行 velocyto.R steady-state 交叉验证
+  - `10e_scvelo_drivers.py`：导出 scVelo driver gene top list 和 split overlap
+  - `10f_cellrank_fate.py`：默认运行 CellRank fate/macrostates，可用 `methods_extra=-cellrank` 禁用
+  - `10h_velocity_root_terminal.R`：输出 09c 可反向读取的 `velocity_root_terminal_<unit>.tsv`
+- `workflow/03stages/09_10_trajectory_velocity.sh`
+  - 按计划顺序串联 `10_velocity.sh -> 09_trajectory.sh -> 10_velocity_finalize.sh`
+- `workflow/03stages/10_velocity_finalize.sh`
+  - `10g_velocity_consistency.R`：汇总 scVelo/stochastic/velocyto/Slingshot/CellRank 一致性和 split 比较
+  - `10i_velocity_eda.R`：生成 `velocity_module_status.tsv`、`velocity_triage.tsv` 和 velocity finalize 报告
 
-- `workflow/03stages/10_velocity.sh`
-  - 先准备参考对象
-  - 再跑 `scVelo`
-
-### 5.15 SCENIC
+### 5.15 Regulation / SCENIC / decoupleR
 
 - `workflow/03stages/00_ortholog.sh`
   - 构建同源映射缓存
 
 - `workflow/03stages/08_regulation.sh`
-  - 下载或检查 SCENIC 资源
+  - `08a-08d`：SCENIC export、pySCENIC GRN、regulon/AUCell、RSS/CSI 下游
+  - `08e`：decoupleR TF activity 和 pathway activity
+  - `08f`：综合调控 EDA 报告，允许 SCENIC-only 或 decoupleR-only partial report
 
-- `workflow/03stages/08_regulation.sh`
-  - 导出同源基因表达矩阵
-  - 跑 pySCENIC
-  - 跑 RSS / CSI 下游
+SCENIC 和 decoupleR 是互补证据，不是完全等价的方法。SCENIC 把 chicken expression matrix 映射到 human symbol 后使用 human cisTarget/motif 资源；decoupleR 则把 human DoRothEA/PROGENy prior network 映射到 chicken symbol，表达矩阵保留 chicken gene。08 的 TF/pathway 活性不能替代 05 DEG、06 enrichment 或 07 communication。
+
+推荐先跑 panorama：
+
+```bash
+REGULATION_LAYERS=panorama bash workflow/03stages/08_regulation.sh
+```
+
+扩展到子层时显式指定：
+
+```bash
+REGULATION_LAYERS=panorama,GC_subcluster bash workflow/03stages/08_regulation.sh
+```
+
+详细 schema 见：
+
+- `docs/module_08_regulation.md`
+- `docs/regulation_schema.md`
 
 ## 6. 当你拿到原始数据后，实际怎么跑
 
@@ -427,8 +462,16 @@ bash workflow/01run.sh <stage>
 如果要 RNA velocity：
 
 ```bash
+bash workflow/03stages/09_10_preflight.sh
+bash workflow/03stages/09_10_trajectory_velocity.sh
+```
+
+等价的显式顺序是：
+
+```bash
 bash workflow/03stages/10_velocity.sh
-bash workflow/03stages/10_velocity.sh
+bash workflow/03stages/09_trajectory.sh
+bash workflow/03stages/10_velocity_finalize.sh
 ```
 
 如果要 SCENIC：

@@ -2,7 +2,7 @@ load_required_packages <- function(pkgs) {
   missing <- pkgs[!vapply(pkgs, requireNamespace, logical(1), quietly = TRUE)]
   if (length(missing) > 0) {
     stop(
-      sprintf("缺少 R 包: %s", paste(missing, collapse = ", ")),
+      sprintf("missing R packages: %s", paste(missing, collapse = ", ")),
       call. = FALSE
     )
   }

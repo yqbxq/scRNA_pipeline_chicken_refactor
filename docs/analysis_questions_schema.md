@@ -4,7 +4,7 @@
 intent. Humans edit this file; M3 will fan out active rows into generated Tier 2
 module input tables.
 
-The conceptual design covers 84 questions. The committed TSV contains 80
+The conceptual design covers 87 questions. The committed TSV contains 83
 materialized rows because F23-F26 differential communication rows are derived
 from split communication questions and must be generated automatically rather
 than hand-maintained.
@@ -140,7 +140,7 @@ Current generated columns:
 | `comparisons.tsv` | `comparison_id`, `source_question_id`, `display_question_id`, `output_alias`, `report_title`, `layer_scope`, `contrast_axis`, `analysis_mode`, `analysis_unit`, `stat_level`, `group_var`, `ident_1`, `ident_2`, `subset_column`, `subset_value`, `aggregation_group_var`, `composition_group_var`, `batch_var`, `enabled`, `min_biological_replicates`, `force_exploratory`, `min_cells_per_group`, `logfc_threshold`, `produces_gene_program`, `gene_program_role`, `notes` |
 | `annotation_marker_targets.tsv` | `target_id`, `source_question_id`, `layer_scope`, `object_layer`, `cluster_column`, `annotation_label_column`, `group_var`, `ident_1`, `ident_2`, `analysis_mode`, `gene_program_role`, `output_dir`, `annotation_only`, `enabled`, `notes` |
 | `communication_pairs.tsv` | `pair_id`, `source_question_id`, `layer_scope`, `sender`, `receiver`, `condition_split_var`, `condition_split_values`, `tool`, `communication_mode`, `activation_policy`, `min_sender_cells`, `min_receiver_cells`, `min_cells_per_condition`, `fallback_pair_id`, `derived_from_pair_id`, `run_baseline_if_split_fails`, `requires_all_derived_inputs_pass`, `receiver_gene_program_source`, `baseline_marker_comparison_id`, `receiver_deg_comparison_id`, `direction_filter`, `requires_cell_subtype`, `notes`, `enabled` |
-| `trajectory_pairs.tsv` | `trajectory_id`, `source_question_id`, `layer_scope`, `root_group`, `terminal_group`, `condition_split_var`, `condition_split_values`, `method`, `enabled`, `notes` |
+| `trajectory_pairs.tsv` | `trajectory_id`, `source_question_id`, `layer_scope`, `root_group`, `terminal_group`, `condition_split_var`, `condition_split_values`, `method`, `tools_to_run`, `methods_extra`, `outlier_qc_policy`, `regress_cell_cycle`, `coarse_label_var`, `fine_label_var`, `split_mode`, `enabled`, `notes` |
 | `scenic_targets.tsv` | `target_id`, `source_question_id`, `layer_scope`, `cell_subset`, `contrast_axis`, `condition_split_var`, `condition_split_values`, `method`, `enabled`, `notes` |
 | `enrichment_targets.tsv` | `target_id`, `source_question_id`, `comparison_id`, `layer_scope`, `analysis_mode`, `gene_program_role`, `organism`, `database`, `enrichment_eligible`, `enrichment_usage`, `min_genes`, `enabled`, `notes` |
 | `gene_program_targets.tsv` | `comparison_id`, `source_question_id`, `layer_scope`, `analysis_mode`, `gene_program_role`, `produces_gene_program`, `annotation_only`, `qc_only`, `global_context_only`, `nichenet_eligible`, `nichenet_usage`, `enrichment_eligible`, `enrichment_usage`, `preferred_for_downstream`, `expected_result_level`, `formal_preferred`, `formal_status`, `result_status`, `skip_reason`, `eligible_reason`, `ineligible_reason`, `notes` |
@@ -202,7 +202,7 @@ Enrichment, and QC/non-gene-program rows enter QC / Non-gene-program.
 
 ## M3 Fan-Out Contract
 
-M3 reads all 80 materialized rows and processes active rows for executable
+M3 reads all 83 materialized rows and processes active rows for executable
 scRNA modules. A small set of planned communication rows is emitted with
 `enabled=no` so the final communication schema stays stable. The 24 ST rows are
 all planned, so M3 must write empty `deconv_pairs.tsv` and `spatial_pairs.tsv`

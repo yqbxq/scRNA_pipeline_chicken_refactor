@@ -67,6 +67,18 @@ check_stage_deps() {
         "status.04_subcluster_completed" \
         "04d_cluster_robustness 需要 04_subcluster 完成。"
       ;;
+    04_robustness)
+      sync_workflow_gate_statuses
+      require_status_flag_or_warn \
+        "status.subcluster_gate_passed" \
+        "04_robustness 被 subcluster gate 阻断。请先审阅 04c subcluster EDA 报告，并在 eda_gates.tsv 中批准 subcluster。"
+      require_status_flag_or_warn \
+        "status.04_subcluster_completed" \
+        "04_robustness 需要 04_subcluster 完成。"
+      require_status_flag_or_warn \
+        "status.04d_cluster_robustness_completed" \
+        "04_robustness 需要先完成 04d_cluster_robustness，以生成 scDesign3 target gate 表。"
+      ;;
     05_deg)
       sync_workflow_gate_statuses
       require_status_flag_or_warn \
@@ -102,6 +114,9 @@ check_stage_deps() {
       require_status_flag_or_warn \
         "status.00_ortholog_completed" \
         "07_communication 需要先完成 00_ortholog，并通过 manifest 暴露 human_best。"
+      require_status_flag_or_warn \
+        "status.scdesign3_validated_gate_passed" \
+        "07_communication 被 scdesign3_validated gate 阻断。请先运行 04_robustness，审阅 04e/04f scDesign3 指标，并在 eda_gates.tsv 中批准 scdesign3_validated。"
       if [[ -f "${WORKFLOW_STATUS_FILE}" ]]; then
         local subcluster_done
         subcluster_done="$(workflow_status_get "status.04_subcluster_completed" 2>/dev/null || true)"
@@ -128,6 +143,45 @@ check_stage_deps() {
           warn "04_subcluster 尚未标记完成；08 默认只使用 panorama。需要子层时请在 REGULATION_LAYERS 中显式列出已注释 layer。"
         fi
       fi
+      ;;
+    09_trajectory)
+      sync_workflow_gate_statuses
+      require_status_flag_or_warn \
+        "status.annotation_gate_passed" \
+        "09_trajectory 被 annotation gate 阻断。请先审阅 03e panorama 注释报告，并在 eda_gates.tsv 中批准 annotation。"
+      require_status_flag_or_warn \
+        "status.03_panorama_completed" \
+        "09_trajectory 需要 03_panorama 整链完成。"
+      require_status_flag_or_warn \
+        "status.subcluster_gate_passed" \
+        "09_trajectory 被 subcluster gate 阻断。请先审阅 04c subcluster EDA 报告，并在 eda_gates.tsv 中批准 subcluster。"
+      require_status_flag_or_warn \
+        "status.04_subcluster_completed" \
+        "09_trajectory 需要 04_subcluster 完成，以便解析 GC/TC subcluster layer。"
+      ;;
+    10_velocity)
+      sync_workflow_gate_statuses
+      require_status_flag_or_warn \
+        "status.annotation_gate_passed" \
+        "10_velocity 被 annotation gate 阻断。请先审阅 03e panorama 注释报告，并在 eda_gates.tsv 中批准 annotation。"
+      require_status_flag_or_warn \
+        "status.03_panorama_completed" \
+        "10_velocity 需要 03_panorama 整链完成。"
+      require_status_flag_or_warn \
+        "status.subcluster_gate_passed" \
+        "10_velocity 被 subcluster gate 阻断。请先审阅 04c subcluster EDA 报告，并在 eda_gates.tsv 中批准 subcluster。"
+      require_status_flag_or_warn \
+        "status.04_subcluster_completed" \
+        "10_velocity 需要 04_subcluster 完成，以便解析 GC/TC velocity reference layer。"
+      require_status_flag_or_warn \
+        "status.velocity_upstream_ready" \
+        "10_velocity 需要 velocity_upstream_ready=true；请先完成 intake/audit 并确认 BAM 输入可用。"
+      ;;
+    10_velocity_finalize)
+      sync_workflow_gate_statuses
+      require_status_flag_or_warn \
+        "status.10_velocity_stage3_completed" \
+        "10_velocity_finalize 需要先完成 10_velocity stage3。"
       ;;
     *)
       warn "未定义 ${stage_id} 的依赖规则，按无依赖继续。"
@@ -277,7 +331,14 @@ sync_workflow_gate_statuses() {
     "status.subcluster_gate_passed=$(eda_gate_passed subcluster && echo true || echo false)" \
     "status.deg_gate_passed=$(eda_gate_passed deg && echo true || echo false)" \
     "status.communication_gate_passed=$(eda_gate_passed communication && echo true || echo false)" \
-    "status.regulation_gate_passed=$(eda_gate_passed regulation && echo true || echo false)"
+    "status.regulation_gate_passed=$(eda_gate_passed regulation && echo true || echo false)" \
+    "status.trajectory_inputs_gate_passed=$(eda_gate_passed trajectory_inputs && echo true || echo false)" \
+    "status.trajectory_methods_gate_passed=$(eda_gate_passed trajectory_methods && echo true || echo false)" \
+    "status.trajectory_finalize_gate_passed=$(eda_gate_passed trajectory_finalize && echo true || echo false)" \
+    "status.velocity_inputs_gate_passed=$(eda_gate_passed velocity_inputs && echo true || echo false)" \
+    "status.velocity_finalize_gate_passed=$(eda_gate_passed velocity_finalize && echo true || echo false)" \
+    "status.scdesign3_targets_gate_passed=$(eda_gate_passed scdesign3_targets && echo true || echo false)" \
+    "status.scdesign3_validated_gate_passed=$(eda_gate_passed scdesign3_validated && echo true || echo false)"
 }
 
 update_workflow_status() {
@@ -422,7 +483,50 @@ for key in (
     "annotation_gate_passed",
     "subcluster_gate_passed",
     "deg_gate_passed",
+    "communication_gate_passed",
+    "regulation_gate_passed",
+    "trajectory_inputs_gate_passed",
+    "trajectory_methods_gate_passed",
+    "trajectory_finalize_gate_passed",
+    "velocity_inputs_gate_passed",
+    "velocity_finalize_gate_passed",
+    "scdesign3_targets_gate_passed",
+    "scdesign3_validated_gate_passed",
     "05_deg_completed",
+    "04d_cluster_robustness_completed",
+    "04e_scdesign3_engine_completed",
+    "04f_scdesign3_finalize_completed",
+    "04_robustness_completed",
+    "09a_trajectory_inputs_completed",
+    "09b_trajectory_inputs_eda_completed",
+    "09_trajectory_inputs_completed",
+    "09c_trajectory_root_completed",
+    "09d_trajectory_slingshot_completed",
+    "09e_trajectory_monocle3_completed",
+    "09e2_trajectory_monocle2_completed",
+    "09f_trajectory_paga_dpt_completed",
+    "09g_trajectory_palantir_completed",
+    "09_trajectory_methods_completed",
+    "09h_trajectory_tradeseq_completed",
+    "09i_trajectory_consensus_completed",
+    "09j_trajectory_velocity_link_completed",
+    "09k_trajectory_figures_completed",
+    "09m_trajectory_split_compare_completed",
+    "09l_trajectory_eda_completed",
+    "09_trajectory_stage3_completed",
+    "09_trajectory_completed",
+    "10a_velocity_loom_completed",
+    "10b_velocity_reference_completed",
+    "10_velocity_inputs_completed",
+    "10c_scvelo_dynamical_completed",
+    "10d_velocyto_steady_completed",
+    "10e_scvelo_drivers_completed",
+    "10f_cellrank_fate_completed",
+    "10g_velocity_consistency_completed",
+    "10h_velocity_root_terminal_completed",
+    "10_velocity_stage3_completed",
+    "10i_velocity_eda_completed",
+    "10_velocity_completed",
     "main_upstream_ready",
     "velocity_upstream_ready",
     "ambient_upstream_ready",
@@ -434,7 +538,7 @@ for key in (
 status["main_ready"] = bool(status.get("metadata_valid")) and bool(status.get("standardized_inputs")) and bool(status.get("main_upstream_ready"))
 status["deg_ready"] = annotation_exists and bool(status.get("annotation_gate_passed"))
 status["enrichment_ready"] = bool(status.get("05_deg_completed")) and bool(status.get("deg_gate_passed"))
-status["trajectory_ready"] = annotation_exists and bool(status.get("annotation_gate_passed"))
+status["trajectory_ready"] = annotation_exists and bool(status.get("annotation_gate_passed")) and bool(status.get("subcluster_gate_passed"))
 status["velocity_reference_ready"] = annotation_exists and bool(status.get("velocity_upstream_ready")) and bool(status.get("annotation_gate_passed"))
 status["scenic_export_ready"] = annotation_exists and bool(status.get("scenic_upstream_ready")) and bool(status.get("annotation_gate_passed"))
 

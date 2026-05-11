@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+cd "${REPO_ROOT}"
+
+bash -n workflow/05single_script/10a_run_velocyto.sh
+bash -n workflow/03stages/09_10_preflight.sh
+bash -n workflow/03stages/10_velocity.sh
+bash -n workflow/03stages/10_velocity_finalize.sh
+bash -n workflow/03stages/09_10_trajectory_velocity.sh
+python3 -m py_compile workflow/04python/10c_scvelo_dynamical.py workflow/04python/10e_scvelo_drivers.py workflow/04python/10f_cellrank_fate.py
+
+python3 - <<'PY'
+from pathlib import Path
+
+checks = {
+    "workflow/04python/10c_scvelo_dynamical.py": [
+        "samples_from_metadata(meta_df)",
+        "cache=False",
+        "scv.tl.velocity_pseudotime(adata)",
+        "scv.tl.recover_dynamics(adata, n_jobs=args.threads)",
+    ],
+    "workflow/05single_script/10g_velocity_consistency.R": [
+        "merge_by_normalized_cell_10g",
+        "dynamical_vs_stochastic_cosine_frac_positive",
+    ],
+    "workflow/05single_script/10h_velocity_root_terminal.R": [
+        "shrink_probability_10h",
+        "velocity_root_terminal_min_cells_per_cluster",
+    ],
+    "workflow/04python/10f_cellrank_fate.py": [
+        "requires at least 50 cells",
+    ],
+}
+for path, patterns in checks.items():
+    text = Path(path).read_text(encoding="utf-8")
+    missing = [pattern for pattern in patterns if pattern not in text]
+    if missing:
+        raise SystemExit(f"{path} missing expected patterns: {missing}")
+
+for path in [
+    "workflow/04python/10c_scvelo_dynamical.py",
+    "workflow/04python/10e_scvelo_drivers.py",
+    "workflow/04python/10f_cellrank_fate.py",
+    "workflow/05single_script/helpers/velocity_utils_10.R",
+    "workflow/05single_script/10i_velocity_eda.R",
+]:
+    text = Path(path).read_text(encoding="utf-8")
+    forbidden = [pattern for pattern in ["ok_stochastic_only", "restore_stochastic_outputs"] if pattern in text]
+    if forbidden:
+        raise SystemExit(f"{path} contains forbidden fallback patterns: {forbidden}")
+PY
+
+Rscript -e 'invisible(parse(file = "workflow/05single_script/09_10_preflight.R")); invisible(parse(file = "workflow/05single_script/10b_prepare_velocity_reference.R")); invisible(parse(file = "workflow/05single_script/10d_velocyto_steady_state.R")); invisible(parse(file = "workflow/05single_script/10g_velocity_consistency.R")); invisible(parse(file = "workflow/05single_script/10h_velocity_root_terminal.R")); invisible(parse(file = "workflow/05single_script/10i_velocity_eda.R")); invisible(parse(file = "workflow/05single_script/helpers/project_paths_10.R")); invisible(parse(file = "workflow/05single_script/helpers/velocity_utils_10.R"))'
+
+R --slave <<'RS'
+.script_dir <- normalizePath("workflow/05single_script", winslash = "/", mustWork = TRUE)
+source(file.path(.script_dir, "helpers", "load_helpers_10.R"), encoding = "UTF-8")
+
+cfg <- get_single_script_config_10()
+stopifnot(grepl("10a_run_velocyto", cfg$module_10a_manifest_path, fixed = TRUE))
+stopifnot(grepl("10b_prepare_velocity_reference", cfg$module_10b_manifest_path, fixed = TRUE))
+stopifnot(grepl("10c_scvelo_dynamical", cfg$module_10c_manifest_path, fixed = TRUE))
+stopifnot(grepl("10d_velocyto_steady_state", cfg$module_10d_manifest_path, fixed = TRUE))
+stopifnot(grepl("10e_scvelo_drivers", cfg$module_10e_manifest_path, fixed = TRUE))
+stopifnot(grepl("10f_cellrank_fate", cfg$module_10f_manifest_path, fixed = TRUE))
+stopifnot(grepl("10g_velocity_consistency", cfg$module_10g_manifest_path, fixed = TRUE))
+stopifnot(grepl("10h_velocity_root_terminal", cfg$module_10h_manifest_path, fixed = TRUE))
+stopifnot(grepl("10i_velocity_eda", cfg$module_10i_manifest_path, fixed = TRUE))
+stopifnot(grepl("09_10_preflight", cfg$module_09_10_preflight_manifest_path, fixed = TRUE))
+stopifnot(identical(velocity_unit_file_id_10("H06_GC_velocity_split__velocity", "syf"), "H06_GC_velocity_split__velocity__syf"))
+stopifnot(identical(velocity_reference_output_key_10("velocity_umap", "H06", "f5"), "velocity_umap__H06__f5"))
+test_meta <- data.frame(sample_id = c("S1", "S1"), row.names = c("S1_AAACx", "S1_TTTT-1"))
+stopifnot(identical(unname(velocity_cell_ids_from_meta_10(test_meta)), c("S1:AAAC-1", "S1:TTTT-1")))
+stopifnot(grepl("scvelo_result_H06__f5.h5ad", velocity_scvelo_h5ad_path_10(cfg, "H06", "f5"), fixed = TRUE))
+stopifnot(grepl("velocyto_steady_direction_H06__f5.tsv", velocity_velocyto_direction_path_10(cfg, "H06", "f5"), fixed = TRUE))
+stopifnot(grepl("cellrank_fate_H06__f5.csv", velocity_cellrank_fate_path_10(cfg, "H06", "f5"), fixed = TRUE))
+stopifnot(grepl("velocity_root_terminal_H06__f5.tsv", velocity_root_terminal_path_10(cfg, "H06", "f5"), fixed = TRUE))
+stopifnot(grepl("velocity_module_status.tsv", cfg$velocity_module_status_tsv, fixed = TRUE))
+stopifnot(grepl("reports/eda/velocity/report.md", cfg$velocity_report_md, fixed = TRUE))
+
+pairs <- velocity_read_pairs_10(cfg)
+if (nrow(pairs) > 0) {
+  stopifnot(all(pairs$method == "velocity"))
+}
+RS
+
+tmp_root="$(mktemp -d)"
+trap 'rm -rf "${tmp_root}"' EXIT
+mkdir -p "${tmp_root}/metadata" "${tmp_root}/results"
+printf 'sample_id\trun_velocity\n' > "${tmp_root}/metadata/samples.tsv"
+
+PROJECT_ROOT="${tmp_root}" \
+RESULTS_DIR="${tmp_root}/results" \
+TABLE_DIR="${tmp_root}/results/tables" \
+MANIFEST_DIR="${tmp_root}/results/manifests" \
+DATA_DIR="${tmp_root}/data" \
+METADATA_DIR="${tmp_root}/metadata" \
+SAMPLE_SHEET="${tmp_root}/metadata/samples.tsv" \
+CANONICAL_SAMPLE_SHEET="${tmp_root}/metadata/samples.canonical.tsv" \
+VELOCITY_SAMPLE_IDS="" \
+RAW_SAMPLES="" \
+SAMPLE_NAMES="" \
+bash workflow/05single_script/10a_run_velocyto.sh
+
+python3 - <<PY
+import json
+from pathlib import Path
+
+root = Path("${tmp_root}")
+manifest = json.loads((root / "results/manifests/10a_run_velocyto/_manifest.json").read_text(encoding="utf-8"))
+assert "velocity_loom_index" in manifest["outputs"]
+assert (root / "results/tables/velocity/inputs/velocity_loom_index.tsv").exists()
+PY
+
+echo "smoke_velocity_inputs_10 passed"

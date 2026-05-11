@@ -1,0 +1,8 @@
+# Project-level scDesign3 gate thresholds. Edit this file to override generated defaults.
+threshold_id	target_type	primary_metric	pass_threshold	warn_threshold	fail_threshold	notes
+SCD_THRESHOLD_CLUSTER_ROBUSTNESS	cluster_robustness	ARI	ARI>=0.80;NMI>=0.75;min_Jaccard>=0.65	ARI>=0.60;NMI>=0.60	ARI<0.60	Default metadata threshold; project config may override during runtime.
+SCD_THRESHOLD_COMPOSITION_ROBUSTNESS	composition_robustness	composition_RMSE	RMSE<=0.10;MAE<=0.10	RMSE<=0.20	RMSE>0.20	Default metadata threshold; project config may override during runtime.
+SCD_THRESHOLD_TRAJECTORY_ROBUSTNESS	trajectory_robustness	trajectory_order_accuracy	order_accuracy>=0.80;pseudotime_correlation>=0.70	order_accuracy>=0.60	order_accuracy<0.60	Default metadata threshold; project config may override during runtime.
+SCD_THRESHOLD_COMMUNICATION_ROBUSTNESS	communication_robustness	sender_receiver_recovery	sender_receiver_recovery=PASS;split_gate!=FAIL	sender_receiver_recovery=WARN	sender_receiver_recovery=FAIL	Default metadata threshold; project config may override during runtime.
+SCD_THRESHOLD_DECONV_VALIDATION	deconv_validation	RMSE	RMSE<=0.10;correlation>=0.80	RMSE<=0.20;correlation>=0.60	RMSE>0.20	Default metadata threshold; project config may override during runtime.
+SCD_THRESHOLD_SPATIAL_VALIDATION	spatial_validation	consistency_score	consistency_score>=0.80	consistency_score>=0.60	consistency_score<0.60	Default metadata threshold; project config may override during runtime.

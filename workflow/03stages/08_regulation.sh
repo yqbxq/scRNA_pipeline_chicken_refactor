@@ -14,6 +14,13 @@ MODULE_08A_MANIFEST="${MANIFEST_DIR}/08a_scenic_export/_manifest.json"
 MODULE_08B_MANIFEST="${MANIFEST_DIR}/08b_scenic_grn/_manifest.json"
 MODULE_08C_MANIFEST="${MANIFEST_DIR}/08c_scenic_regulons/_manifest.json"
 MODULE_08D_MANIFEST="${MANIFEST_DIR}/08d_scenic_downstream/_manifest.json"
+MODULE_08E_MANIFEST="${MANIFEST_DIR}/08e_decoupler/_manifest.json"
+MODULE_08F_MANIFEST="${MANIFEST_DIR}/08f_regulation_eda/_manifest.json"
+
+RUN_SCENIC="${RUN_SCENIC:-yes}"
+RUN_SCENIC_GRN="${RUN_SCENIC_GRN:-yes}"
+RUN_DECOUPLER="${RUN_DECOUPLER:-yes}"
+RUN_REGULATION_EDA="${RUN_REGULATION_EDA:-yes}"
 
 download_if_missing_08() {
   local url="$1"
@@ -133,9 +140,20 @@ ensure_eda_control_files
 require_manifest_output "${MODULE_00_MANIFEST}" "human_best" >/dev/null
 require_manifest_output "${MODULE_03D_MANIFEST}" "annotated_object" >/dev/null
 
-download_scenic_resources_inline
+if [[ "${RUN_SCENIC}" == "yes" && "${RUN_SCENIC_GRN}" == "yes" ]]; then
+  download_scenic_resources_inline
+fi
 
 REGULATION_RERAN=0
+REGULATION_SCENIC_INDEX=""
+REGULATION_DECOUPLER_INDEX=""
+REGULATION_REPORT=""
+STATUS_08A="skipped_by_config"
+STATUS_08B="skipped_by_config"
+STATUS_08C="skipped_by_config"
+STATUS_08D="skipped_by_config"
+STATUS_08E="skipped_by_config"
+STATUS_08F="skipped_by_config"
 
 run_reg_r_main_if_stale() {
   local script_path="$1"
@@ -165,6 +183,20 @@ run_reg_r_scenic_if_stale() {
   fi
 }
 
+run_reg_r_decoupler_if_stale() {
+  local script_path="$1"
+  local output_path="$2"
+  shift 2 || true
+
+  if is_stale_output "${output_path}" "$@"; then
+    echo "运行 ${script_path}"
+    run_r_decoupler "${script_path}"
+    REGULATION_RERAN=1
+  else
+    echo "已存在且未过期，跳过: ${output_path}"
+  fi
+}
+
 run_reg_shell_if_stale() {
   local script_path="$1"
   local output_path="$2"
@@ -179,57 +211,110 @@ run_reg_shell_if_stale() {
   fi
 }
 
-run_reg_r_main_if_stale \
-  "${WORKFLOW_ROOT}/05single_script/08a_scenic_export.R" \
-  "${MODULE_08A_MANIFEST}" \
-  "${MODULE_03D_MANIFEST}" \
-  "${MODULE_04B_MANIFEST}" \
-  "${MODULE_00_MANIFEST}"
-require_manifest_output "${MODULE_08A_MANIFEST}" "scenic_export_index_tsv" >/dev/null
+if [[ "${RUN_SCENIC}" == "yes" ]]; then
+  run_reg_r_main_if_stale \
+    "${WORKFLOW_ROOT}/05single_script/08a_scenic_export.R" \
+    "${MODULE_08A_MANIFEST}" \
+    "${MODULE_03D_MANIFEST}" \
+    "${MODULE_04B_MANIFEST}" \
+    "${MODULE_00_MANIFEST}"
+  require_manifest_output "${MODULE_08A_MANIFEST}" "scenic_export_index_tsv" >/dev/null
+  STATUS_08A="completed"
 
-run_reg_shell_if_stale \
-  "${WORKFLOW_ROOT}/05single_script/08b_scenic_grn.sh" \
-  "${MODULE_08B_MANIFEST}" \
-  "${MODULE_08A_MANIFEST}" \
-  "${SCENIC_RESOURCE_MANIFEST}" \
-  "${SCENIC_TF_LIST}"
-require_manifest_output "${MODULE_08B_MANIFEST}" "scenic_grn_index_tsv" >/dev/null
+  if [[ "${RUN_SCENIC_GRN}" == "yes" ]]; then
+    run_reg_shell_if_stale \
+      "${WORKFLOW_ROOT}/05single_script/08b_scenic_grn.sh" \
+      "${MODULE_08B_MANIFEST}" \
+      "${MODULE_08A_MANIFEST}" \
+      "${SCENIC_RESOURCE_MANIFEST}" \
+      "${SCENIC_TF_LIST}"
+    require_manifest_output "${MODULE_08B_MANIFEST}" "scenic_grn_index_tsv" >/dev/null
+    STATUS_08B="completed"
 
-run_reg_r_scenic_if_stale \
-  "${WORKFLOW_ROOT}/05single_script/08c_scenic_regulons.R" \
-  "${MODULE_08C_MANIFEST}" \
-  "${MODULE_08A_MANIFEST}" \
-  "${MODULE_08B_MANIFEST}" \
-  "${SCENIC_RESOURCE_MANIFEST}" \
-  "${SCENIC_MOTIF_ANN}" \
-  "${SCENIC_DB_500BP}" \
-  "${SCENIC_DB_10KB}"
-require_manifest_output "${MODULE_08C_MANIFEST}" "scenic_regulons_index_tsv" >/dev/null
+    run_reg_r_scenic_if_stale \
+      "${WORKFLOW_ROOT}/05single_script/08c_scenic_regulons.R" \
+      "${MODULE_08C_MANIFEST}" \
+      "${MODULE_08A_MANIFEST}" \
+      "${MODULE_08B_MANIFEST}" \
+      "${SCENIC_RESOURCE_MANIFEST}" \
+      "${SCENIC_MOTIF_ANN}" \
+      "${SCENIC_DB_500BP}" \
+      "${SCENIC_DB_10KB}"
+    require_manifest_output "${MODULE_08C_MANIFEST}" "scenic_regulons_index_tsv" >/dev/null
+    STATUS_08C="completed"
 
-run_reg_r_scenic_if_stale \
-  "${WORKFLOW_ROOT}/05single_script/08d_scenic_downstream.R" \
-  "${MODULE_08D_MANIFEST}" \
-  "${MODULE_08C_MANIFEST}" \
-  "${MODULE_03D_MANIFEST}" \
-  "${MODULE_04B_MANIFEST}"
-REGULATION_SCENIC_INDEX="$(require_manifest_output "${MODULE_08D_MANIFEST}" "scenic_downstream_index_tsv")"
+    run_reg_r_scenic_if_stale \
+      "${WORKFLOW_ROOT}/05single_script/08d_scenic_downstream.R" \
+      "${MODULE_08D_MANIFEST}" \
+      "${MODULE_08C_MANIFEST}" \
+      "${MODULE_03D_MANIFEST}" \
+      "${MODULE_04B_MANIFEST}"
+    REGULATION_SCENIC_INDEX="$(require_manifest_output "${MODULE_08D_MANIFEST}" "scenic_downstream_index_tsv")"
+    STATUS_08D="completed"
+  else
+    STATUS_08B="skipped_by_config"
+    STATUS_08C="skipped_due_to_08b"
+    STATUS_08D="skipped_due_to_08c"
+  fi
+fi
+
+if [[ "${RUN_DECOUPLER}" == "yes" ]]; then
+  run_reg_r_decoupler_if_stale \
+    "${WORKFLOW_ROOT}/05single_script/08e_decoupler.R" \
+    "${MODULE_08E_MANIFEST}" \
+    "${MODULE_03D_MANIFEST}" \
+    "${MODULE_04B_MANIFEST}" \
+    "${MODULE_00_MANIFEST}"
+  REGULATION_DECOUPLER_INDEX="$(require_manifest_output "${MODULE_08E_MANIFEST}" "decoupler_index_tsv")"
+  STATUS_08E="completed"
+fi
+
+if [[ "${RUN_REGULATION_EDA}" == "yes" ]]; then
+  REGULATION_EDA_DEPS=()
+  for dep_path in \
+    "${MODULE_08A_MANIFEST}" \
+    "${MODULE_08B_MANIFEST}" \
+    "${MODULE_08C_MANIFEST}" \
+    "${MODULE_08D_MANIFEST}" \
+    "${MODULE_08E_MANIFEST}" \
+    "${MANIFEST_DIR}/05d_deg_eda/_manifest.json" \
+    "${MANIFEST_DIR}/06c_enrichment_eda/_manifest.json" \
+    "${MANIFEST_DIR}/07c_communication_eda/_manifest.json"; do
+    if [[ -e "${dep_path}" ]]; then
+      REGULATION_EDA_DEPS+=("${dep_path}")
+    fi
+  done
+  run_reg_r_main_if_stale \
+    "${WORKFLOW_ROOT}/05single_script/08f_regulation_eda.R" \
+    "${MODULE_08F_MANIFEST}" \
+    "${REGULATION_EDA_DEPS[@]}"
+  REGULATION_REPORT="$(require_manifest_output "${MODULE_08F_MANIFEST}" "report_md")"
+  if [[ "${STATUS_08D}" == "completed" && "${STATUS_08E}" == "completed" ]]; then
+    STATUS_08F="completed"
+  else
+    STATUS_08F="completed_partial"
+  fi
+fi
 
 if [[ "${REGULATION_RERAN}" == "1" ]]; then
   set_eda_gate_status \
     "regulation" \
     "pending" \
     "" \
-    "08 SCENIC migration completed; review ${REGULATION_SCENIC_INDEX}. decoupleR/review summary are not implemented in this S1-S6 cut."
+    "08 regulation modules updated; review report ${REGULATION_REPORT:-NA}, SCENIC index ${REGULATION_SCENIC_INDEX:-NA}, and decoupleR index ${REGULATION_DECOUPLER_INDEX:-NA}."
 fi
 
 sync_workflow_gate_statuses
 update_workflow_status \
-  "08_regulation_scenic_completed" \
-  "review ${REGULATION_SCENIC_INDEX}; next v08 work: decoupleR and regulation EDA summary" \
-  "status.08a_scenic_export_completed=true" \
-  "status.08b_scenic_grn_completed=true" \
-  "status.08c_scenic_regulons_completed=true" \
-  "status.08d_scenic_downstream_completed=true" \
-  "status.08_regulation_scenic_completed=true" \
-  "status.08_regulation_completed=false" \
+  "08_regulation_completed" \
+  "review ${REGULATION_REPORT:-NA}" \
+  "status.08a_scenic_export_status=${STATUS_08A}" \
+  "status.08b_scenic_grn_status=${STATUS_08B}" \
+  "status.08c_scenic_regulons_status=${STATUS_08C}" \
+  "status.08d_scenic_downstream_status=${STATUS_08D}" \
+  "status.08e_decoupler_status=${STATUS_08E}" \
+  "status.08f_regulation_eda_status=${STATUS_08F}" \
+  "status.08_regulation_scenic_completed=$([[ "${STATUS_08D}" == "completed" ]] && echo true || echo false)" \
+  "status.08_regulation_decoupler_completed=$([[ "${STATUS_08E}" == "completed" ]] && echo true || echo false)" \
+  "status.08_regulation_completed=$([[ "${STATUS_08F}" == completed* ]] && echo true || echo false)" \
   "status.regulation_gate_passed=$(eda_gate_passed regulation && echo true || echo false)"

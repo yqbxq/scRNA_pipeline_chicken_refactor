@@ -42,6 +42,7 @@ set_eda_gate_status() {
     "${python_bin}" - <<'PY'
 import csv
 import os
+from datetime import datetime
 from pathlib import Path
 
 gate_file = Path(os.environ["EDA_GATE_FILE"])
@@ -54,18 +55,37 @@ rows = []
 with gate_file.open("r", encoding="utf-8", newline="") as handle:
     reader = csv.DictReader(handle, delimiter="\t")
     fieldnames = reader.fieldnames or ["gate_id", "status", "approved_by", "notes"]
+    approved_field = "approved_by" if "approved_by" in fieldnames else ("reviewed_by" if "reviewed_by" in fieldnames else "approved_by")
+    if approved_field not in fieldnames:
+        fieldnames.append(approved_field)
+    if "approved_at" not in fieldnames and "reviewed_at" not in fieldnames:
+        fieldnames.append("approved_at")
+    timestamp_field = "approved_at" if "approved_at" in fieldnames else "reviewed_at"
+    if "gate_profile" not in fieldnames:
+        fieldnames.append("gate_profile")
+    if "notes" not in fieldnames:
+        fieldnames.append("notes")
     for row in reader:
+        row.setdefault(timestamp_field, "")
+        row.setdefault("gate_profile", "default")
         if row["gate_id"] == target_gate_id:
             row["status"] = target_gate_status
-            row["approved_by"] = target_approved_by
+            row[approved_field] = target_approved_by
+            if target_gate_status.lower() in {"approved", "yes", "true"} and not row.get(timestamp_field):
+                row[timestamp_field] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
             row["notes"] = target_notes
         rows.append(row)
 
 if not any(row["gate_id"] == target_gate_id for row in rows):
+    approved_at = ""
+    if target_gate_status.lower() in {"approved", "yes", "true"}:
+        approved_at = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
     rows.append({
         "gate_id": target_gate_id,
         "status": target_gate_status,
-        "approved_by": target_approved_by,
+        approved_field: target_approved_by,
+        timestamp_field: approved_at,
+        "gate_profile": "default",
         "notes": target_notes,
     })
 
@@ -75,6 +95,7 @@ with gate_file.open("w", encoding="utf-8", newline="") as handle:
         fieldnames=fieldnames,
         delimiter="\t",
         lineterminator="\n",
+        extrasaction="ignore",
     )
     writer.writeheader()
     writer.writerows(rows)

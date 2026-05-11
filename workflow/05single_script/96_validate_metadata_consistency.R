@@ -379,13 +379,13 @@ for (col in optional_question_cols) {
 }
 
 if (nrow(questions) > 0 && length(missing_cols) == 0) {
-  expected_materialized <- 80L
+  expected_materialized <- 83L
   if (nrow(questions) == expected_materialized) {
-    pass("questions.row_count", "80 materialized rows present; F23-F26 are intentionally derived")
+    pass("questions.row_count", "83 materialized rows present; F23-F26 are intentionally derived")
   } else {
     warn(
       "questions.row_count",
-      sprintf("expected 80 materialized rows after derived-row removal, found %s", nrow(questions)),
+      sprintf("expected 83 materialized rows after derived-row removal, found %s", nrow(questions)),
       fix = "Check analysis_questions_FULL.md and keep F23-F26 as generator-derived rows."
     )
   }
@@ -610,7 +610,11 @@ generated_tables <- list(
   enrichment_targets = list(path = file.path(metadata_dir, "enrichment_targets.tsv"), id = "target_id"),
   gene_program_targets = list(path = file.path(metadata_dir, "gene_program_targets.tsv"), id = "comparison_id"),
   deconv_pairs = list(path = file.path(metadata_dir, "deconv_pairs.tsv"), id = "deconv_id"),
-  spatial_pairs = list(path = file.path(metadata_dir, "spatial_pairs.tsv"), id = "spatial_pair_id")
+  spatial_pairs = list(path = file.path(metadata_dir, "spatial_pairs.tsv"), id = "spatial_pair_id"),
+  scdesign3_question_map = list(path = file.path(metadata_dir, "scdesign3_question_map.tsv"), id = "question_id"),
+  scdesign3_targets = list(path = file.path(metadata_dir, "scdesign3_targets.tsv"), id = "target_id"),
+  scdesign3_simulation_designs = list(path = file.path(metadata_dir, "scdesign3_simulation_designs.tsv"), id = "simulation_design_id"),
+  scdesign3_thresholds = list(path = file.path(metadata_dir, "scdesign3_thresholds.tsv"), id = "threshold_id")
 )
 
 loaded_generated <- list()
@@ -677,6 +681,242 @@ allowed_enrichment_usage <- c(
   "none", "identity_baseline_enrichment", "subtype_pairwise_enrichment",
   "mechanism_enrichment", "global_context_enrichment"
 )
+
+if (!is.null(loaded_generated$scdesign3_question_map)) {
+  scdesign3_question_map <- loaded_generated$scdesign3_question_map
+  scdesign3_map_schema <- c(
+    "question_id", "section", "question_family", "status",
+    "scdesign3_role", "validation_layer", "validation_object",
+    "ground_truth_col", "simulation_type", "simulation_unit",
+    "primary_metric", "secondary_metrics", "gate_target", "affects_modules",
+    "required_before_core_interpretation", "derived_parent_question_id",
+    "enabled", "reason", "materialized", "question_class", "scope",
+    "contrast_axis", "tools_to_run", "question_zh"
+  )
+  if (require_generated_cols("scdesign3_question_map.tsv", scdesign3_question_map, scdesign3_map_schema) && nrow(scdesign3_question_map) > 0) {
+    required_derived <- c(
+      "F23_TC_GC_diff_overall",
+      "F24_TC_GC_diff_subtype",
+      "F25_GC_internal_diff",
+      "F26_panorama_screen_diff"
+    )
+    missing_materialized <- if (exists("questions") && nrow(questions) > 0 && "question_id" %in% colnames(questions)) {
+      setdiff(questions$question_id, scdesign3_question_map$question_id)
+    } else {
+      character(0)
+    }
+    missing_derived <- setdiff(required_derived, scdesign3_question_map$question_id)
+    if (length(missing_materialized) > 0) {
+      fail("tier2.scdesign3_question_map.materialized_coverage", sprintf("materialized questions missing from scDesign3 map: %s", paste(missing_materialized, collapse = ", ")))
+    } else {
+      pass("tier2.scdesign3_question_map.materialized_coverage", sprintf("all %s materialized questions are present in scDesign3 map", if (exists("questions")) nrow(questions) else 0L))
+    }
+    if (length(missing_derived) > 0) {
+      fail("tier2.scdesign3_question_map.derived_coverage", sprintf("derived F23-F26 questions missing from scDesign3 map: %s", paste(missing_derived, collapse = ", ")))
+    } else {
+      pass("tier2.scdesign3_question_map.derived_coverage", "F23-F26 derived communication questions are present in scDesign3 map")
+    }
+
+    allowed_roles <- c(
+      "direct_validate", "upstream_gate", "downstream_consistency",
+      "not_applicable", "planned_waiting_input",
+      "derived_from_validated_parent"
+    )
+    bad_roles <- unique(scdesign3_question_map$scdesign3_role[!scdesign3_question_map$scdesign3_role %in% allowed_roles])
+    bad_roles <- bad_roles[nzchar(bad_roles)]
+    if (length(bad_roles) > 0) {
+      fail("tier2.scdesign3_question_map.roles", sprintf("unsupported scdesign3_role values: %s", paste(bad_roles, collapse = ", ")))
+    } else {
+      pass("tier2.scdesign3_question_map.roles", "scDesign3 roles use the approved role vocabulary")
+    }
+
+    bad_enabled <- unique(scdesign3_question_map$enabled[!scdesign3_question_map$enabled %in% c("yes", "planned", "no")])
+    bad_enabled <- bad_enabled[nzchar(bad_enabled)]
+    if (length(bad_enabled) > 0) {
+      fail("tier2.scdesign3_question_map.enabled", sprintf("enabled must be yes/planned/no: %s", paste(bad_enabled, collapse = ", ")))
+    } else {
+      pass("tier2.scdesign3_question_map.enabled", "scDesign3 enabled values are valid")
+    }
+
+    derived_bad <- scdesign3_question_map[
+      scdesign3_question_map$question_id %in% required_derived &
+        (scdesign3_question_map$scdesign3_role != "derived_from_validated_parent" |
+          !nzchar(scdesign3_question_map$derived_parent_question_id)),
+      ,
+      drop = FALSE
+    ]
+    if (nrow(derived_bad) > 0) {
+      fail("tier2.scdesign3_question_map.derived_role", sprintf("derived rows must inherit parent gates: %s", paste(derived_bad$question_id, collapse = ", ")))
+    } else {
+      pass("tier2.scdesign3_question_map.derived_role", "derived scDesign3 rows inherit parent gate status")
+    }
+  }
+}
+
+if (!is.null(loaded_generated$scdesign3_targets)) {
+  scdesign3_targets <- loaded_generated$scdesign3_targets
+  scdesign3_target_schema <- c(
+    "target_id", "target_type", "layer_id", "input_object", "truth_col",
+    "questions_covered", "n_simulations", "resolution_grid",
+    "mixture_design", "primary_metric", "pass_threshold", "warn_threshold",
+    "fail_threshold", "output_dir", "status"
+  )
+  if (require_generated_cols("scdesign3_targets.tsv", scdesign3_targets, scdesign3_target_schema)) {
+    allowed_target_types <- c(
+      "cluster_robustness", "composition_robustness", "trajectory_robustness",
+      "communication_robustness", "deconv_validation", "spatial_validation"
+    )
+    bad_target_types <- unique(scdesign3_targets$target_type[!scdesign3_targets$target_type %in% allowed_target_types])
+    bad_target_types <- bad_target_types[nzchar(bad_target_types)]
+    if (length(bad_target_types) > 0) {
+      fail("tier2.scdesign3_targets.target_type", sprintf("unsupported target_type values: %s", paste(bad_target_types, collapse = ", ")))
+    } else {
+      pass("tier2.scdesign3_targets.target_type", "scDesign3 target types are valid")
+    }
+
+    if (!is.null(loaded_generated$scdesign3_question_map) && nrow(scdesign3_targets) > 0) {
+      covered <- unique(unlist(lapply(scdesign3_targets$questions_covered, split_dependency_ids), use.names = FALSE))
+      covered <- covered[nzchar(covered)]
+      target_required <- loaded_generated$scdesign3_question_map[
+        !loaded_generated$scdesign3_question_map$scdesign3_role %in% c("not_applicable", "derived_from_validated_parent") &
+          nzchar(loaded_generated$scdesign3_question_map$validation_object),
+        ,
+        drop = FALSE
+      ]
+      missing_target_coverage <- setdiff(target_required$question_id, covered)
+      if (length(missing_target_coverage) > 0) {
+        fail("tier2.scdesign3_targets.question_coverage", sprintf("scDesign3 target-required questions missing from targets: %s", paste(missing_target_coverage, collapse = ", ")))
+      } else {
+        pass("tier2.scdesign3_targets.question_coverage", sprintf("%s target-required scDesign3 questions are covered by targets", nrow(target_required)))
+      }
+    }
+  }
+}
+
+if (!is.null(loaded_generated$scdesign3_simulation_designs)) {
+  require_generated_cols(
+    "scdesign3_simulation_designs.tsv",
+    loaded_generated$scdesign3_simulation_designs,
+    c(
+      "simulation_design_id", "target_id", "simulation_type",
+      "simulation_unit", "n_simulations", "resolution_grid",
+      "mixture_design", "max_cells_per_label", "n_hvg", "status", "notes"
+    )
+  )
+}
+
+if (!is.null(loaded_generated$scdesign3_thresholds)) {
+  require_generated_cols(
+    "scdesign3_thresholds.tsv",
+    loaded_generated$scdesign3_thresholds,
+    c(
+      "threshold_id", "target_type", "primary_metric", "pass_threshold",
+      "warn_threshold", "fail_threshold", "notes"
+    )
+  )
+}
+
+if (!is.null(loaded_generated$trajectory_pairs)) {
+  trajectory_pairs <- loaded_generated$trajectory_pairs
+  trajectory_schema <- c(
+    "trajectory_id", "source_question_id", "layer_scope", "root_group",
+    "terminal_group", "condition_split_var", "condition_split_values",
+    "method", "tools_to_run", "methods_extra", "outlier_qc_policy",
+    "regress_cell_cycle", "coarse_label_var", "fine_label_var",
+    "split_mode", "enabled", "notes"
+  )
+  if (require_generated_cols("trajectory_pairs.tsv", trajectory_pairs, trajectory_schema)) {
+    observed <- colnames(trajectory_pairs)[seq_along(trajectory_schema)]
+    if (identical(observed, trajectory_schema)) {
+      pass("tier2.trajectory_pairs.column_order", "trajectory_pairs.tsv uses the v4 17-column order")
+    } else {
+      fail(
+        "tier2.trajectory_pairs.column_order",
+        sprintf("trajectory_pairs.tsv first %s columns do not match v4 order", length(trajectory_schema))
+      )
+    }
+  }
+
+  if (nrow(trajectory_pairs) > 0 && all(trajectory_schema %in% colnames(trajectory_pairs))) {
+    trajectory_pairs$method <- tolower(vapply(trajectory_pairs$method, trim, character(1)))
+    trajectory_pairs$enabled <- tolower(vapply(trajectory_pairs$enabled, trim, character(1)))
+    active_trajectory_pairs <- trajectory_pairs[trajectory_pairs$enabled != "no", , drop = FALSE]
+    allowed_methods <- c("trajectory", "velocity")
+    bad_methods <- unique(active_trajectory_pairs$method[!active_trajectory_pairs$method %in% allowed_methods])
+    bad_methods <- bad_methods[nzchar(bad_methods)]
+    if (length(bad_methods) > 0) {
+      fail("tier2.trajectory_pairs.method", sprintf("unsupported method values: %s", paste(bad_methods, collapse = ", ")))
+    } else {
+      pass("tier2.trajectory_pairs.method", "trajectory pair methods are valid")
+    }
+
+    enum_checks <- list(
+      outlier_qc_policy = c("strict", "standard", "off"),
+      regress_cell_cycle = c("yes", "no", "auto"),
+      split_mode = c("auto", "force_split", "force_pooled", "pooled")
+    )
+    for (col in names(enum_checks)) {
+      values <- tolower(vapply(active_trajectory_pairs[[col]], trim, character(1)))
+      values[!nzchar(values)] <- switch(col, outlier_qc_policy = "standard", regress_cell_cycle = "auto", split_mode = "auto")
+      bad <- unique(values[!values %in% enum_checks[[col]]])
+      bad <- bad[nzchar(bad)]
+      if (length(bad) > 0) {
+        fail(paste0("tier2.trajectory_pairs.", col), sprintf("unsupported %s values: %s", col, paste(bad, collapse = ", ")))
+      } else {
+        pass(paste0("tier2.trajectory_pairs.", col), sprintf("%s values are valid", col))
+      }
+    }
+
+    split_method_tokens <- function(x) {
+      parts <- trimws(unlist(strsplit(trim(x), "[,;[:space:]]+", perl = TRUE), use.names = FALSE))
+      parts[nzchar(parts)]
+    }
+    allowed_tools <- list(
+      trajectory = c("slingshot", "monocle3", "monocle2", "paga-dpt", "tradeseq", "palantir"),
+      velocity = c("scvelo-dynamical", "scvelo-stochastic", "velocyto", "cellrank")
+    )
+    tool_fail_n <- 0L
+    extra_fail_n <- 0L
+    for (idx in seq_len(nrow(active_trajectory_pairs))) {
+      row <- active_trajectory_pairs[idx, , drop = FALSE]
+      method <- row$method[[1]]
+      tools <- tolower(gsub("_", "-", split_method_tokens(row$tools_to_run[[1]]), fixed = TRUE))
+      allowed <- allowed_tools[[method]] %||% character(0)
+      bad_tools <- setdiff(tools, allowed)
+      if (length(tools) == 0) {
+        fail("tier2.trajectory_pairs.tools_to_run", sprintf("%s has empty tools_to_run", row$trajectory_id[[1]]))
+        tool_fail_n <- tool_fail_n + 1L
+      } else if (length(bad_tools) > 0) {
+        fail("tier2.trajectory_pairs.tools_to_run", sprintf("%s has unsupported tools_to_run tokens: %s", row$trajectory_id[[1]], paste(bad_tools, collapse = ", ")))
+        tool_fail_n <- tool_fail_n + length(bad_tools)
+      }
+      extra_tokens <- split_method_tokens(row$methods_extra[[1]])
+      bad_extra <- extra_tokens[!grepl("^(\\+|-|no[-_])?[A-Za-z0-9_.-]+$", extra_tokens, perl = TRUE)]
+      if (length(bad_extra) > 0) {
+        fail("tier2.trajectory_pairs.methods_extra", sprintf("%s has invalid methods_extra tokens: %s", row$trajectory_id[[1]], paste(bad_extra, collapse = ", ")))
+        extra_fail_n <- extra_fail_n + length(bad_extra)
+      }
+    }
+    if (tool_fail_n == 0L) {
+      pass("tier2.trajectory_pairs.tools_to_run", "tools_to_run tokens are valid for trajectory/velocity rows")
+    }
+    if (extra_fail_n == 0L) {
+      pass("tier2.trajectory_pairs.methods_extra", "methods_extra +/- tokens are syntactically valid")
+    }
+
+    missing_labels <- active_trajectory_pairs[
+      !nzchar(trim(active_trajectory_pairs$coarse_label_var)) |
+        !nzchar(trim(active_trajectory_pairs$fine_label_var)),
+      ,
+      drop = FALSE
+    ]
+    if (nrow(missing_labels) > 0) {
+      fail("tier2.trajectory_pairs.label_vars", sprintf("missing label vars: %s", paste(missing_labels$trajectory_id, collapse = ", ")))
+    } else {
+      pass("tier2.trajectory_pairs.label_vars", "coarse_label_var and fine_label_var are populated")
+    }
+  }
+}
 
 if (!is.null(loaded_generated$annotation_marker_targets)) {
   annotation_marker_targets <- loaded_generated$annotation_marker_targets

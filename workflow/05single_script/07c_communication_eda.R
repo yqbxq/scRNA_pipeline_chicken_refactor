@@ -41,6 +41,91 @@ cellchat_triage <- read_tsv_optional(cfg$cellchat_triage_tsv)
 nichenet_triage <- read_tsv_optional(cfg$nichenet_triage_tsv)
 pairs <- read_communication_pairs(cfg)
 
+read_scdesign3_communication_gate_07c <- function(cfg) {
+  candidates <- c(
+    file.path(cfg$table_dir, "04f_scdesign3_finalize", "communication_scdesign3_gate_post_engine.tsv"),
+    file.path(cfg$table_dir, "04f_scdesign3_finalize", "question_gate_status_post_engine.tsv"),
+    file.path(cfg$table_dir, "scdesign3_all_questions_status.tsv"),
+    file.path(cfg$table_dir, "04d_cluster_robustness", "communication_scdesign3_gate.tsv"),
+    file.path(cfg$table_dir, "04d_cluster_robustness", "question_gate_status.tsv")
+  )
+  for (path in candidates) {
+    df <- read_tsv_optional(path)
+    if (nrow(df) == 0) {
+      next
+    }
+    if ("pair_id" %in% colnames(df)) {
+      for (col in c("scdesign3_gate_status", "allowed_for_cellchat", "allowed_for_nichenet", "reason")) {
+        if (!col %in% colnames(df)) df[[col]] <- ""
+      }
+      return(list(kind = "pair", data = df))
+    }
+    if ("question_id" %in% colnames(df)) {
+      for (col in c("gate_status", "interpretation_allowed", "reason")) {
+        if (!col %in% colnames(df)) df[[col]] <- ""
+      }
+      return(list(kind = "question", data = df))
+    }
+  }
+  list(kind = "missing", data = data.frame(stringsAsFactors = FALSE))
+}
+
+attach_scdesign3_gate_to_communication_07c <- function(gate_summary, pairs, cfg) {
+  if (nrow(gate_summary) == 0) {
+    gate_summary$scdesign3_gate_status <- character(0)
+    gate_summary$scdesign3_gate_reason <- character(0)
+    gate_summary$communication_interpretation_level <- character(0)
+    gate_summary$allowed_for_cellchat <- character(0)
+    gate_summary$allowed_for_nichenet <- character(0)
+    return(gate_summary)
+  }
+  gate <- read_scdesign3_communication_gate_07c(cfg)
+  if (identical(gate$kind, "missing")) {
+    gate_summary$scdesign3_gate_status <- "NOT_RUN"
+    gate_summary$scdesign3_gate_reason <- "scDesign3 communication gate has not been generated."
+    gate_summary$communication_interpretation_level <- "ungated"
+    gate_summary$allowed_for_cellchat <- "yes"
+    gate_summary$allowed_for_nichenet <- "yes"
+    return(gate_summary)
+  }
+  if (identical(gate$kind, "pair")) {
+    pair_gate <- gate$data
+    pair_gate <- pair_gate[, intersect(c("pair_id", "scdesign3_gate_status", "allowed_for_cellchat", "allowed_for_nichenet", "reason"), colnames(pair_gate)), drop = FALSE]
+    out <- gate_summary %>% dplyr::left_join(pair_gate, by = "pair_id")
+  } else {
+    question_gate <- gate$data[, c("question_id", "gate_status", "interpretation_allowed", "reason"), drop = FALSE]
+    pair_question <- pairs
+    for (col in c("pair_id", "source_question_id")) {
+      if (!col %in% colnames(pair_question)) pair_question[[col]] <- ""
+    }
+    pair_question <- unique(pair_question[, c("pair_id", "source_question_id"), drop = FALSE])
+    out <- gate_summary %>%
+      dplyr::left_join(pair_question, by = "pair_id") %>%
+      dplyr::left_join(question_gate, by = c("source_question_id" = "question_id")) %>%
+      dplyr::mutate(
+        scdesign3_gate_status = gate_status,
+        allowed_for_cellchat = dplyr::if_else(scdesign3_gate_status %in% c("PASS", "WARN", "DERIVED"), "yes", "no"),
+        allowed_for_nichenet = dplyr::if_else(scdesign3_gate_status %in% c("PASS", "WARN"), "yes", "no")
+      ) %>%
+      dplyr::select(-source_question_id, -gate_status, -interpretation_allowed)
+  }
+  out %>%
+    dplyr::mutate(
+      scdesign3_gate_status = dplyr::coalesce(scdesign3_gate_status, "MISSING_GATE"),
+      scdesign3_gate_reason = dplyr::coalesce(reason, "No matching scDesign3 gate for communication pair."),
+      communication_interpretation_level = dplyr::case_when(
+        scdesign3_gate_status == "PASS" ~ "core",
+        scdesign3_gate_status == "WARN" ~ "exploratory",
+        scdesign3_gate_status == "DERIVED" ~ "inherit_parent",
+        scdesign3_gate_status == "NOT_APPLICABLE" ~ "context",
+        TRUE ~ "blocked_or_pending"
+      ),
+      allowed_for_cellchat = dplyr::coalesce(allowed_for_cellchat, "no"),
+      allowed_for_nichenet = dplyr::coalesce(allowed_for_nichenet, "no")
+    ) %>%
+    dplyr::select(-reason)
+}
+
 for (col in c("pair_id", "layer_id", "condition_value", "status", "lr_table_path")) {
   if (!col %in% colnames(cellchat_index)) cellchat_index[[col]] <- character(nrow(cellchat_index))
 }
@@ -162,6 +247,7 @@ gate_summary <- dplyr::bind_rows(
   gate_summary_from_cellchat_07c(cellchat_index),
   gate_summary_from_nichenet_07c(nichenet_index)
 )
+gate_summary <- attach_scdesign3_gate_to_communication_07c(gate_summary, pairs, cfg)
 skipped_low_cells <- gate_summary[
   gate_summary$status == "skipped_low_cells" | gate_summary$gate_status == "fail",
   ,

@@ -58,6 +58,9 @@ H02_GC_trajectory_split	trajectory	GC pseudotime split	GC_subcluster	[pGC]	[lGC]
 H03_TC_trajectory_baseline	trajectory	TC轨迹	TC_subcluster	auto	auto	-	lineage	trajectory+velocity	P2	planned		等TC	always									no
 H04_TC_trajectory_split	trajectory	TC轨迹split	TC_subcluster	auto	auto	group_id:syf,f5	lineage	trajectory+velocity	P3	planned		等TC	always									no
 H05_GC_velocity	trajectory	GC RNA velocity	GC_subcluster	*	*	-	velocity	velocity	P0	active		独立验证	always									no
+H06_GC_velocity_split	trajectory	GC RNA velocity syf vs f5	GC_subcluster	*	*	group_id:syf,f5	velocity	velocity	P0	active		配对 H05；syf vs f5 RNA velocity 流场比较	always									no
+H07_TC_velocity_baseline	trajectory	TC RNA velocity	TC_subcluster	*	*	-	velocity	velocity	P2	planned		等 TC；与 H05 平行	always									no
+H08_TC_velocity_split	trajectory	TC RNA velocity syf vs f5	TC_subcluster	*	*	group_id:syf,f5	velocity	velocity	P3	planned		等 TC；与 H06 平行	always									no
 I01_ST_clustering	spatial	ST clustering	ST_section	*	*	-	spatial_clustering	spatial_clustering	P0	planned		2.5	always									no
 I02_ST_region_marker	spatial	region marker	ST_section	*	*	-	pairwise	deg+enrichment	P0	planned		2.6	always									no
 I03_ST_region_marker_syf	spatial	region in syf	ST_section	*	*	syf_only	pairwise	deg+enrichment	P1	planned			always									no
