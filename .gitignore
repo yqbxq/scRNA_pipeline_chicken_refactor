@@ -26,6 +26,7 @@ metadata/*
 !metadata/deconv_pairs.tsv
 !metadata/spatial_pairs.tsv
 !metadata/scdesign3_thresholds.tsv
+!metadata/scdesign3_simulation_overrides.tsv
 raw/
 fastq/
 cellranger_out/

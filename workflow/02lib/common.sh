@@ -88,6 +88,7 @@ export SCDESIGN3_N_CORES="${SCDESIGN3_N_CORES:-${MAIN_THREADS:-4}}"
 export SCDESIGN3_MAX_CELLS_PER_LABEL="${SCDESIGN3_MAX_CELLS_PER_LABEL:-2000}"
 export SCDESIGN3_N_HVG="${SCDESIGN3_N_HVG:-2000}"
 export SCDESIGN3_N_PCS="${SCDESIGN3_N_PCS:-30}"
+export SCDESIGN3_RESOLUTION_GRID="${SCDESIGN3_RESOLUTION_GRID:-}"
 export PANORAMA_LAYER_ID="${PANORAMA_LAYER_ID:-panorama}"
 export ANNOTATION_HUB_PATH_CLUSTERED="${ANNOTATION_HUB_PATH_CLUSTERED:-${CHECKPOINT_DIR}/02_after_clustering.rds}"
 export MODULE_03_VERSION="${MODULE_03_VERSION:-1.0}"
@@ -166,6 +167,7 @@ export SCDESIGN3_QUESTION_MAP="${SCDESIGN3_QUESTION_MAP:-${METADATA_DIR}/scdesig
 export SCDESIGN3_TARGETS_SHEET="${SCDESIGN3_TARGETS_SHEET:-${METADATA_DIR}/scdesign3_targets.tsv}"
 export SCDESIGN3_SIMULATION_DESIGNS_SHEET="${SCDESIGN3_SIMULATION_DESIGNS_SHEET:-${METADATA_DIR}/scdesign3_simulation_designs.tsv}"
 export SCDESIGN3_THRESHOLDS_SHEET="${SCDESIGN3_THRESHOLDS_SHEET:-${METADATA_DIR}/scdesign3_thresholds.tsv}"
+export SCDESIGN3_SIMULATION_OVERRIDES_SHEET="${SCDESIGN3_SIMULATION_OVERRIDES_SHEET:-${METADATA_DIR}/scdesign3_simulation_overrides.tsv}"
 export DELIVERY_MANIFEST="${DELIVERY_MANIFEST:-${METADATA_DIR}/delivery_manifest.tsv}"
 export RECEIVED_FILES_MANIFEST="${RECEIVED_FILES_MANIFEST:-${METADATA_DIR}/received_files_manifest.tsv}"
 export INPUT_INVENTORY_FILE="${INPUT_INVENTORY_FILE:-${INTAKE_REPORT_DIR}/input_inventory.tsv}"
@@ -513,6 +515,9 @@ ensure_metadata_fresh() {
     "${SCDESIGN3_SIMULATION_DESIGNS_SHEET}"
     "${SCDESIGN3_THRESHOLDS_SHEET}"
   )
+  local generation_inputs=(
+    "${questions_file}"
+  )
   local generator="${PIPELINE_ROOT}/workflow/03stages/95_run_metadata_generator.sh"
   local validator="${PIPELINE_ROOT}/workflow/03stages/96_validate_metadata.sh"
   local table_path
@@ -523,11 +528,32 @@ ensure_metadata_fresh() {
   [[ -x "${validator}" ]] || die "缺少可执行 metadata validator: ${validator}"
 
   for table_path in "${generated_tables[@]}"; do
-    if [[ ! -s "${table_path}" || "${questions_file}" -nt "${table_path}" ]]; then
+    if [[ ! -s "${table_path}" ]]; then
       needs_generate=1
       break
     fi
+    local input_path
+    for input_path in "${generation_inputs[@]}"; do
+      if [[ -s "${input_path}" && "${input_path}" -nt "${table_path}" ]]; then
+        needs_generate=1
+        break 2
+      fi
+    done
   done
+
+  if [[ "${needs_generate}" != "1" ]]; then
+    local scdesign3_input
+    local scdesign3_output
+    for scdesign3_input in "${SCDESIGN3_THRESHOLDS_SHEET}" "${SCDESIGN3_SIMULATION_OVERRIDES_SHEET}"; do
+      [[ -s "${scdesign3_input}" ]] || continue
+      for scdesign3_output in "${SCDESIGN3_TARGETS_SHEET}" "${SCDESIGN3_SIMULATION_DESIGNS_SHEET}"; do
+        if [[ ! -s "${scdesign3_output}" || "${scdesign3_input}" -nt "${scdesign3_output}" ]]; then
+          needs_generate=1
+          break 2
+        fi
+      done
+    done
+  fi
 
   if [[ "${needs_generate}" == "1" ]]; then
     echo "[metadata] analysis_questions.tsv 更新或 Tier 2 表缺失，重新生成 metadata。"

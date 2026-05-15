@@ -49,7 +49,7 @@ engine_status_path <- file.path(cfg$table_dir, "04e_scdesign3_engine", "engine_s
 target_gates_old <- read_tsv_optional(target_gate_pre_path)
 question_gates_old <- read_tsv_optional(question_gate_pre_path)
 target_metrics <- read_tsv_optional(engine_metrics_path)
-engine_status <- read_tsv_optional(engine_status_path)
+engine_status_df <- read_tsv_optional(engine_status_path)
 
 if (nrow(target_gates_old) == 0 || !"target_id" %in% colnames(target_gates_old)) {
   stop(sprintf("Missing 04d target gate status: %s", target_gate_pre_path), call. = FALSE)
@@ -62,7 +62,7 @@ for (col in c("target_id", "status", "gate_status", "primary_metric_value", "med
   if (!col %in% colnames(target_metrics)) target_metrics[[col]] <- character(nrow(target_metrics))
 }
 for (col in c("target_id", "fit_ok", "sim_ok", "score_ok", "status", "reason")) {
-  if (!col %in% colnames(engine_status)) engine_status[[col]] <- character(nrow(engine_status))
+  if (!col %in% colnames(engine_status_df)) engine_status_df[[col]] <- character(nrow(engine_status_df))
 }
 
 engine_projection <- target_metrics %>%
@@ -79,7 +79,7 @@ engine_projection <- target_metrics %>%
     engine_reason = reason
   ) %>%
   dplyr::left_join(
-    engine_status %>%
+    engine_status_df %>%
       dplyr::select(target_id, fit_ok, sim_ok, score_ok, runtime_status = status, runtime_reason = reason),
     by = "target_id"
   )
@@ -262,6 +262,7 @@ report_lines <- build_report_lines_v04(
   review_focus = c(
     "Approve `scdesign3_validated` only after reviewing 04e target metrics and figures.",
     "Rows where engine_applied is `no` still reflect 04d preflight or planned status.",
+    "A WARN gate_status can mean either preflight warning or post-engine exploratory support; inspect gate_level to distinguish them.",
     "Downstream modules should consume the root all-question status table or this 04f post-engine table."
   ),
   extra_sections = list(

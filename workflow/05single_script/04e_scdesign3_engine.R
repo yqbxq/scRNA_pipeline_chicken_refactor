@@ -47,7 +47,6 @@ ensure_dir(dirname(manifest_path))
 
 targets_path <- env_or_default_03("SCDESIGN3_TARGETS_SHEET", file.path(cfg$metadata_dir, "scdesign3_targets.tsv"))
 thresholds_path <- env_or_default_03("SCDESIGN3_THRESHOLDS_SHEET", file.path(cfg$metadata_dir, "scdesign3_thresholds.tsv"))
-simulation_designs_path <- env_or_default_03("SCDESIGN3_SIMULATION_DESIGNS_SHEET", file.path(cfg$metadata_dir, "scdesign3_simulation_designs.tsv"))
 preflight_target_gate_path <- file.path(cfg$table_dir, "04d_cluster_robustness", "target_gate_status.tsv")
 
 targets <- read_tsv_optional(targets_path)
@@ -55,7 +54,8 @@ required_target_cols <- c(
   "target_id", "target_type", "layer_id", "input_object", "truth_col",
   "questions_covered", "n_simulations", "resolution_grid",
   "mixture_design", "primary_metric", "pass_threshold", "warn_threshold",
-  "fail_threshold", "output_dir", "status"
+  "fail_threshold", "max_cells_per_label", "n_hvg", "n_pcs",
+  "output_dir", "status"
 )
 missing_target_cols <- setdiff(required_target_cols, colnames(targets))
 if (length(missing_target_cols) > 0) {
@@ -95,7 +95,8 @@ engine_cfg <- list(
   max_cells_per_label = env_integer_03("SCDESIGN3_MAX_CELLS_PER_LABEL", 2000L),
   n_hvg = env_integer_03("SCDESIGN3_N_HVG", 2000L),
   n_pcs = env_integer_03("SCDESIGN3_N_PCS", 30L),
-  resolution_default = scd_parse_resolution_grid(env_or_default_03("SCDESIGN3_RESOLUTION_GRID", "0.6")),
+  resolution_default = c(0.6),
+  resolution_grid_override = env_or_default_03("SCDESIGN3_RESOLUTION_GRID", ""),
   checkpoint_dir = checkpoint_dir,
   figure_root = figure_root
 )
@@ -158,12 +159,12 @@ report_lines <- build_report_lines_v04(
     "M1 executes cluster_robustness targets only; other target types remain registered for later milestones.",
     sprintf("targets_seen: `%s`; targets_processed: `%s`", nrow(targets), nrow(targets_to_process)),
     sprintf("n_simulations_default: `%s`; effective override: `%s`", engine_cfg$n_simulations_default, Sys.getenv("SCDESIGN3_ENGINE_N_SIM", unset = "")),
+    sprintf("resolution_grid_override: `%s`", ifelse(nzchar(engine_cfg$resolution_grid_override), engine_cfg$resolution_grid_override, "none")),
     sprintf("missing_engine_packages: `%s`", ifelse(length(missing_packages) == 0, "none", paste(missing_packages, collapse = ",")))
   ),
   key_files = list(
     scdesign3_targets = targets_path,
     scdesign3_thresholds = thresholds_path,
-    scdesign3_simulation_designs = simulation_designs_path,
     target_metrics = paths$target_metrics_tsv,
     per_simulation_metrics = paths$per_simulation_metrics_tsv,
     per_label_metrics = paths$per_label_metrics_tsv,
@@ -200,12 +201,11 @@ write_manifest_local(
   inputs = list(
     scdesign3_targets = targets_path,
     scdesign3_thresholds = thresholds_path,
-    scdesign3_simulation_designs = simulation_designs_path,
     preflight_target_gate_status = preflight_target_gate_path
   ),
   version = cfg$module_version,
   depends_on = list(
-    metadata = list(targets = targets_path, thresholds = thresholds_path, simulation_designs = simulation_designs_path),
+    metadata = list(targets = targets_path, thresholds = thresholds_path),
     module_04d = cfg$module_04d_manifest_path
   )
 )

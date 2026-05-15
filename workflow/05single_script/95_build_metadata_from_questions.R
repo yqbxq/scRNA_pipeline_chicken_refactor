@@ -123,8 +123,11 @@ gene_program_targets <- m3_fanout_gene_program(comparisons, annotation_marker_ta
 deconv_pairs <- m3_empty_df(m3_deconv_cols)
 spatial_pairs <- m3_empty_df(m3_spatial_cols)
 scdesign3_question_map <- m3_build_scdesign3_question_map(questions)
-scdesign3_threshold_overrides <- m3_read_tsv(file.path(metadata_dir, "scdesign3_thresholds.tsv"))
-scdesign3_targets <- m3_build_scdesign3_targets(scdesign3_question_map, scdesign3_threshold_overrides)
+scdesign3_threshold_path <- file.path(metadata_dir, "scdesign3_thresholds.tsv")
+scdesign3_simulation_overrides_path <- env_or("SCDESIGN3_SIMULATION_OVERRIDES_SHEET", file.path(metadata_dir, "scdesign3_simulation_overrides.tsv"))
+scdesign3_threshold_overrides <- m3_read_tsv(scdesign3_threshold_path)
+scdesign3_simulation_overrides <- m3_read_tsv(scdesign3_simulation_overrides_path)
+scdesign3_targets <- m3_build_scdesign3_targets(scdesign3_question_map, scdesign3_threshold_overrides, scdesign3_simulation_overrides)
 scdesign3_simulation_designs <- m3_build_scdesign3_simulation_designs(scdesign3_targets)
 scdesign3_thresholds <- m3_build_scdesign3_thresholds(scdesign3_threshold_overrides)
 
@@ -148,9 +151,9 @@ m3_write_generated_tsv(gene_program_targets, file.path(metadata_dir, "gene_progr
 m3_write_generated_tsv(deconv_pairs, file.path(metadata_dir, "deconv_pairs.tsv"), m3_deconv_cols)
 m3_write_generated_tsv(spatial_pairs, file.path(metadata_dir, "spatial_pairs.tsv"), m3_spatial_cols)
 m3_write_generated_tsv(scdesign3_question_map, file.path(metadata_dir, "scdesign3_question_map.tsv"), m3_scdesign3_question_map_cols)
+m3_write_generated_tsv(scdesign3_thresholds, scdesign3_threshold_path, colnames(scdesign3_thresholds))
 m3_write_generated_tsv(scdesign3_targets, file.path(metadata_dir, "scdesign3_targets.tsv"), m3_scdesign3_target_cols)
 m3_write_generated_tsv(scdesign3_simulation_designs, file.path(metadata_dir, "scdesign3_simulation_designs.tsv"), m3_scdesign3_simulation_design_cols)
-m3_write_generated_tsv(scdesign3_thresholds, file.path(metadata_dir, "scdesign3_thresholds.tsv"), m3_scdesign3_threshold_cols)
 
 summary <- data.frame(
   table = c(

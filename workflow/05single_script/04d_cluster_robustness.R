@@ -61,7 +61,8 @@ required_target_cols <- c(
   "target_id", "target_type", "layer_id", "input_object", "truth_col",
   "questions_covered", "n_simulations", "resolution_grid",
   "mixture_design", "primary_metric", "pass_threshold", "warn_threshold",
-  "fail_threshold", "output_dir", "status"
+  "fail_threshold", "max_cells_per_label", "n_hvg", "n_pcs",
+  "output_dir", "status"
 )
 missing_target_cols <- setdiff(required_target_cols, colnames(targets))
 if (length(missing_target_cols) > 0) {

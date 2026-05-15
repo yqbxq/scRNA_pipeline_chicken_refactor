@@ -12,18 +12,25 @@ m3_scdesign3_target_cols <- c(
   "target_id", "target_type", "layer_id", "input_object", "truth_col",
   "questions_covered", "n_simulations", "resolution_grid",
   "mixture_design", "primary_metric", "pass_threshold", "warn_threshold",
-  "fail_threshold", "output_dir", "status"
+  "fail_threshold", "max_cells_per_label", "n_hvg", "n_pcs",
+  "output_dir", "status"
 )
 
 m3_scdesign3_simulation_design_cols <- c(
   "simulation_design_id", "target_id", "simulation_type",
   "simulation_unit", "n_simulations", "resolution_grid", "mixture_design",
-  "max_cells_per_label", "n_hvg", "status", "notes"
+  "max_cells_per_label", "n_hvg", "n_pcs", "status", "notes"
 )
 
 m3_scdesign3_threshold_cols <- c(
   "threshold_id", "target_type", "primary_metric", "pass_threshold",
   "warn_threshold", "fail_threshold", "notes"
+)
+
+m3_scdesign3_simulation_override_cols <- c(
+  "override_id", "target_id", "target_type", "n_simulations",
+  "resolution_grid", "max_cells_per_label", "n_hvg", "n_pcs",
+  "status", "notes"
 )
 
 m3_scdesign3_derived_questions <- data.frame(
@@ -314,7 +321,7 @@ m3_scdesign3_input_object <- function(layer) {
 
 m3_scdesign3_thresholds <- function(target_type, metric) {
   if (target_type == "cluster_robustness") {
-    return(c(pass = "ARI>=0.80;NMI>=0.75;min_Jaccard>=0.65", warn = "ARI>=0.60;NMI>=0.60", fail = "ARI<0.60"))
+    return(c(pass = "ARI>=0.80", warn = "ARI>=0.60;NMI>=0.60;min_Jaccard>=0.45", fail = "ARI<0.60"))
   }
   if (target_type == "composition_robustness") {
     return(c(pass = "RMSE<=0.10;MAE<=0.10", warn = "RMSE<=0.20", fail = "RMSE>0.20"))
@@ -428,7 +435,59 @@ m3_scdesign3_thresholds_from_table <- function(threshold_table, target_type, met
   m3_scdesign3_thresholds(target_type, metric)
 }
 
-m3_build_scdesign3_targets <- function(question_map, thresholds_override = NULL) {
+m3_scdesign3_default_simulation_settings <- function(target_type, layer_id) {
+  list(
+    n_simulations = "5",
+    resolution_grid = ifelse(layer_id == "ST", "", "0.2,0.4,0.6,0.8,1.0,1.2"),
+    max_cells_per_label = "2000",
+    n_hvg = "2000",
+    n_pcs = "30"
+  )
+}
+
+m3_normalize_scdesign3_simulation_overrides <- function(overrides = NULL) {
+  if (is.null(overrides) || nrow(overrides) == 0) {
+    return(m3_empty_df(m3_scdesign3_simulation_override_cols))
+  }
+  for (col in m3_scdesign3_simulation_override_cols) {
+    if (!col %in% colnames(overrides)) {
+      overrides[[col]] <- ""
+    }
+  }
+  overrides <- overrides[, m3_scdesign3_simulation_override_cols, drop = FALSE]
+  overrides$status <- ifelse(nzchar(m3_trim(overrides$status)), m3_trim(overrides$status), "active")
+  overrides
+}
+
+m3_scdesign3_simulation_override_for_target <- function(overrides, target_id, target_type) {
+  overrides <- m3_normalize_scdesign3_simulation_overrides(overrides)
+  if (nrow(overrides) == 0) {
+    return(NULL)
+  }
+  active <- overrides[!tolower(overrides$status) %in% c("no", "false", "disabled", "inactive"), , drop = FALSE]
+  if (nrow(active) == 0) {
+    return(NULL)
+  }
+  target_hit <- active[nzchar(active$target_id) & active$target_id == target_id, , drop = FALSE]
+  if (nrow(target_hit) > 0) {
+    return(target_hit[1L, , drop = FALSE])
+  }
+  type_hit <- active[!nzchar(active$target_id) & active$target_type == target_type, , drop = FALSE]
+  if (nrow(type_hit) > 0) {
+    return(type_hit[1L, , drop = FALSE])
+  }
+  NULL
+}
+
+m3_scdesign3_override_value <- function(override, col, default = "") {
+  if (is.null(override) || !col %in% colnames(override)) {
+    return(default)
+  }
+  value <- m3_trim(override[[col]][[1]])
+  if (nzchar(value)) value else default
+}
+
+m3_build_scdesign3_targets <- function(question_map, thresholds_override = NULL, simulation_overrides = NULL) {
   if (nrow(question_map) == 0) {
     return(m3_empty_df(m3_scdesign3_target_cols))
   }
@@ -448,6 +507,8 @@ m3_build_scdesign3_targets <- function(question_map, thresholds_override = NULL)
     target_type <- m3_scdesign3_target_type(hit$scdesign3_role[[1]], hit$question_family[[1]], hit$validation_layer[[1]], m3_scdesign3_question_code(hit$question_id[[1]]))
     metric <- m3_scdesign3_primary_metric(target_type)
     thresholds <- m3_scdesign3_thresholds_from_table(threshold_table, target_type, metric)
+    sim_defaults <- m3_scdesign3_default_simulation_settings(target_type, hit$validation_layer[[1]])
+    sim_override <- m3_scdesign3_simulation_override_for_target(simulation_overrides, target_id, target_type)
     status <- if (all(hit$enabled == "planned")) "planned" else "active"
     rows[[length(rows) + 1L]] <- data.frame(
       target_id = target_id,
@@ -456,13 +517,16 @@ m3_build_scdesign3_targets <- function(question_map, thresholds_override = NULL)
       input_object = m3_scdesign3_input_object(hit$validation_layer[[1]]),
       truth_col = hit$ground_truth_col[[1]],
       questions_covered = paste(sort(unique(hit$question_id)), collapse = ";"),
-      n_simulations = "5",
-      resolution_grid = ifelse(hit$validation_layer[[1]] == "ST", "", "0.2,0.4,0.6,0.8,1.0,1.2"),
+      n_simulations = m3_scdesign3_override_value(sim_override, "n_simulations", sim_defaults$n_simulations),
+      resolution_grid = m3_scdesign3_override_value(sim_override, "resolution_grid", sim_defaults$resolution_grid),
       mixture_design = ifelse(target_type == "composition_robustness", "balanced;observed;perturbed", "observed_balanced"),
       primary_metric = metric,
       pass_threshold = thresholds[["pass"]],
       warn_threshold = thresholds[["warn"]],
       fail_threshold = thresholds[["fail"]],
+      max_cells_per_label = m3_scdesign3_override_value(sim_override, "max_cells_per_label", sim_defaults$max_cells_per_label),
+      n_hvg = m3_scdesign3_override_value(sim_override, "n_hvg", sim_defaults$n_hvg),
+      n_pcs = m3_scdesign3_override_value(sim_override, "n_pcs", sim_defaults$n_pcs),
       output_dir = file.path("results", "tables", "04d_cluster_robustness", target_id),
       status = status,
       stringsAsFactors = FALSE
@@ -476,8 +540,14 @@ m3_build_scdesign3_simulation_designs <- function(targets) {
   if (nrow(targets) == 0) {
     return(m3_empty_df(m3_scdesign3_simulation_design_cols))
   }
+  for (col in c("max_cells_per_label", "n_hvg", "n_pcs")) {
+    if (!col %in% colnames(targets)) {
+      targets[[col]] <- ""
+    }
+  }
   rows <- lapply(seq_len(nrow(targets)), function(idx) {
     target <- targets[idx, , drop = FALSE]
+    defaults <- m3_scdesign3_default_simulation_settings(target$target_type[[1]], target$layer_id[[1]])
     data.frame(
       simulation_design_id = paste0(target$target_id[[1]], "_DESIGN"),
       target_id = target$target_id[[1]],
@@ -494,8 +564,9 @@ m3_build_scdesign3_simulation_designs <- function(targets) {
       n_simulations = target$n_simulations[[1]],
       resolution_grid = target$resolution_grid[[1]],
       mixture_design = target$mixture_design[[1]],
-      max_cells_per_label = "2000",
-      n_hvg = "2000",
+      max_cells_per_label = m3_trim(target$max_cells_per_label[[1]], defaults$max_cells_per_label),
+      n_hvg = m3_trim(target$n_hvg[[1]], defaults$n_hvg),
+      n_pcs = m3_trim(target$n_pcs[[1]], defaults$n_pcs),
       status = target$status[[1]],
       notes = "Generated from scdesign3_targets.tsv; concrete engines may refine parameters per target.",
       stringsAsFactors = FALSE
@@ -526,12 +597,18 @@ m3_build_scdesign3_thresholds <- function(thresholds_override = NULL) {
   })
   out <- do.call(rbind, rows)
   if (!is.null(thresholds_override) && nrow(thresholds_override) > 0) {
+    extra_cols <- setdiff(colnames(thresholds_override), m3_scdesign3_threshold_cols)
+    for (col in extra_cols) {
+      if (!col %in% colnames(out)) {
+        out[[col]] <- ""
+      }
+    }
     for (col in m3_scdesign3_threshold_cols) {
       if (!col %in% colnames(thresholds_override)) {
         thresholds_override[[col]] <- ""
       }
     }
-    thresholds_override <- thresholds_override[, m3_scdesign3_threshold_cols, drop = FALSE]
+    thresholds_override <- thresholds_override[, c(m3_scdesign3_threshold_cols, extra_cols), drop = FALSE]
     for (idx in seq_len(nrow(thresholds_override))) {
       target_type <- m3_trim(thresholds_override$target_type[[idx]])
       if (!nzchar(target_type)) {
@@ -539,9 +616,14 @@ m3_build_scdesign3_thresholds <- function(thresholds_override = NULL) {
       }
       hit <- which(out$target_type == target_type)
       if (length(hit) == 0) {
-        out <- rbind(out, thresholds_override[idx, , drop = FALSE])
+        for (col in colnames(out)) {
+          if (!col %in% colnames(thresholds_override)) {
+            thresholds_override[[col]] <- ""
+          }
+        }
+        out <- rbind(out, thresholds_override[idx, colnames(out), drop = FALSE])
       } else {
-        for (col in c("primary_metric", "pass_threshold", "warn_threshold", "fail_threshold", "notes")) {
+        for (col in c("primary_metric", "pass_threshold", "warn_threshold", "fail_threshold", "notes", extra_cols)) {
           value <- m3_trim(thresholds_override[[col]][[idx]])
           if (nzchar(value)) {
             out[[col]][[hit[[1]]]] <- value
@@ -554,5 +636,5 @@ m3_build_scdesign3_thresholds <- function(thresholds_override = NULL) {
       }
     }
   }
-  out[, m3_scdesign3_threshold_cols, drop = FALSE]
+  out[, c(m3_scdesign3_threshold_cols, setdiff(colnames(out), m3_scdesign3_threshold_cols)), drop = FALSE]
 }

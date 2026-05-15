@@ -1,0 +1,3 @@
+# Project-level scDesign3 simulation overrides. target_id has priority over target_type.
+override_id	target_id	target_type	n_simulations	resolution_grid	max_cells_per_label	n_hvg	n_pcs	status	notes
+SCD_SIM_CLUSTER_DEFAULT		cluster_robustness	5	0.2,0.4,0.6,0.8,1.0,1.2	2000	2000	30	active	Default M1 cluster robustness runtime.

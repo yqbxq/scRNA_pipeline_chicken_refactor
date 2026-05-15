@@ -273,6 +273,12 @@ Tier 2 表为自动生成文件，不应手工编辑。后续新增 ST 或联合
   - `04e_scdesign3_engine.R`：在 `scdesign3_targets` gate 批准后，对 M1 `cluster_robustness` target 运行真实 scDesign3 fit/simulate/recluster/score 引擎；默认 `SCDESIGN3_N_SIM=5`。
   - `04f_scdesign3_finalize.R`：把 04e 的 ARI/NMI/Jaccard 结果回填到 target/question gate，并覆盖 root `results/tables/scdesign3_all_questions_status.tsv`。
 
+scDesign3 M1 的 project-level 配置表：
+
+- `metadata/scdesign3_thresholds.tsv`：可编辑阈值表；`cluster_robustness` 的 PASS 主指标是 `ARI>=0.80`，NMI/Jaccard 用于 WARN 辅助判断，`fail_threshold` 会显式参与 FAIL 判定。
+- `metadata/scdesign3_simulation_overrides.tsv`：可按 `target_id` 或 `target_type` 覆盖 `n_simulations`、`resolution_grid`、`max_cells_per_label`、`n_hvg`、`n_pcs`；`target_id` 优先级高于 `target_type`，默认 M1 cluster target 使用 5 次模拟。
+- `SCDESIGN3_RESOLUTION_GRID` 是可选全局 override；留空时使用 target/override 表里的 resolution grid。
+
 gate 规则采用 Option B：
 
 - 运行 `04_subcluster.sh` 前必须已经通过 `annotation` gate，且 `03_panorama_completed=true`。
@@ -282,6 +288,7 @@ gate 规则采用 Option B：
 - 独立运行 `04d_cluster_robustness.sh` 时会同时校验 `subcluster_gate_passed=true` 和 `04_subcluster_completed=true`。
 - `04d` 完成后会把 `scdesign3_targets` gate 置为 `pending`；审阅 `results/tables/04d_cluster_robustness/target_gate_status.tsv` 后批准该 gate，才能运行 `04_robustness.sh`。
 - `04_robustness.sh` 完成后会把 `scdesign3_validated` gate 置为 `pending`；07 communication 会等待该 gate 批准后再进入核心解释。
+- 09 trajectory 和 10 velocity 不被 `scdesign3_validated` gate 阻塞；若报告里出现 `WARN`，需要结合 `gate_level` 区分 preflight warning 和真实 engine 指标的探索性支持。
 
 `comparisons.tsv` 在 04c 中支持可选子集列：
 

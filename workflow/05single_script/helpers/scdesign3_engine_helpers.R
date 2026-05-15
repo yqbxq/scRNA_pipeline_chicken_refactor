@@ -115,26 +115,37 @@ scd_eval_threshold_condition <- function(condition, metrics) {
   if (!nzchar(condition)) {
     return(TRUE)
   }
-  match <- regexec("^([A-Za-z0-9_.]+)\\s*(>=|<=|>|<|==|=)\\s*(-?[0-9.]+)\\s*$", condition, perl = TRUE)
+  match <- regexec("^([A-Za-z0-9_.]+)\\s*(>=|<=|>|<|==|=|!=)\\s*(.+?)\\s*$", condition, perl = TRUE)
   parts <- regmatches(condition, match)[[1]]
   if (length(parts) != 4) {
     return(NA)
   }
   metric_name <- parts[[2]]
   op <- parts[[3]]
-  threshold <- suppressWarnings(as.numeric(parts[[4]]))
-  value <- scd_metric_value(metrics, metric_name)
-  if (!is.finite(value) || !is.finite(threshold)) {
+  threshold_raw <- trimws(parts[[4]])
+  value_raw <- if (!is.null(metrics) && metric_name %in% names(metrics)) metrics[[metric_name]][[1]] else NA
+  threshold_num <- suppressWarnings(as.numeric(threshold_raw))
+  value_num <- suppressWarnings(as.numeric(value_raw))
+  if (op %in% c("=", "==", "!=") && (!is.finite(value_num) || !is.finite(threshold_num))) {
+    value_chr <- trimws(as.character(value_raw))
+    threshold_chr <- trimws(as.character(threshold_raw))
+    if (!nzchar(value_chr) || !nzchar(threshold_chr) || is.na(value_chr) || is.na(threshold_chr)) {
+      return(NA)
+    }
+    return(if (op == "!=") value_chr != threshold_chr else value_chr == threshold_chr)
+  }
+  if (!is.finite(value_num) || !is.finite(threshold_num)) {
     return(NA)
   }
   switch(
     op,
-    ">=" = value >= threshold,
-    "<=" = value <= threshold,
-    ">" = value > threshold,
-    "<" = value < threshold,
-    "==" = value == threshold,
-    "=" = value == threshold,
+    ">=" = value_num >= threshold_num,
+    "<=" = value_num <= threshold_num,
+    ">" = value_num > threshold_num,
+    "<" = value_num < threshold_num,
+    "==" = value_num == threshold_num,
+    "=" = value_num == threshold_num,
+    "!=" = value_num != threshold_num,
     NA
   )
 }
@@ -151,7 +162,11 @@ scd_eval_threshold_expr <- function(expr, metrics) {
   all(values)
 }
 
-scd_gate_decision <- function(metrics, pass_threshold, warn_threshold) {
+scd_gate_decision <- function(metrics, pass_threshold, warn_threshold, fail_threshold = "") {
+  fail <- scd_eval_threshold_expr(fail_threshold, metrics)
+  if (isTRUE(fail)) {
+    return("FAIL")
+  }
   pass <- scd_eval_threshold_expr(pass_threshold, metrics)
   if (isTRUE(pass)) {
     return("PASS")
@@ -249,7 +264,7 @@ scd_normalized_mutual_info <- function(truth, cluster) {
   if (!is.finite(denom) || denom == 0) {
     return(NA_real_)
   }
-  mi / denom
+  unname(mi / denom)
 }
 
 compute_per_label_metrics <- function(cluster, truth, target_id, sim_i, resolution) {
@@ -317,11 +332,11 @@ compute_clustering_metrics <- function(cluster, truth) {
   tab <- table(cluster, truth)
   purity <- if (sum(tab) > 0) sum(apply(tab, 1, max)) / sum(tab) else NA_real_
   c(
-    ARI = scd_adjusted_rand_index(truth, cluster),
-    NMI = scd_normalized_mutual_info(truth, cluster),
+    ARI = unname(scd_adjusted_rand_index(truth, cluster)),
+    NMI = unname(scd_normalized_mutual_info(truth, cluster)),
     max_jaccard_mean = ifelse(length(jaccard[is.finite(jaccard)]) > 0, mean(jaccard, na.rm = TRUE), NA_real_),
     min_Jaccard = ifelse(length(jaccard[is.finite(jaccard)]) > 0, min(jaccard, na.rm = TRUE), NA_real_),
-    purity = purity
+    purity = unname(purity)
   )
 }
 
@@ -622,7 +637,7 @@ simulate_synthetic_counts <- function(fit, sim_i, seed) {
       family_use = fit$family_use,
       n_cores = fit$n_cores,
       usebam = FALSE,
-      corr_formula = "1",
+      corr_formula = paste0("~", fit$truth_col),
       copula = "gaussian",
       DT = TRUE,
       pseudo_obs = FALSE,
@@ -802,16 +817,27 @@ scd_write_engine_figures <- function(target_id, figure_root, per_sim, per_label,
   c(ari_distribution_png = ari_path, recluster_confusion_matrix_png = confusion_path, pseudobulk_synth_vs_real_png = pseudo_path)
 }
 
+scd_aggregate_pseudobulk <- function(items) {
+  items <- items[!vapply(items, is.null, logical(1))]
+  if (length(items) == 0) {
+    return(NULL)
+  }
+  df <- do.call(rbind, items)
+  if (is.null(df) || nrow(df) == 0) {
+    return(NULL)
+  }
+  stats::aggregate(cbind(real_mean, synth_mean) ~ gene, df, mean, na.rm = TRUE)
+}
+
 scd_skip_result <- function(target, resolved_input_path, n_sim_requested, status, reason, runtime_s, checkpoint_path, figure_root) {
   metrics <- scd_target_metrics_row(target, n_sim_requested, 0L, status, reason, runtime_s, gate_status = "PLANNED")
   engine <- scd_engine_status_row(target, resolved_input_path, n_sim_requested, 0L, FALSE, FALSE, FALSE, status, reason, runtime_s, checkpoint_path)
-  figures <- scd_write_engine_figures(scd_scalar(target$target_id), figure_root, scd_empty_df(scd_per_simulation_cols), scd_empty_df(scd_per_label_cols), NULL, reason)
   list(
     target_metrics = metrics,
     per_simulation = scd_empty_df(scd_per_simulation_cols),
     per_label = scd_empty_df(scd_per_label_cols),
     engine_status = engine,
-    figures = figures
+    figures = character(0)
   )
 }
 
@@ -822,6 +848,9 @@ run_cluster_target <- function(target, engine_cfg) {
   target_status <- scd_scalar(target$status, "active")
   resolved_input_path <- scd_scalar(target$resolved_input_path)
   n_sim_requested <- scd_as_integer(Sys.getenv("SCDESIGN3_ENGINE_N_SIM", unset = ""), scd_as_integer(target$n_simulations, engine_cfg$n_simulations_default))
+  max_cells_per_label <- scd_as_integer(target$max_cells_per_label, engine_cfg$max_cells_per_label)
+  n_hvg <- scd_as_integer(target$n_hvg, engine_cfg$n_hvg)
+  n_pcs <- scd_as_integer(target$n_pcs, engine_cfg$n_pcs)
   checkpoint_path <- file.path(engine_cfg$checkpoint_dir, paste0(target_id, ".rds"))
 
   if (!identical(target_type, "cluster_robustness")) {
@@ -843,8 +872,8 @@ run_cluster_target <- function(target, engine_cfg) {
     scd_prepare_target_data(
       resolved_input_path,
       scd_scalar(target$truth_col),
-      engine_cfg$max_cells_per_label,
-      engine_cfg$n_hvg,
+      max_cells_per_label,
+      n_hvg,
       engine_cfg$seed
     ),
     error = function(e) e
@@ -861,10 +890,11 @@ run_cluster_target <- function(target, engine_cfg) {
     return(scd_skip_result(target, resolved_input_path, n_sim_requested, "fit_failed", conditionMessage(fit), proc.time()[["elapsed"]] - start, checkpoint_path, engine_cfg$figure_root))
   }
 
-  resolutions <- scd_parse_resolution_grid(target$resolution_grid, default = engine_cfg$resolution_default)
+  resolution_grid <- if (nzchar(scd_scalar(engine_cfg$resolution_grid_override))) engine_cfg$resolution_grid_override else target$resolution_grid
+  resolutions <- scd_parse_resolution_grid(resolution_grid, default = engine_cfg$resolution_default)
   per_sim_rows <- list()
   per_label_rows <- list()
-  pseudobulk_df <- NULL
+  pseudobulk_items <- list()
 
   for (sim_i in seq_len(n_sim_requested)) {
     sim_start <- proc.time()[["elapsed"]]
@@ -895,20 +925,23 @@ run_cluster_target <- function(target, engine_cfg) {
       next
     }
 
-    if (is.null(pseudobulk_df)) {
-      common_genes <- intersect(rownames(prepared$counts), rownames(synth$counts))
-      common_genes <- common_genes[seq_len(min(length(common_genes), 2000L))]
-      if (length(common_genes) > 0) {
-        real_mean <- rowMeans(as.matrix(prepared$counts[common_genes, , drop = FALSE]))
-        synth_mean <- rowMeans(as.matrix(synth$counts[common_genes, , drop = FALSE]))
-        pseudobulk_df <- data.frame(gene = common_genes, real_mean = real_mean, synth_mean = synth_mean, stringsAsFactors = FALSE)
-      }
+    common_genes <- intersect(rownames(prepared$counts), rownames(synth$counts))
+    common_genes <- common_genes[seq_len(min(length(common_genes), 2000L))]
+    if (length(common_genes) > 0) {
+      real_mean <- rowMeans(as.matrix(prepared$counts[common_genes, , drop = FALSE]))
+      synth_mean <- rowMeans(as.matrix(synth$counts[common_genes, , drop = FALSE]))
+      pseudobulk_items[[length(pseudobulk_items) + 1L]] <- data.frame(
+        gene = common_genes,
+        real_mean = real_mean,
+        synth_mean = synth_mean,
+        stringsAsFactors = FALSE
+      )
     }
 
     for (resolution in resolutions) {
       res_start <- proc.time()[["elapsed"]]
       clusters <- tryCatch(
-        recluster_synthetic(synth$counts, resolution, prepared$n_truth_labels, engine_cfg$seed + sim_i, engine_cfg$n_pcs),
+        recluster_synthetic(synth$counts, resolution, prepared$n_truth_labels, engine_cfg$seed + sim_i, n_pcs),
         error = function(e) e
       )
       if (inherits(clusters, "error")) {
@@ -959,6 +992,7 @@ run_cluster_target <- function(target, engine_cfg) {
 
   per_sim <- scd_bind_rows(per_sim_rows, scd_per_simulation_cols)
   per_label <- scd_bind_rows(per_label_rows, scd_per_label_cols)
+  pseudobulk_df <- scd_aggregate_pseudobulk(pseudobulk_items)
   ok <- per_sim[per_sim$status == "ok", , drop = FALSE]
   if (nrow(ok) == 0) {
     reason <- "No simulations produced scoreable reclustering metrics."
@@ -997,7 +1031,12 @@ run_cluster_target <- function(target, engine_cfg) {
     purity = median(suppressWarnings(as.numeric(best$purity)), na.rm = TRUE)
   )
   aggregate_metrics[!is.finite(aggregate_metrics)] <- NA_real_
-  gate <- scd_gate_decision(aggregate_metrics, scd_scalar(target$pass_threshold), scd_scalar(target$warn_threshold))
+  gate <- scd_gate_decision(
+    aggregate_metrics,
+    scd_scalar(target$pass_threshold),
+    scd_scalar(target$warn_threshold),
+    scd_scalar(target$fail_threshold)
+  )
   runtime_s <- proc.time()[["elapsed"]] - start
   list(
     target_metrics = scd_target_metrics_row(target, n_sim_requested, n_sim_done, "ok", "", runtime_s, gate, aggregate_metrics, best_resolution),

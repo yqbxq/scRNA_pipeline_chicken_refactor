@@ -759,7 +759,8 @@ if (!is.null(loaded_generated$scdesign3_targets)) {
     "target_id", "target_type", "layer_id", "input_object", "truth_col",
     "questions_covered", "n_simulations", "resolution_grid",
     "mixture_design", "primary_metric", "pass_threshold", "warn_threshold",
-    "fail_threshold", "output_dir", "status"
+    "fail_threshold", "max_cells_per_label", "n_hvg", "n_pcs",
+    "output_dir", "status"
   )
   if (require_generated_cols("scdesign3_targets.tsv", scdesign3_targets, scdesign3_target_schema)) {
     allowed_target_types <- c(
@@ -800,9 +801,28 @@ if (!is.null(loaded_generated$scdesign3_simulation_designs)) {
     c(
       "simulation_design_id", "target_id", "simulation_type",
       "simulation_unit", "n_simulations", "resolution_grid",
-      "mixture_design", "max_cells_per_label", "n_hvg", "status", "notes"
+      "mixture_design", "max_cells_per_label", "n_hvg", "n_pcs", "status", "notes"
     )
   )
+}
+
+scdesign3_override_path <- file.path(metadata_dir, "scdesign3_simulation_overrides.tsv")
+if (file.exists(scdesign3_override_path) && file.info(scdesign3_override_path)$size > 0) {
+  scdesign3_overrides <- read_tsv(scdesign3_override_path)
+  override_schema <- c(
+    "override_id", "target_id", "target_type", "n_simulations",
+    "resolution_grid", "max_cells_per_label", "n_hvg", "n_pcs",
+    "status", "notes"
+  )
+  if (require_generated_cols("scdesign3_simulation_overrides.tsv", scdesign3_overrides, override_schema) && nrow(scdesign3_overrides) > 0) {
+    bad_status <- unique(scdesign3_overrides$status[!tolower(scdesign3_overrides$status) %in% c("", "active", "yes", "true", "no", "false", "disabled", "inactive")])
+    bad_status <- bad_status[nzchar(bad_status)]
+    if (length(bad_status) > 0) {
+      fail("tier2.scdesign3_simulation_overrides.status", sprintf("unsupported override status values: %s", paste(bad_status, collapse = ", ")))
+    } else {
+      pass("tier2.scdesign3_simulation_overrides.status", "scDesign3 simulation override statuses are valid")
+    }
+  }
 }
 
 if (!is.null(loaded_generated$scdesign3_thresholds)) {
