@@ -169,6 +169,13 @@ axis_tool_allow <- list(
   regulation_stage = c("scenic", "decoupler"),
   lineage = c("trajectory", "velocity"),
   velocity = c("velocity"),
+  spatial_clustering = c("spatial_clustering"),
+  spatial_neighbor = c("squidpy"),
+  spatial_overlay = c("rctd", "stlearn", "custom", "visualization"),
+  deconv_pair = c("rctd", "cell2location", "card", "seurat_transfer"),
+  SVG = c("spark", "sparkx", "spatialde", "spatialde2"),
+  SVG_diff = c("spark", "sparkx", "spatialde", "spatialde2"),
+  deconv_validation = c("scdesign3", "rctd", "cell2location"),
   enrichment_target = c("deg", "enrichment")
 )
 
@@ -358,6 +365,10 @@ load_scope_metadata <- function(scopes) {
 }
 
 questions <- read_tsv(question_path)
+st_fanout_version <- suppressWarnings(as.integer(env_or("ST_FANOUT_VERSION", "0")))
+if (is.na(st_fanout_version)) {
+  st_fanout_version <- 0L
+}
 if (nrow(questions) == 0) {
   fail("questions.exists", sprintf("analysis questions table is missing or empty: %s", question_path))
 } else {
@@ -508,10 +519,31 @@ if (nrow(questions) > 0 && length(missing_cols) == 0) {
   }
 
   st_rows <- questions[questions$scope == "ST_section", , drop = FALSE]
-  if (nrow(st_rows) > 0 && any(st_rows$status != "planned")) {
-    fail("questions.st_planned", "all ST_section rows must remain planned until ST-H")
+  allowed_st_m2_active <- c(
+    "I01_ST_clustering", "I02_ST_region_marker", "I06_SVG",
+    "I07_SVG_by_stage", "I08_deconv_panorama",
+    "I12_ST_region_compo", "I13_neighborhood", "I15_ST_enrichment"
+  )
+  if (st_fanout_version < 1L) {
+    if (nrow(st_rows) > 0 && any(st_rows$status != "planned")) {
+      fail("questions.st_planned", "all ST_section rows must remain planned when ST_FANOUT_VERSION=0")
+    } else {
+      pass("questions.st_planned", sprintf("all %s ST_section rows are planned", nrow(st_rows)))
+    }
   } else {
-    pass("questions.st_planned", sprintf("all %s ST_section rows are planned", nrow(st_rows)))
+    active_st_rows <- st_rows[st_rows$status == "active", , drop = FALSE]
+    disallowed_active <- setdiff(active_st_rows$question_id, allowed_st_m2_active)
+    if (length(disallowed_active) > 0) {
+      fail(
+        "questions.st_planned",
+        sprintf("ST_FANOUT_VERSION=1 only allows M2 ST active IDs; disallowed active IDs: %s", paste(disallowed_active, collapse = ", "))
+      )
+    } else {
+      pass(
+        "questions.st_planned",
+        sprintf("ST_FANOUT_VERSION=1 allows M2 ST fan-out while non-M2 ST rows remain planned (%s ST rows total)", nrow(st_rows))
+      )
+    }
   }
 
   active_rows <- questions[questions$status == "active", , drop = FALSE]
@@ -654,6 +686,45 @@ require_generated_cols <- function(table_name, df, cols) {
   }
   pass(paste0("tier2.schema.", table_name), sprintf("%s contains required schema columns", table_name))
   TRUE
+}
+
+split_tokens_any <- function(x) {
+  x <- trim(x)
+  if (!nzchar(x) || x %in% c("-", "*")) {
+    return(if (identical(x, "*")) "*" else character(0))
+  }
+  out <- trimws(unlist(strsplit(x, "[,;+]", perl = TRUE), use.names = FALSE))
+  out[nzchar(out)]
+}
+
+known_spatial_filter_tokens <- function() {
+  sections <- read_tsv(env_or("SECTION_SHEET", file.path(metadata_dir, "sections.tsv")))
+  samples <- read_tsv(env_or("CANONICAL_SAMPLE_SHEET", file.path(metadata_dir, "samples.canonical.tsv")))
+  if (nrow(samples) == 0) {
+    samples <- read_tsv(file.path(metadata_dir, "samples.tsv"))
+  }
+  section_ids <- character(0)
+  conditions <- character(0)
+  if (nrow(sections) > 0) {
+    if ("section_id" %in% colnames(sections)) {
+      section_ids <- c(section_ids, trim(sections$section_id))
+    }
+    if ("condition" %in% colnames(sections)) {
+      conditions <- c(conditions, trim(sections$condition))
+    }
+  }
+  if (nrow(samples) > 0) {
+    if ("section_id" %in% colnames(samples)) {
+      section_ids <- c(section_ids, trim(samples$section_id))
+    }
+    if ("condition" %in% colnames(samples)) {
+      conditions <- c(conditions, trim(samples$condition))
+    }
+    if ("group_id" %in% colnames(samples)) {
+      conditions <- c(conditions, trim(samples$group_id))
+    }
+  }
+  unique(c("*", "syf_only", "f5_only", "syf_1", "f5_1", section_ids[nzchar(section_ids)], conditions[nzchar(conditions)]))
 }
 
 split_comm_tokens <- function(x) {
@@ -814,6 +885,83 @@ if (!is.null(loaded_generated$scdesign3_thresholds)) {
       "warn_threshold", "fail_threshold", "notes"
     )
   )
+}
+
+if (!is.null(loaded_generated$spatial_pairs)) {
+  spatial_pairs <- loaded_generated$spatial_pairs
+  spatial_schema <- c(
+    "spatial_pair_id", "source_question_id", "st_scope", "sender", "receiver",
+    "contrast_axis", "section_filter", "condition_split_var",
+    "condition_split_values", "tool", "enabled", "notes"
+  )
+  if (require_generated_cols("spatial_pairs.tsv", spatial_pairs, spatial_schema) && nrow(spatial_pairs) > 0) {
+    allowed_st_tools <- c(
+      "spatial_clustering", "squidpy", "rctd", "cell2location", "card",
+      "seurat_transfer", "sparkx", "spark", "spatialde2", "spatialde",
+      "stagate", "scdesign3", "stlearn", "decoupler", "visualization", "custom"
+    )
+    allowed_filters <- known_spatial_filter_tokens()
+    spatial_fail_n <- 0L
+    active_spatial <- spatial_pairs[tolower(trim(spatial_pairs$enabled)) != "no", , drop = FALSE]
+    for (idx in seq_len(nrow(active_spatial))) {
+      row <- active_spatial[idx, , drop = FALSE]
+      tools <- tolower(split_tokens_any(row$tool[[1]]))
+      bad_tools <- setdiff(tools, allowed_st_tools)
+      if (length(tools) == 0 || length(bad_tools) > 0) {
+        fail("tier2.spatial_pairs.tool", sprintf("%s has unsupported tool tokens: %s", row$spatial_pair_id[[1]], paste(bad_tools %||% tools, collapse = ", ")))
+        spatial_fail_n <- spatial_fail_n + 1L
+      }
+      filters <- split_tokens_any(row$section_filter[[1]])
+      bad_filters <- setdiff(filters, allowed_filters)
+      if (length(filters) == 0 || length(bad_filters) > 0) {
+        fail("tier2.spatial_pairs.section_filter", sprintf("%s has unsupported section_filter tokens: %s", row$spatial_pair_id[[1]], paste(bad_filters %||% filters, collapse = ", ")))
+        spatial_fail_n <- spatial_fail_n + 1L
+      }
+    }
+    if (spatial_fail_n == 0L) {
+      pass("tier2.spatial_pairs.contract", sprintf("%s enabled spatial rows use valid tools and section filters", nrow(active_spatial)))
+    }
+  }
+}
+
+if (!is.null(loaded_generated$deconv_pairs)) {
+  deconv_pairs <- loaded_generated$deconv_pairs
+  deconv_schema <- c(
+    "deconv_id", "source_question_id", "st_scope", "reference_scope",
+    "section_filter", "condition_split_var", "condition_split_values",
+    "tool", "enabled", "notes"
+  )
+  if (require_generated_cols("deconv_pairs.tsv", deconv_pairs, deconv_schema) && nrow(deconv_pairs) > 0) {
+    allowed_deconv_tools <- c("rctd", "cell2location", "card", "seurat_transfer", "scdesign3", "custom")
+    allowed_reference_scopes <- c("panorama", "GC_subcluster", "TC_subcluster", "synthetic_panorama", "*")
+    allowed_filters <- known_spatial_filter_tokens()
+    deconv_fail_n <- 0L
+    active_deconv <- deconv_pairs[tolower(trim(deconv_pairs$enabled)) != "no", , drop = FALSE]
+    for (idx in seq_len(nrow(active_deconv))) {
+      row <- active_deconv[idx, , drop = FALSE]
+      tools <- tolower(split_tokens_any(row$tool[[1]]))
+      bad_tools <- setdiff(tools, allowed_deconv_tools)
+      if (length(tools) == 0 || length(bad_tools) > 0) {
+        fail("tier2.deconv_pairs.tool", sprintf("%s has unsupported tool tokens: %s", row$deconv_id[[1]], paste(bad_tools %||% tools, collapse = ", ")))
+        deconv_fail_n <- deconv_fail_n + 1L
+      }
+      scopes <- split_tokens_any(row$reference_scope[[1]])
+      bad_scopes <- setdiff(scopes, allowed_reference_scopes)
+      if (length(scopes) == 0 || length(bad_scopes) > 0) {
+        fail("tier2.deconv_pairs.reference_scope", sprintf("%s has unsupported reference_scope tokens: %s", row$deconv_id[[1]], paste(bad_scopes %||% scopes, collapse = ", ")))
+        deconv_fail_n <- deconv_fail_n + 1L
+      }
+      filters <- split_tokens_any(row$section_filter[[1]])
+      bad_filters <- setdiff(filters, allowed_filters)
+      if (length(filters) == 0 || length(bad_filters) > 0) {
+        fail("tier2.deconv_pairs.section_filter", sprintf("%s has unsupported section_filter tokens: %s", row$deconv_id[[1]], paste(bad_filters %||% filters, collapse = ", ")))
+        deconv_fail_n <- deconv_fail_n + 1L
+      }
+    }
+    if (deconv_fail_n == 0L) {
+      pass("tier2.deconv_pairs.contract", sprintf("%s enabled deconv rows use valid tools, references, and section filters", nrow(active_deconv)))
+    }
+  }
 }
 
 if (!is.null(loaded_generated$trajectory_pairs)) {

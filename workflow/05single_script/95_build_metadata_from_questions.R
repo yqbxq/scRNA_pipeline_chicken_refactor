@@ -66,17 +66,37 @@ if (length(missing) > 0) {
   stop(sprintf("analysis questions table is missing required columns: %s", paste(missing, collapse = ", ")), call. = FALSE)
 }
 
-active <- questions[questions$status == "active", , drop = FALSE]
+st_fanout_version <- suppressWarnings(as.integer(Sys.getenv("ST_FANOUT_VERSION", "0")))
+if (is.na(st_fanout_version)) {
+  st_fanout_version <- 0L
+}
+
+questions_for_fanout <- questions
+if (st_fanout_version >= 1L) {
+  m2_st_ids <- m3_st_m2_question_ids()
+  questions_for_fanout$status[questions_for_fanout$question_id %in% m2_st_ids] <- "active"
+}
+
+active <- questions_for_fanout[questions_for_fanout$status == "active", , drop = FALSE]
 
 comparison_items <- list()
 communication_items <- list()
 scenic_items <- list()
 trajectory_items <- list()
+deconv_items <- list()
+spatial_items <- list()
+st_enrichment_items <- list()
 
 for (idx in seq_len(nrow(active))) {
   q <- active[idx, , drop = FALSE]
   axis <- q$contrast_axis[[1]]
-  if (axis %in% comparison_axes) {
+  if (identical(q$scope[[1]], "ST_section")) {
+    st_items <- m3_fanout_st(q)
+    comparison_items <- append_df(comparison_items, st_items$comparisons)
+    spatial_items <- append_df(spatial_items, st_items$spatial_pairs)
+    deconv_items <- append_df(deconv_items, st_items$deconv_pairs)
+    st_enrichment_items <- append_df(st_enrichment_items, st_items$enrichment_targets)
+  } else if (axis %in% comparison_axes) {
     comparison_items <- append_df(comparison_items, m3_fanout_comparison(q))
   } else if (axis %in% communication_axes) {
     communication_items <- append_df(communication_items, m3_fanout_communication(q))
@@ -118,10 +138,14 @@ if (nrow(communication_pairs) > 0) {
 }
 trajectory_pairs <- bind_or_empty(trajectory_items, m3_trajectory_cols)
 scenic_targets <- bind_or_empty(scenic_items, m3_scenic_cols)
-enrichment_targets <- m3_fanout_enrichment(questions, comparisons)
+enrichment_targets <- rbind(
+  m3_fanout_enrichment(questions_for_fanout, comparisons),
+  bind_or_empty(st_enrichment_items, m3_enrichment_cols)
+)
+rownames(enrichment_targets) <- NULL
 gene_program_targets <- m3_fanout_gene_program(comparisons, annotation_marker_targets)
-deconv_pairs <- m3_empty_df(m3_deconv_cols)
-spatial_pairs <- m3_empty_df(m3_spatial_cols)
+deconv_pairs <- bind_or_empty(deconv_items, m3_deconv_cols)
+spatial_pairs <- bind_or_empty(spatial_items, m3_spatial_cols)
 scdesign3_question_map <- m3_build_scdesign3_question_map(questions)
 scdesign3_threshold_overrides <- m3_read_tsv(file.path(metadata_dir, "scdesign3_thresholds.tsv"))
 scdesign3_targets <- m3_build_scdesign3_targets(scdesign3_question_map, scdesign3_threshold_overrides)

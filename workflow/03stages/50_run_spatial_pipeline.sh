@@ -7,6 +7,7 @@ PIPELINE_ROOT="${PIPELINE_ROOT:-$(cd "${WORKFLOW_ROOT}/.." && pwd)}"
 
 source "${WORKFLOW_ROOT}/02lib/common.sh"
 
+ensure_metadata_fresh
 check_stage_deps "50_spatial"
 prepare_project_state_dirs
 
@@ -25,7 +26,7 @@ run_future_spatial_r_stage() {
   shift 2 || true
   local script_path="${SPATIAL_R_DIR}/${script_name}"
   local manifest_path="${MANIFEST_DIR}/${manifest_name}/_manifest.json"
-  [[ -f "${script_path}" ]] || die "R stage 尚未实现: ${script_path}。本轮只完成非 R 脚手架。"
+  [[ -f "${script_path}" ]] || die "R stage 尚未实现: ${script_path}。"
   run_stage_if_stale_with_runner run_r_spatial "${script_path}" "${manifest_path}" "$@"
 }
 

@@ -145,7 +145,7 @@ Current generated columns:
 | `enrichment_targets.tsv` | `target_id`, `source_question_id`, `comparison_id`, `layer_scope`, `analysis_mode`, `gene_program_role`, `organism`, `database`, `enrichment_eligible`, `enrichment_usage`, `min_genes`, `enabled`, `notes` |
 | `gene_program_targets.tsv` | `comparison_id`, `source_question_id`, `layer_scope`, `analysis_mode`, `gene_program_role`, `produces_gene_program`, `annotation_only`, `qc_only`, `global_context_only`, `nichenet_eligible`, `nichenet_usage`, `enrichment_eligible`, `enrichment_usage`, `preferred_for_downstream`, `expected_result_level`, `formal_preferred`, `formal_status`, `result_status`, `skip_reason`, `eligible_reason`, `ineligible_reason`, `notes` |
 | `deconv_pairs.tsv` | `deconv_id`, `source_question_id`, `st_scope`, `reference_scope`, `section_filter`, `condition_split_var`, `condition_split_values`, `tool`, `enabled`, `notes` |
-| `spatial_pairs.tsv` | `spatial_pair_id`, `source_question_id`, `st_scope`, `sender`, `receiver`, `contrast_axis`, `condition_split_var`, `condition_split_values`, `tool`, `enabled`, `notes` |
+| `spatial_pairs.tsv` | `spatial_pair_id`, `source_question_id`, `st_scope`, `sender`, `receiver`, `contrast_axis`, `section_filter`, `condition_split_var`, `condition_split_values`, `tool`, `enabled`, `notes` |
 
 ## Marker / DEG Layering Contract
 

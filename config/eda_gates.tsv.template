@@ -1,0 +1,25 @@
+gate_id	status	approved_by	approved_at	gate_profile	notes
+ambient	pending			default	Review ambient RNA diagnostics before applying decontamination.
+pre_qc	pending			default	Review scRNA pre-QC EDA before filtering.
+post_qc	pending			default	Review scRNA post-QC EDA before integration.
+integration	pending			default	Review integration diagnostics before final clustering.
+annotation	pending			default	Review 03e panorama annotation before downstream.
+subcluster	pending			default	Review 04c subcluster EDA before proceeding to 05.
+deg	pending			default	Review DEG outputs before enrichment.
+enrichment	pending			default	Review enrichment outputs before downstream interpretation.
+communication	pending			default	Review communication gating outputs.
+regulation	pending			default	Review SCENIC/decoupleR regulation outputs.
+scdesign3_targets	pending			default	Review scDesign3 targets before robustness gating.
+scdesign3_validated	pending			default	Review scDesign3 robustness gates.
+trajectory_inputs	pending			default	Review 09a/09b trajectory inputs before method run.
+trajectory_methods	pending			default	Review 09 trajectory method consensus before stage3.
+trajectory_finalize	pending			default	Review 09k/09l/09m trajectory final report.
+velocity_inputs	pending			default	Review 10a/10b velocity inputs before stage3.
+velocity_finalize	pending			default	Review 10i velocity final report.
+spatial_pre_qc	pending			default	Review spatial pre-QC report before spatial filtering.
+spatial_post_qc	pending			default	Review spatial post-QC report before spatial normalization.
+spatial_integration	pending			default	Review spatial integration diagnostics before clustering.
+spatial_region_annotation	pending			default	Review region annotation before marker/DE/composition.
+spatial_deconv	pending			default	Review deconvolution + scDesign3 validation.
+joint_trajectory	pending			default	Review joint trajectory projection outputs.
+joint_communication	pending			default	Review joint communication evidence outputs.

@@ -1,2 +1,2 @@
 # AUTO-GENERATED. Edit metadata/analysis_questions.tsv instead.
-spatial_pair_id	source_question_id	st_scope	sender	receiver	contrast_axis	condition_split_var	condition_split_values	tool	enabled	notes
+spatial_pair_id	source_question_id	st_scope	sender	receiver	contrast_axis	section_filter	condition_split_var	condition_split_values	tool	enabled	notes
