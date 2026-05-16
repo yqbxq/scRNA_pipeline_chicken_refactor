@@ -124,6 +124,7 @@ sec_2	5		20		95		true	0.5
 sec_3	5		20		95		true	0.5
 EOF
 cp "${PIPELINE_ROOT}/config/spatial_object_layers.tsv.template" "${TMP_ROOT}/project/config/spatial_object_layers.tsv"
+cp "${PIPELINE_ROOT}/config/spatial_normalization_override.tsv.template" "${TMP_ROOT}/project/config/spatial_normalization_override.tsv"
 cp "${PIPELINE_ROOT}/config/eda_gates.tsv.template" "${TMP_ROOT}/project/config/eda_gates.tsv"
 
 export SCRNA_PIPELINE_CONFIG="${TMP_ROOT}/project/config/project_config.sh"
@@ -136,6 +137,10 @@ Rscript "${PIPELINE_ROOT}/workflow/05single_script/spatial/01a_pre_spot_qc_eda.R
 Rscript "${PIPELINE_ROOT}/workflow/05single_script/spatial/01b_spot_qc_filter.R"
 Rscript "${PIPELINE_ROOT}/workflow/05single_script/spatial/01c_post_spot_qc_eda.R"
 Rscript "${PIPELINE_ROOT}/workflow/05single_script/spatial/02_normalize_spatial.R" --methods m0,m1,m3
-Rscript "${PIPELINE_ROOT}/workflow/05single_script/spatial/testing/smoke_spatial_normalize.R"
+SPATIAL_NORMALIZE_EXPECT_M4_STATUS=skipped \
+  Rscript "${PIPELINE_ROOT}/workflow/05single_script/spatial/testing/smoke_spatial_normalize.R"
+Rscript "${PIPELINE_ROOT}/workflow/05single_script/spatial/02_normalize_spatial.R" --methods all
+SPATIAL_NORMALIZE_EXPECT_M4_STATUS=failed_py_bridge \
+  Rscript "${PIPELINE_ROOT}/workflow/05single_script/spatial/testing/smoke_spatial_normalize.R"
 
 echo "smoke_spatial_normalize_ok"

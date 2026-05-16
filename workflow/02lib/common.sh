@@ -470,6 +470,9 @@ ensure_spatial_config_files() {
   if [[ ! -s "${SPATIAL_OBJECT_LAYER_FILE}" && -f "${PIPELINE_ROOT}/config/spatial_object_layers.tsv.template" ]]; then
     cp -f "${PIPELINE_ROOT}/config/spatial_object_layers.tsv.template" "${SPATIAL_OBJECT_LAYER_FILE}"
   fi
+  if [[ ! -s "${SPATIAL_NORMALIZATION_OVERRIDE_FILE}" && -f "${PIPELINE_ROOT}/config/spatial_normalization_override.tsv.template" ]]; then
+    cp -f "${PIPELINE_ROOT}/config/spatial_normalization_override.tsv.template" "${SPATIAL_NORMALIZATION_OVERRIDE_FILE}"
+  fi
   if [[ ! -s "${SPATIAL_INTAKE_CONTRACT_FILE}" && -f "${PIPELINE_ROOT}/config/spatial_intake_contract.tsv.template" ]]; then
     cp -f "${PIPELINE_ROOT}/config/spatial_intake_contract.tsv.template" "${SPATIAL_INTAKE_CONTRACT_FILE}"
   fi

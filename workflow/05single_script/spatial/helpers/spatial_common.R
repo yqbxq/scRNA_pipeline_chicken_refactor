@@ -533,10 +533,18 @@ spatial_row_vars <- function(mat) {
   pmax(as.numeric(row_sq_mean - row_mean ^ 2), 0)
 }
 
+spatial_set_assay_data <- function(obj, assay, slot, new.data) {
+  tryCatch(
+    Seurat::SetAssayData(obj, assay = assay, layer = slot, new.data = new.data),
+    error = function(e) Seurat::SetAssayData(obj, assay = assay, slot = slot, new.data = new.data)
+  )
+}
+
 run_normalize_m0 <- function(obj, hvg_n = 2000L) {
   assay <- spatial_assay_name(obj)
   Seurat::DefaultAssay(obj) <- assay
-  obj <- Seurat::NormalizeData(obj, assay = assay, normalization.method = "LogNormalize", scale.factor = 1, verbose = FALSE)
+  counts <- spatial_counts_matrix(obj)
+  obj <- spatial_set_assay_data(obj, assay = assay, slot = "data", new.data = counts)
   Seurat::VariableFeatures(obj) <- character(0)
   obj
 }
@@ -607,7 +615,7 @@ run_normalize_m4_py_bridge <- function(obj, py_bin, script_path, hvg_n = 2000L) 
   residuals <- Matrix::readMM(output_mtx)
   rownames(residuals) <- rownames(counts)
   colnames(residuals) <- colnames(counts)
-  obj <- Seurat::SetAssayData(obj, assay = assay, slot = "scale.data", new.data = as.matrix(residuals))
+  obj <- spatial_set_assay_data(obj, assay = assay, slot = "scale.data", new.data = as.matrix(residuals))
   vars <- spatial_row_vars(as(residuals, "dgCMatrix"))
   vars[!is.finite(vars)] <- 0
   hvg <- rownames(residuals)[order(vars, decreasing = TRUE)]
@@ -631,6 +639,13 @@ normalization_result_status <- function(x) {
     return(as.character(x$status))
   }
   if (inherits(x, "Seurat")) "ok" else "failed"
+}
+
+normalization_result_data_slot <- function(x) {
+  if (is.list(x) && !is.null(x$data_slot)) {
+    return(as.character(x$data_slot))
+  }
+  ""
 }
 
 compute_hvg_iou_matrix <- function(results_list) {
@@ -676,6 +691,12 @@ compute_pca_confounder_correlation <- function(results_list, confounders = c("nC
   for (method in names(results_list)) {
     obj <- normalization_result_obj(results_list[[method]])
     if (is.null(obj)) {
+      next
+    }
+    if (identical(method, "m0_no_normalization")) {
+      for (conf in confounders) {
+        rows[[length(rows) + 1L]] <- data.frame(method = method, pc = NA_integer_, confounder = conf, spearman_rho = NA_real_, status = "m0_no_hvg", stringsAsFactors = FALSE)
+      }
       next
     }
     pca_obj <- tryCatch(ensure_spatial_pca(obj, npcs = 10L), error = function(e) e)
@@ -785,6 +806,7 @@ summarize_timing <- function(results_list) {
     data.frame(
       method = method,
       status = normalization_result_status(x),
+      data_slot = normalization_result_data_slot(x),
       timing_sec = if (is.list(x) && !is.null(x$timing_sec)) as.numeric(x$timing_sec) else NA_real_,
       message = if (is.list(x) && !is.null(x$message)) as.character(x$message) else "",
       stringsAsFactors = FALSE
@@ -801,16 +823,24 @@ read_normalization_override <- function(override_file, section_id = "") {
   if (nrow(overrides) == 0) {
     return("")
   }
+  if ("section_id" %in% colnames(overrides)) {
+    overrides <- overrides[!startsWith(trimws(as.character(overrides$section_id)), "#"), , drop = FALSE]
+  }
+  if (nrow(overrides) == 0) {
+    return("")
+  }
   method_col <- intersect(c("override_choice", "final_choice", "normalization_method", "method"), colnames(overrides))[1]
   if (is.na(method_col)) {
     return("")
   }
   if ("section_id" %in% colnames(overrides) && nzchar(section_id)) {
-    hit <- overrides[overrides$section_id %in% c(section_id, "__DEFAULT__", "all", "ALL"), , drop = FALSE]
-    if (nrow(hit) == 0) {
-      return("")
+    for (candidate in c(section_id, "__DEFAULT__", "all", "ALL")) {
+      hit <- overrides[overrides$section_id == candidate, , drop = FALSE]
+      if (nrow(hit) > 0) {
+        return(spatial_cell(hit[1, , drop = FALSE], method_col, ""))
+      }
     }
-    return(spatial_cell(hit[1, , drop = FALSE], method_col, ""))
+    return("")
   }
   spatial_cell(overrides[1, , drop = FALSE], method_col, "")
 }

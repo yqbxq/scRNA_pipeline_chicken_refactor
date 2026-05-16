@@ -1,0 +1,2 @@
+section_id	override_choice	notes
+# example: __DEFAULT__	m3_sct_v2	Allowed choices: m0_no_normalization,m1_lognormalize,m2_sct_v1,m3_sct_v2,m4_pearson_residuals.

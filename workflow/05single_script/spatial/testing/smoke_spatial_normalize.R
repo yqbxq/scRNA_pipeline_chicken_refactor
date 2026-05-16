@@ -26,7 +26,8 @@ qc_summary <- read_tsv(file.path(project_root, "results/spatial/tables/spatial_p
 assert(nrow(qc_summary) == 3L, "expected three sections in qc_filter_summary.tsv")
 assert(all(qc_summary$retention > 0.8), "fixture should retain more than 80% of spots")
 assert(all(file.exists(file.path(project_root, qc_summary$post_qc_rds))), "post-QC RDS files missing")
-assert(length(list.files(file.path(project_root, "reports/eda/spatial_post_qc/figures"), pattern = "^qc_filter_mask_.*\\.png$")) == 3L, "mask figure count mismatch")
+assert(length(list.files(file.path(project_root, "reports/eda/spatial_post_qc/figures/qc_filter_mask"), pattern = "^qc_filter_mask_.*\\.png$")) == 3L, "mask figure count mismatch")
+assert(length(list.files(file.path(project_root, "reports/eda/spatial_post_qc/figures/raw_vs_post_qc"), pattern = "__raw_vs_post_qc_.*\\.png$")) >= 9L, "raw-vs-post-QC figure count mismatch")
 
 triage <- read_tsv(file.path(project_root, "results/spatial/tables/spatial_post_qc/post_filter_triage.tsv"))
 assert(identical(colnames(triage), c("section_id", "excessive_drop", "boundary_drop", "drift_from_pre_qc", "unbalanced_sections")), "post_filter_triage.tsv column order changed")
@@ -37,6 +38,7 @@ assert(file.exists(file.path(project_root, "reports/eda/spatial_post_qc/report.m
 selected <- read_tsv(file.path(project_root, "reports/spatial/normalization_compare/selected_method.tsv"))
 assert(nrow(selected) == 3L, "expected selected method row per section")
 assert(all(selected$final_choice == "m3_sct_v2"), "default selected method should be m3_sct_v2")
+assert(all(selected$data_slot == "scale.data"), "selected m3_sct_v2 should advertise scale.data")
 for (idx in seq_len(nrow(selected))) {
   canonical <- file.path(project_root, selected$canonical_rds[[idx]])
   variant <- file.path(
@@ -59,7 +61,15 @@ for (section_id in unique(hvg$section_id)) {
 }
 
 timing <- read_tsv(file.path(project_root, "reports/spatial/normalization_compare/method_timing.tsv"))
-assert(any(timing$method == "m4_pearson_residuals" & timing$status == "skipped"), "m4 should be marked skipped when not requested")
+expected_m4_status <- Sys.getenv("SPATIAL_NORMALIZE_EXPECT_M4_STATUS", unset = "skipped")
+assert(any(timing$method == "m4_pearson_residuals" & timing$status == expected_m4_status), sprintf("m4 should be marked %s", expected_m4_status))
+if (identical(expected_m4_status, "failed_py_bridge")) {
+  assert(any(timing$method == "m3_sct_v2" & timing$status == "ok"), "m3_sct_v2 should still succeed when m4 bridge fails")
+}
+if (any(timing$method == "m0_no_normalization")) {
+  pca <- read_tsv(file.path(project_root, "reports/spatial/normalization_compare/pca_confounder_corr.tsv"))
+  assert(any(pca$method == "m0_no_normalization" & pca$status == "m0_no_hvg"), "m0 PCA rows should be marked m0_no_hvg")
+}
 assert(file.exists(file.path(project_root, "reports/spatial/normalization_compare/report.md")), "normalization report missing")
 
 message("smoke_spatial_normalize_r_ok")

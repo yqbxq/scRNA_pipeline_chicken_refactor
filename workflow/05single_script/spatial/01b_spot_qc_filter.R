@@ -65,7 +65,7 @@ for (raw_path in raw_paths) {
   saveRDS(filt, post_qc_path)
   post_qc_paths <- c(post_qc_paths, post_qc_path)
 
-  mask_path <- file.path(cfg$spatial_post_qc_figure_dir, sprintf("qc_filter_mask_%s.png", stem))
+  mask_path <- file.path(cfg$spatial_post_qc_mask_dir, sprintf("qc_filter_mask_%s.png", stem))
   write_qc_filter_mask_plot(obj, keep, mask_path)
   mask_paths <- c(mask_paths, mask_path)
 
@@ -102,7 +102,7 @@ write_manifest_local(
   new_outputs = list(
     qc_filter_summary = build_output_entry(cfg$qc_filter_summary_tsv, "tsv", module_name, "one row per spatial object after spot QC filtering", base_dir = cfg$project_root, schema = infer_schema_from_df(summary_df)),
     post_qc_object_dir = build_output_entry(cfg$spatial_checkpoint_dir, "directory", module_name, "per-section post-QC Seurat objects", base_dir = cfg$project_root),
-    qc_filter_mask_dir = build_output_entry(cfg$spatial_post_qc_figure_dir, "directory", module_name, "per-section spatial keep/drop mask figures", base_dir = cfg$project_root)
+    qc_filter_mask_dir = build_output_entry(cfg$spatial_post_qc_mask_dir, "directory", module_name, "per-section spatial keep/drop mask figures", base_dir = cfg$project_root)
   ),
   module_name = module_name,
   base_dir = cfg$project_root,

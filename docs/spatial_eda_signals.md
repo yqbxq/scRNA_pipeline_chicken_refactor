@@ -12,3 +12,5 @@ ST 02 post-filter QC adds four fixed signals in `post_filter_triage.tsv`:
 | `unbalanced_sections` | Retention differs by more than 25 percentage points across sections. |
 
 These signals are review aids for the `spatial_post_qc` gate and are not inferential tests.
+
+The `marker_spatial_coherence.tsv` value `morans_i_approx` is a lightweight k-nearest-neighbor Spearman proxy: each spot is compared with the mean expression of its nearest spatial neighbors, then averaged across top HVGs. It is an EDA stability signal, not a formal Moran's I test.

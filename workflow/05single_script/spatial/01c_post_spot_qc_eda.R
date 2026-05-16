@@ -92,7 +92,7 @@ for (idx in seq_len(nrow(qc_summary))) {
 
   section_figures <- character()
   for (metric in c("nFeature_Spatial", "nCount_Spatial", "percent.mito")) {
-    fig_path <- file.path(cfg$spatial_post_qc_figure_dir, sprintf("%s__raw_vs_post_qc_%s.png", stem, metric))
+    fig_path <- file.path(cfg$spatial_post_qc_overlay_dir, sprintf("%s__raw_vs_post_qc_%s.png", stem, metric))
     save_metric_plot(plot_metric_overlay(raw_metrics, post_metrics, metric, section_id), fig_path, width = 6.4, height = 4.4)
     section_figures <- c(section_figures, fig_path)
   }
@@ -181,7 +181,7 @@ write_manifest_local(
   new_outputs = list(
     report = build_output_entry(cfg$post_qc_report_md, "md", module_name, "human-readable spatial post-filter QC report", base_dir = cfg$project_root),
     post_filter_triage = build_output_entry(cfg$post_filter_triage_tsv, "tsv", module_name, "one row per section post-filter triage", base_dir = cfg$project_root, schema = infer_schema_from_df(triage_df)),
-    figures_dir = build_output_entry(cfg$spatial_post_qc_figure_dir, "directory", module_name, "raw-vs-filtered QC figures", base_dir = cfg$project_root)
+    figures_dir = build_output_entry(cfg$spatial_post_qc_overlay_dir, "directory", module_name, "raw-vs-filtered QC figures", base_dir = cfg$project_root)
   ),
   module_name = module_name,
   base_dir = cfg$project_root,

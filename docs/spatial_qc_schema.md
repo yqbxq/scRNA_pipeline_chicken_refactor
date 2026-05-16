@@ -15,3 +15,18 @@
 | `excessive_drop_threshold` | no | `0.5` | Post-filter triage flags sections below this retention. |
 
 Missing optional columns remain backward-compatible with earlier ST 01 projects.
+
+## Normalization Override
+
+`config/spatial_normalization_override.tsv` is optional. If it is missing, empty, or has no matching row, ST 02 uses `SPATIAL_DEFAULT_NORMALIZATION_METHOD`, currently `m3_sct_v2`.
+Rows whose `section_id` begins with `#` are ignored.
+
+Accepted schema:
+
+| column | meaning |
+| --- | --- |
+| `section_id` | Specific section id, `__DEFAULT__`, `all`, or `ALL`. Specific rows are checked first, then fallback rows. |
+| `override_choice` | Preferred method. The parser also accepts `final_choice`, `normalization_method`, or `method` as the value column. |
+| `notes` | Optional human-readable rationale. |
+
+Allowed method values are `m0_no_normalization`, `m1_lognormalize`, `m2_sct_v1`, `m3_sct_v2`, and `m4_pearson_residuals`.

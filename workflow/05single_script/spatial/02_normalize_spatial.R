@@ -117,6 +117,15 @@ layer_defaults <- function(layer_file) {
 }
 
 run_one_method <- function(method, obj, hvg_n) {
+  data_slot <- switch(
+    method,
+    m0_no_normalization = "data",
+    m1_lognormalize = "data",
+    m2_sct_v1 = "scale.data",
+    m3_sct_v2 = "scale.data",
+    m4_pearson_residuals = "scale.data",
+    ""
+  )
   started <- proc.time()[["elapsed"]]
   result <- tryCatch({
     obj_m <- switch(
@@ -129,14 +138,15 @@ run_one_method <- function(method, obj, hvg_n) {
     )
     obj_m@misc$normalization <- list(
       method = method,
+      data_slot = data_slot,
       hvg = Seurat::VariableFeatures(obj_m),
       hvg_n = length(Seurat::VariableFeatures(obj_m)),
       timestamp = as.character(Sys.time())
     )
-    list(status = "ok", obj = obj_m, message = "")
+    list(status = "ok", obj = obj_m, message = "", data_slot = data_slot)
   }, error = function(e) {
     status <- if (identical(method, "m4_pearson_residuals")) "failed_py_bridge" else "failed"
-    list(status = status, obj = NULL, message = conditionMessage(e))
+    list(status = status, obj = NULL, message = conditionMessage(e), data_slot = data_slot)
   })
   result$timing_sec <- round(proc.time()[["elapsed"]] - started, 3)
   result
@@ -238,6 +248,7 @@ for (post_qc_path in post_qc_paths) {
     default_choice = cfg$default_normalization_method,
     override_choice = override,
     final_choice = final_choice,
+    data_slot = normalization_result_data_slot(results[[final_choice]]),
     decision_timestamp = as.character(Sys.time()),
     decided_by = if (nzchar(override)) "override_file" else "pipeline_default",
     canonical_rds = relative_path_local(canonical_path, cfg$project_root),

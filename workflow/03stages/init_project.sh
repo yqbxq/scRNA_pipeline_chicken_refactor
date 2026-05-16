@@ -436,6 +436,7 @@ subcluster_1	subcluster	no	panorama					yes	2000	1:20	8	0.10,0.15,0.20,0.25,0.30
 EOF
   cp -f "${PIPELINE_ROOT}/config/spatial_qc_thresholds.tsv.template" "${SPATIAL_QC_THRESHOLD_FILE}"
   cp -f "${PIPELINE_ROOT}/config/spatial_object_layers.tsv.template" "${SPATIAL_OBJECT_LAYER_FILE}"
+  cp -f "${PIPELINE_ROOT}/config/spatial_normalization_override.tsv.template" "${SPATIAL_NORMALIZATION_OVERRIDE_FILE}"
   cp -f "${PIPELINE_ROOT}/config/spatial_intake_contract.tsv.template" "${SPATIAL_INTAKE_CONTRACT_FILE}"
   cp -f "${PIPELINE_ROOT}/config/marker_panels/spatial_region_panel.tsv.template" "${MARKER_PANEL_DIR}/spatial_region_panel.tsv.template"
 }
