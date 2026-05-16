@@ -138,9 +138,21 @@ if (nrow(communication_pairs) > 0) {
 }
 trajectory_pairs <- bind_or_empty(trajectory_items, m3_trajectory_cols)
 scenic_targets <- bind_or_empty(scenic_items, m3_scenic_cols)
+auto_enrichment_targets <- m3_fanout_enrichment(questions_for_fanout, comparisons)
+st_enrichment_targets <- bind_or_empty(st_enrichment_items, m3_enrichment_cols)
+if (nrow(st_enrichment_targets) > 0 && nrow(auto_enrichment_targets) > 0) {
+  duplicated_comparison_ids <- intersect(st_enrichment_targets$comparison_id, auto_enrichment_targets$comparison_id)
+  if (length(duplicated_comparison_ids) > 0) {
+    st_enrichment_targets <- st_enrichment_targets[
+      !st_enrichment_targets$comparison_id %in% duplicated_comparison_ids,
+      ,
+      drop = FALSE
+    ]
+  }
+}
 enrichment_targets <- rbind(
-  m3_fanout_enrichment(questions_for_fanout, comparisons),
-  bind_or_empty(st_enrichment_items, m3_enrichment_cols)
+  auto_enrichment_targets,
+  st_enrichment_targets
 )
 rownames(enrichment_targets) <- NULL
 gene_program_targets <- m3_fanout_gene_program(comparisons, annotation_marker_targets)

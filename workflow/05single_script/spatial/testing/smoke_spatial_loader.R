@@ -22,7 +22,7 @@ tmp <- tempfile("spatial_loader_")
 dir.create(tmp, recursive = TRUE)
 on.exit(unlink(tmp, recursive = TRUE), add = TRUE)
 
-counts <- Matrix::Matrix(c(5, 0, 2, 3, 4, 0), nrow = 3, sparse = TRUE)
+counts <- Matrix::Matrix(c(5, 0, 2, 3, 4, 0, 0, 7, 1, 2, 3, 4), nrow = 3, sparse = TRUE)
 Matrix::writeMM(counts, file.path(tmp, "matrix.mtx"))
 write.table(
   data.frame(gene_id = c("g1", "g2", "g3"), gene_name = c("MT-CO1", "ACTB", "ND1"), type = "Gene Expression"),
@@ -32,9 +32,14 @@ write.table(
   row.names = FALSE,
   col.names = FALSE
 )
-writeLines(c("spot1", "spot2"), file.path(tmp, "barcodes.tsv"))
+writeLines(c("spot1", "spot2", "spot3", "spot4"), file.path(tmp, "barcodes.tsv"))
 write.csv(
-  data.frame(barcode = c("spot1", "spot2"), row = c(10, 11), col = c(20, 21), in_tissue = c(TRUE, TRUE)),
+  data.frame(
+    barcode = c("spot1", "spot2", "spot3", "spot4"),
+    row = c(10, 10, 11, 11),
+    col = c(20, 21, 20, 21),
+    in_tissue = c(TRUE, TRUE, TRUE, TRUE)
+  ),
   file.path(tmp, "coords.csv"),
   row.names = FALSE
 )

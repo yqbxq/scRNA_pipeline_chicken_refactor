@@ -31,11 +31,31 @@ EOF
 Rscript - <<RSCRIPT
 if (!requireNamespace("Matrix", quietly = TRUE)) quit(status = 42)
 root <- "${TMP_ROOT}/matrix/st_syf_1"
-counts <- Matrix::Matrix(c(5, 0, 2, 3, 4, 0), nrow = 3, sparse = TRUE)
+counts <- Matrix::Matrix(c(5, 0, 2, 3, 4, 0, 0, 7, 1, 2, 3, 4), nrow = 3, sparse = TRUE)
 Matrix::writeMM(counts, file.path(root, "matrix.mtx"))
-write.table(data.frame("g1", "MT-CO1", "Gene Expression"), file.path(root, "features.tsv"), sep = "\t", quote = FALSE, row.names = FALSE, col.names = FALSE)
-write("spot1\nspot2", file.path(root, "barcodes.tsv"))
-write.csv(data.frame(barcode = c("spot1", "spot2"), row = c(1, 2), col = c(1, 2), in_tissue = c(TRUE, TRUE)), file.path(root, "coords.csv"), row.names = FALSE)
+write.table(
+  data.frame(
+    gene_id = c("g1", "g2", "g3"),
+    gene_name = c("MT-CO1", "ACTB", "ND1"),
+    type = "Gene Expression"
+  ),
+  file.path(root, "features.tsv"),
+  sep = "\t",
+  quote = FALSE,
+  row.names = FALSE,
+  col.names = FALSE
+)
+writeLines(c("spot1", "spot2", "spot3", "spot4"), file.path(root, "barcodes.tsv"))
+write.csv(
+  data.frame(
+    barcode = c("spot1", "spot2", "spot3", "spot4"),
+    row = c(1, 1, 2, 2),
+    col = c(1, 2, 1, 2),
+    in_tissue = c(TRUE, TRUE, TRUE, TRUE)
+  ),
+  file.path(root, "coords.csv"),
+  row.names = FALSE
+)
 RSCRIPT
 
 cat > "${TMP_ROOT}/project/config/project_config.sh" <<EOF

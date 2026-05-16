@@ -189,7 +189,7 @@ mito_genes_from_gtf <- function(features, gtf_path) {
     return(character(0))
   }
   lines <- readLines(gtf_path, warn = FALSE, encoding = "UTF-8")
-  lines <- lines[grepl("^(chrM|MT|M)\\b", lines, ignore.case = TRUE)]
+  lines <- lines[grepl("^(chrM|MT)\\b|^M\\t", lines, ignore.case = TRUE)]
   if (length(lines) == 0) {
     return(character(0))
   }
@@ -217,7 +217,6 @@ detect_spatial_mito_features <- function(obj, gtf_path = NULL, manual_override =
           intersect(features, manual_values)
         } else {
           base <- manual_chicken_mito_genes()
-          intersect(toupper(features), toupper(base))
           features[toupper(features) %in% toupper(base)]
         }
       },
