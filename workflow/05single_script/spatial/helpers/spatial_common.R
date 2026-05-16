@@ -328,3 +328,500 @@ spatial_eda_spatial_plot <- function(metrics, metric) {
     ggplot2::theme_void(base_size = 11) +
     ggplot2::labs(color = metric)
 }
+
+spatial_numeric_or <- function(value, default) {
+  if (length(value) == 0 || is.null(value)) {
+    return(default)
+  }
+  value <- suppressWarnings(as.numeric(value[[1]]))
+  if (is.na(value)) default else value
+}
+
+spatial_thresholds_table <- function(cfg) {
+  thresholds <- spatial_read_tsv(cfg$spatial_qc_threshold_file)
+  if (nrow(thresholds) == 0) {
+    thresholds <- data.frame(
+      section_id = "__DEFAULT__",
+      qc_min_nfeature = cfg$qc_min_nfeature_default,
+      qc_max_nfeature = "",
+      qc_min_ncount = cfg$qc_min_ncount_default,
+      qc_max_ncount = "",
+      qc_max_mito_pct = cfg$qc_max_mito_pct_default,
+      mito_set_override = "",
+      spatial_aware_filter = "false",
+      excessive_drop_threshold = cfg$excessive_drop_threshold,
+      stringsAsFactors = FALSE
+    )
+  }
+  for (col in c(
+    "section_id", "qc_min_nfeature", "qc_max_nfeature", "qc_min_ncount",
+    "qc_max_ncount", "qc_max_mito_pct", "mito_set_override",
+    "spatial_aware_filter", "excessive_drop_threshold"
+  )) {
+    if (!col %in% colnames(thresholds)) {
+      thresholds[[col]] <- ""
+    }
+  }
+  thresholds
+}
+
+spatial_threshold_for_section <- function(thresholds, section_id, sample_id = "", cfg = NULL) {
+  hit <- thresholds[thresholds$section_id == section_id, , drop = FALSE]
+  if (nrow(hit) == 0 && nzchar(sample_id)) {
+    hit <- thresholds[thresholds$section_id == sample_id, , drop = FALSE]
+  }
+  if (nrow(hit) == 0) {
+    hit <- thresholds[thresholds$section_id == "__DEFAULT__", , drop = FALSE]
+  }
+  if (nrow(hit) == 0) {
+    hit <- thresholds[1, , drop = FALSE]
+  }
+  cfg <- cfg %||% list(
+    qc_min_nfeature_default = 200,
+    qc_max_nfeature_default = Inf,
+    qc_min_ncount_default = 500,
+    qc_max_ncount_default = Inf,
+    qc_max_mito_pct_default = 20,
+    excessive_drop_threshold = 0.5
+  )
+  list(
+    section_id = as.character(hit$section_id[[1]]),
+    qc_min_nfeature = spatial_numeric_or(hit$qc_min_nfeature, cfg$qc_min_nfeature_default),
+    qc_max_nfeature = spatial_numeric_or(hit$qc_max_nfeature, cfg$qc_max_nfeature_default),
+    qc_min_ncount = spatial_numeric_or(hit$qc_min_ncount, cfg$qc_min_ncount_default),
+    qc_max_ncount = spatial_numeric_or(hit$qc_max_ncount, cfg$qc_max_ncount_default),
+    qc_max_mito_pct = spatial_numeric_or(hit$qc_max_mito_pct, cfg$qc_max_mito_pct_default),
+    mito_set_override = spatial_cell(hit, "mito_set_override", ""),
+    spatial_aware_filter = spatial_bool(spatial_cell(hit, "spatial_aware_filter", "false"), default = FALSE),
+    excessive_drop_threshold = spatial_numeric_or(hit$excessive_drop_threshold, cfg$excessive_drop_threshold)
+  )
+}
+
+spatial_object_ids <- function(obj, fallback = "") {
+  meta <- obj@meta.data
+  section_id <- if ("section_id" %in% colnames(meta)) unique(as.character(meta$section_id))[1] else fallback
+  sample_id <- if ("sample_id" %in% colnames(meta)) unique(as.character(meta$sample_id))[1] else if ("orig.ident" %in% colnames(meta)) unique(as.character(meta$orig.ident))[1] else fallback
+  list(sample_id = spatial_safe_id(sample_id), section_id = spatial_safe_id(section_id))
+}
+
+apply_qc_filter <- function(obj, thr) {
+  metrics <- compute_spot_qc_metrics(obj)
+  min_feature <- spatial_numeric_or(thr$qc_min_nfeature, 200)
+  max_feature <- spatial_numeric_or(thr$qc_max_nfeature, Inf)
+  min_count <- spatial_numeric_or(thr$qc_min_ncount, 500)
+  max_count <- spatial_numeric_or(thr$qc_max_ncount, Inf)
+  max_mito <- spatial_numeric_or(thr$qc_max_mito_pct, 20)
+
+  low_feature <- metrics$nFeature_Spatial < min_feature
+  high_feature <- is.finite(max_feature) & metrics$nFeature_Spatial > max_feature
+  low_count <- metrics$nCount_Spatial < min_count
+  high_count <- is.finite(max_count) & metrics$nCount_Spatial > max_count
+  high_mito <- !is.na(metrics$percent.mito) & is.finite(max_mito) & metrics$percent.mito > max_mito
+  keep <- !(low_feature | high_feature | low_count | high_count | high_mito)
+  names(keep) <- metrics$spot_id
+
+  reason_df <- data.frame(
+    spot_id = metrics$spot_id,
+    keep = keep,
+    low_feature = low_feature,
+    high_feature = high_feature,
+    low_count = low_count,
+    high_count = high_count,
+    high_mito = high_mito,
+    stringsAsFactors = FALSE
+  )
+  reason_summary <- data.frame(
+    n_drop_low_feature = sum(low_feature, na.rm = TRUE),
+    n_drop_high_feature = sum(high_feature, na.rm = TRUE),
+    n_drop_low_count = sum(low_count, na.rm = TRUE),
+    n_drop_high_count = sum(high_count, na.rm = TRUE),
+    n_drop_high_mito = sum(high_mito, na.rm = TRUE),
+    stringsAsFactors = FALSE
+  )
+  list(keep = keep, reasons = reason_df, summary = reason_summary, metrics = metrics)
+}
+
+spatial_filter_coords <- function(obj) {
+  metrics <- compute_spot_qc_metrics(obj)
+  coords <- data.frame(row = metrics$row, col = metrics$col, row.names = metrics$spot_id)
+  if (all(!is.finite(coords$row)) || all(!is.finite(coords$col))) {
+    coords$row <- seq_len(nrow(coords))
+    coords$col <- 1
+  }
+  coords
+}
+
+detect_spatial_drop_cluster <- function(obj, keep, eps_factor = 1.5, min_pts = 5, max_cluster_frac = 0.1) {
+  coords <- spatial_filter_coords(obj)
+  keep <- as.logical(keep[rownames(coords)])
+  keep[is.na(keep)] <- TRUE
+  drop_coords <- coords[!keep & is.finite(coords$row) & is.finite(coords$col), c("col", "row"), drop = FALSE]
+  total_spots <- nrow(coords)
+  if (nrow(drop_coords) < min_pts) {
+    return(list(n_clusters = 0L, max_cluster_frac = 0, summary = "no_drop_cluster", status = "ok"))
+  }
+  if (!requireNamespace("dbscan", quietly = TRUE)) {
+    return(list(n_clusters = NA_integer_, max_cluster_frac = NA_real_, summary = "dbscan_unavailable", status = "dbscan_unavailable"))
+  }
+
+  sample_idx <- seq_len(nrow(coords))
+  if (length(sample_idx) > 200L) {
+    set.seed(42L)
+    sample_idx <- sample(sample_idx, 200L)
+  }
+  dist_values <- as.numeric(stats::dist(coords[sample_idx, c("col", "row"), drop = FALSE]))
+  dist_values <- dist_values[is.finite(dist_values) & dist_values > 0]
+  eps <- if (length(dist_values) > 0) stats::median(dist_values) * eps_factor else eps_factor
+  if (!is.finite(eps) || eps <= 0) {
+    eps <- eps_factor
+  }
+
+  db <- dbscan::dbscan(as.matrix(drop_coords), eps = eps, minPts = min_pts)
+  cluster_sizes <- table(db$cluster[db$cluster > 0])
+  max_frac <- if (length(cluster_sizes) > 0) max(cluster_sizes) / total_spots else 0
+  list(
+    n_clusters = length(cluster_sizes),
+    max_cluster_frac = as.numeric(max_frac),
+    summary = if (is.finite(max_frac) && max_frac > max_cluster_frac) "boundary_drop_detected" else "scattered_drop_ok",
+    status = "ok"
+  )
+}
+
+write_qc_filter_mask_plot <- function(obj, keep, out_path) {
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    stop("ggplot2 package is required to write spatial QC mask plots", call. = FALSE)
+  }
+  coords <- spatial_filter_coords(obj)
+  keep <- as.logical(keep[rownames(coords)])
+  keep[is.na(keep)] <- TRUE
+  plot_df <- data.frame(
+    spot_id = rownames(coords),
+    row = coords$row,
+    col = coords$col,
+    qc_status = ifelse(keep, "keep", "drop"),
+    stringsAsFactors = FALSE
+  )
+  p <- ggplot2::ggplot(plot_df, ggplot2::aes(x = col, y = row, color = qc_status)) +
+    ggplot2::geom_point(size = 0.95, alpha = 0.88, na.rm = TRUE) +
+    ggplot2::scale_y_reverse() +
+    ggplot2::coord_fixed() +
+    ggplot2::scale_color_manual(values = c(drop = "#C8102E", keep = "#B8B8B8")) +
+    ggplot2::theme_void(base_size = 11) +
+    ggplot2::theme(legend.position = "bottom") +
+    ggplot2::labs(color = NULL)
+  ensure_dir(dirname(out_path))
+  ggplot2::ggsave(out_path, p, width = 5.2, height = 5.2, dpi = 180, bg = "white")
+  invisible(out_path)
+}
+
+spatial_assay_name <- function(obj) {
+  if ("Spatial" %in% names(obj@assays)) "Spatial" else Seurat::DefaultAssay(obj)
+}
+
+spatial_row_vars <- function(mat) {
+  if (requireNamespace("matrixStats", quietly = TRUE) && !inherits(mat, "sparseMatrix")) {
+    return(matrixStats::rowVars(as.matrix(mat)))
+  }
+  if (inherits(mat, "sparseMatrix")) {
+    row_mean <- Matrix::rowMeans(mat)
+    row_sq_mean <- Matrix::rowMeans(mat ^ 2)
+  } else {
+    mat <- as.matrix(mat)
+    row_mean <- rowMeans(mat)
+    row_sq_mean <- rowMeans(mat ^ 2)
+  }
+  pmax(as.numeric(row_sq_mean - row_mean ^ 2), 0)
+}
+
+run_normalize_m0 <- function(obj, hvg_n = 2000L) {
+  assay <- spatial_assay_name(obj)
+  Seurat::DefaultAssay(obj) <- assay
+  obj <- Seurat::NormalizeData(obj, assay = assay, normalization.method = "LogNormalize", scale.factor = 1, verbose = FALSE)
+  Seurat::VariableFeatures(obj) <- character(0)
+  obj
+}
+
+run_normalize_m1 <- function(obj, hvg_n = 2000L) {
+  assay <- spatial_assay_name(obj)
+  Seurat::DefaultAssay(obj) <- assay
+  obj <- Seurat::NormalizeData(obj, assay = assay, normalization.method = "LogNormalize", scale.factor = 10000, verbose = FALSE)
+  obj <- Seurat::FindVariableFeatures(obj, assay = assay, selection.method = "vst", nfeatures = hvg_n, verbose = FALSE)
+  features <- Seurat::VariableFeatures(obj)
+  if (length(features) > 0) {
+    obj <- Seurat::ScaleData(obj, assay = assay, features = features, verbose = FALSE)
+  }
+  obj
+}
+
+run_normalize_m2 <- function(obj, hvg_n = 2000L) {
+  assay <- spatial_assay_name(obj)
+  Seurat::SCTransform(obj, assay = assay, vst.flavor = "v1", variable.features.n = hvg_n, verbose = FALSE)
+}
+
+run_normalize_m3 <- function(obj, hvg_n = 2000L) {
+  assay <- spatial_assay_name(obj)
+  Seurat::SCTransform(obj, assay = assay, vst.flavor = "v2", variable.features.n = hvg_n, verbose = FALSE)
+}
+
+run_normalize_m4_py_bridge <- function(obj, py_bin, script_path, hvg_n = 2000L) {
+  if (!file.exists(script_path)) {
+    stop(sprintf("Pearson residual bridge script is missing: %s", script_path), call. = FALSE)
+  }
+  if (!nzchar(py_bin) || Sys.which(py_bin) == "") {
+    stop(sprintf("Python executable is not available for py_spatial: %s", py_bin), call. = FALSE)
+  }
+  if (!requireNamespace("Matrix", quietly = TRUE)) {
+    stop("Matrix package is required for Pearson residual bridge", call. = FALSE)
+  }
+  assay <- spatial_assay_name(obj)
+  counts <- spatial_counts_matrix(obj)
+  tmp <- tempfile("spatial_pearson_")
+  dir.create(tmp, recursive = TRUE, showWarnings = FALSE)
+  on.exit(unlink(tmp, recursive = TRUE, force = TRUE), add = TRUE)
+  counts_mtx <- file.path(tmp, "counts.mtx")
+  features_tsv <- file.path(tmp, "features.tsv")
+  barcodes_tsv <- file.path(tmp, "barcodes.tsv")
+  output_mtx <- file.path(tmp, "pearson_residuals.mtx")
+  metadata_json <- file.path(tmp, "pearson_metadata.json")
+  Matrix::writeMM(counts, counts_mtx)
+  writeLines(rownames(counts), features_tsv, useBytes = TRUE)
+  writeLines(colnames(counts), barcodes_tsv, useBytes = TRUE)
+  status <- system2(
+    py_bin,
+    c(
+      script_path,
+      "--counts-mtx", counts_mtx,
+      "--features", features_tsv,
+      "--barcodes", barcodes_tsv,
+      "--output-mtx", output_mtx,
+      "--metadata-json", metadata_json
+    ),
+    stdout = TRUE,
+    stderr = TRUE
+  )
+  exit_status <- attr(status, "status") %||% 0L
+  if (!identical(as.integer(exit_status), 0L) || !file.exists(output_mtx)) {
+    msg <- paste(status, collapse = "\n")
+    stop(sprintf("Pearson residual bridge failed: %s", msg), call. = FALSE)
+  }
+  residuals <- Matrix::readMM(output_mtx)
+  rownames(residuals) <- rownames(counts)
+  colnames(residuals) <- colnames(counts)
+  obj <- Seurat::SetAssayData(obj, assay = assay, slot = "scale.data", new.data = as.matrix(residuals))
+  vars <- spatial_row_vars(as(residuals, "dgCMatrix"))
+  vars[!is.finite(vars)] <- 0
+  hvg <- rownames(residuals)[order(vars, decreasing = TRUE)]
+  Seurat::VariableFeatures(obj) <- head(hvg, hvg_n)
+  obj@misc$pearson_residuals_bridge <- list(metadata_json = if (file.exists(metadata_json)) jsonlite::read_json(metadata_json, simplifyVector = TRUE) else list())
+  obj
+}
+
+normalization_result_obj <- function(x) {
+  if (inherits(x, "Seurat")) {
+    return(x)
+  }
+  if (is.list(x) && !is.null(x$obj) && inherits(x$obj, "Seurat")) {
+    return(x$obj)
+  }
+  NULL
+}
+
+normalization_result_status <- function(x) {
+  if (is.list(x) && !is.null(x$status)) {
+    return(as.character(x$status))
+  }
+  if (inherits(x, "Seurat")) "ok" else "failed"
+}
+
+compute_hvg_iou_matrix <- function(results_list) {
+  ok_methods <- names(results_list)[vapply(results_list, function(x) !is.null(normalization_result_obj(x)), logical(1))]
+  if (length(ok_methods) == 0) {
+    return(data.frame(stringsAsFactors = FALSE))
+  }
+  mat <- matrix(NA_real_, nrow = length(ok_methods), ncol = length(ok_methods), dimnames = list(ok_methods, ok_methods))
+  hvgs <- lapply(results_list[ok_methods], function(x) Seurat::VariableFeatures(normalization_result_obj(x)))
+  for (i in ok_methods) {
+    for (j in ok_methods) {
+      union_n <- length(union(hvgs[[i]], hvgs[[j]]))
+      mat[i, j] <- if (i == j) 1 else if (union_n == 0) NA_real_ else length(intersect(hvgs[[i]], hvgs[[j]])) / union_n
+    }
+  }
+  out <- as.data.frame(mat, stringsAsFactors = FALSE)
+  out$method <- rownames(out)
+  out[, c("method", setdiff(colnames(out), "method")), drop = FALSE]
+}
+
+ensure_spatial_pca <- function(obj, npcs = 10L) {
+  if ("pca" %in% names(obj@reductions) && ncol(obj@reductions$pca@cell.embeddings) >= 1) {
+    return(obj)
+  }
+  features <- Seurat::VariableFeatures(obj)
+  if (length(features) == 0) {
+    counts <- spatial_counts_matrix(obj)
+    vars <- spatial_row_vars(counts)
+    vars[!is.finite(vars)] <- 0
+    features <- head(rownames(counts)[order(vars, decreasing = TRUE)], min(2000L, nrow(counts)))
+    Seurat::VariableFeatures(obj) <- features
+  }
+  assay <- Seurat::DefaultAssay(obj)
+  obj <- tryCatch(
+    Seurat::ScaleData(obj, assay = assay, features = features, verbose = FALSE),
+    error = function(e) obj
+  )
+  Seurat::RunPCA(obj, assay = assay, features = features, npcs = min(npcs, length(features), max(1L, ncol(obj) - 1L)), verbose = FALSE)
+}
+
+compute_pca_confounder_correlation <- function(results_list, confounders = c("nCount_Spatial", "percent.mito")) {
+  rows <- list()
+  for (method in names(results_list)) {
+    obj <- normalization_result_obj(results_list[[method]])
+    if (is.null(obj)) {
+      next
+    }
+    pca_obj <- tryCatch(ensure_spatial_pca(obj, npcs = 10L), error = function(e) e)
+    if (inherits(pca_obj, "error")) {
+      rows[[length(rows) + 1L]] <- data.frame(method = method, pc = NA_integer_, confounder = NA_character_, spearman_rho = NA_real_, status = "failed_pca", stringsAsFactors = FALSE)
+      next
+    }
+    emb <- pca_obj@reductions$pca@cell.embeddings
+    meta <- pca_obj@meta.data[rownames(emb), , drop = FALSE]
+    for (pc_idx in seq_len(min(10L, ncol(emb)))) {
+      for (conf in confounders) {
+        if (!conf %in% colnames(meta)) {
+          rho <- NA_real_
+          status <- "missing_confounder"
+        } else {
+          rho <- suppressWarnings(stats::cor(emb[, pc_idx], as.numeric(meta[[conf]]), method = "spearman", use = "complete.obs"))
+          status <- "ok"
+        }
+        rows[[length(rows) + 1L]] <- data.frame(method = method, pc = pc_idx, confounder = conf, spearman_rho = rho, status = status, stringsAsFactors = FALSE)
+      }
+    }
+  }
+  if (length(rows) == 0) {
+    return(data.frame(method = character(), pc = integer(), confounder = character(), spearman_rho = numeric(), status = character(), stringsAsFactors = FALSE))
+  }
+  do.call(rbind, rows)
+}
+
+extract_spatial_expression <- function(obj, features) {
+  assay <- Seurat::DefaultAssay(obj)
+  mat <- tryCatch(
+    Seurat::GetAssayData(obj, assay = assay, slot = "data"),
+    error = function(e) spatial_counts_matrix(obj)
+  )
+  features <- intersect(features, rownames(mat))
+  if (length(features) == 0) {
+    return(matrix(nrow = 0, ncol = ncol(mat)))
+  }
+  as.matrix(mat[features, , drop = FALSE])
+}
+
+compute_feature_spatial_coherence <- function(obj, features, max_cells = 500L) {
+  coords <- spatial_filter_coords(obj)
+  keep <- rownames(coords)
+  if (length(keep) > max_cells) {
+    set.seed(42L)
+    keep <- sample(keep, max_cells)
+  }
+  coords <- coords[keep, , drop = FALSE]
+  finite <- is.finite(coords$row) & is.finite(coords$col)
+  coords <- coords[finite, , drop = FALSE]
+  if (nrow(coords) < 4) {
+    return(NA_real_)
+  }
+  expr <- extract_spatial_expression(obj, features)
+  expr <- expr[, rownames(coords), drop = FALSE]
+  if (nrow(expr) == 0) {
+    return(NA_real_)
+  }
+  d <- as.matrix(stats::dist(coords[, c("col", "row"), drop = FALSE]))
+  diag(d) <- Inf
+  k <- min(4L, nrow(d) - 1L)
+  nn <- t(apply(d, 1, function(x) order(x)[seq_len(k)]))
+  values <- apply(expr, 1, function(v) {
+    if (stats::sd(v, na.rm = TRUE) == 0) {
+      return(NA_real_)
+    }
+    neigh_mean <- vapply(seq_len(nrow(nn)), function(i) mean(v[nn[i, ]], na.rm = TRUE), numeric(1))
+    suppressWarnings(stats::cor(v, neigh_mean, method = "spearman", use = "complete.obs"))
+  })
+  mean(values, na.rm = TRUE)
+}
+
+compute_marker_spatial_coherence <- function(results_list, marker_panel = NULL) {
+  rows <- list()
+  marker_features <- character(0)
+  if (!is.null(marker_panel) && nrow(marker_panel) > 0) {
+    marker_col <- intersect(c("gene", "gene_symbol", "marker", "feature"), colnames(marker_panel))[1]
+    if (!is.na(marker_col)) {
+      marker_features <- unique(as.character(marker_panel[[marker_col]]))
+    }
+  }
+  for (method in names(results_list)) {
+    obj <- normalization_result_obj(results_list[[method]])
+    if (is.null(obj)) {
+      next
+    }
+    features <- marker_features
+    if (length(features) == 0) {
+      features <- head(Seurat::VariableFeatures(obj), 20L)
+    }
+    if (length(features) == 0) {
+      features <- head(rownames(spatial_counts_matrix(obj)), 20L)
+    }
+    score <- tryCatch(compute_feature_spatial_coherence(obj, features), error = function(e) NA_real_)
+    rows[[length(rows) + 1L]] <- data.frame(method = method, feature_set = if (length(marker_features) > 0) "marker_panel" else "top_hvg_fallback", morans_i_approx = score, stringsAsFactors = FALSE)
+  }
+  if (length(rows) == 0) {
+    return(data.frame(method = character(), feature_set = character(), morans_i_approx = numeric(), stringsAsFactors = FALSE))
+  }
+  do.call(rbind, rows)
+}
+
+summarize_timing <- function(results_list) {
+  rows <- lapply(names(results_list), function(method) {
+    x <- results_list[[method]]
+    data.frame(
+      method = method,
+      status = normalization_result_status(x),
+      timing_sec = if (is.list(x) && !is.null(x$timing_sec)) as.numeric(x$timing_sec) else NA_real_,
+      message = if (is.list(x) && !is.null(x$message)) as.character(x$message) else "",
+      stringsAsFactors = FALSE
+    )
+  })
+  do.call(rbind, rows)
+}
+
+read_normalization_override <- function(override_file, section_id = "") {
+  if (!nzchar(override_file) || !file.exists(override_file) || file.info(override_file)$size == 0) {
+    return("")
+  }
+  overrides <- spatial_read_tsv(override_file)
+  if (nrow(overrides) == 0) {
+    return("")
+  }
+  method_col <- intersect(c("override_choice", "final_choice", "normalization_method", "method"), colnames(overrides))[1]
+  if (is.na(method_col)) {
+    return("")
+  }
+  if ("section_id" %in% colnames(overrides) && nzchar(section_id)) {
+    hit <- overrides[overrides$section_id %in% c(section_id, "__DEFAULT__", "all", "ALL"), , drop = FALSE]
+    if (nrow(hit) == 0) {
+      return("")
+    }
+    return(spatial_cell(hit[1, , drop = FALSE], method_col, ""))
+  }
+  spatial_cell(overrides[1, , drop = FALSE], method_col, "")
+}
+
+select_normalization_method <- function(default, override = "", available_methods = character()) {
+  selected <- if (nzchar(override)) override else default
+  if (length(available_methods) > 0 && !selected %in% available_methods) {
+    if (default %in% available_methods) {
+      return(default)
+    }
+    return(available_methods[[1]])
+  }
+  selected
+}

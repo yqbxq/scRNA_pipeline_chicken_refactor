@@ -1,4 +1,4 @@
-section_id	qc_min_nfeature	qc_min_ncount	qc_max_mito_pct	mito_set_override
-__DEFAULT__	200	500	20
-syf_1	200	500	20
-f5_1	200	500	20
+section_id	qc_min_nfeature	qc_max_nfeature	qc_min_ncount	qc_max_ncount	qc_max_mito_pct	mito_set_override	spatial_aware_filter	excessive_drop_threshold
+__DEFAULT__	200		500		20		false	0.5
+syf_1	200		500		20		false	0.5
+f5_1	200		500		20		false	0.5

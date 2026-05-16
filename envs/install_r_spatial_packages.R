@@ -84,7 +84,7 @@ ensure_cran("BiocManager")
 for (pkg in c(
   "Seurat", "SeuratObject", "hdf5r", "reticulate", "yaml", "dplyr",
   "tibble", "tidyr", "readr", "ggplot2", "patchwork", "cowplot",
-  "ggrepel", "data.table", "broom"
+  "ggrepel", "data.table", "broom", "dbscan", "sctransform"
 )) {
   ensure_cran(pkg)
 }
@@ -105,7 +105,7 @@ ensure_github("SPARK", "xzhoulab/SPARK")
 required_pkgs <- c(
   "Seurat", "SeuratObject", "hdf5r", "reticulate", "yaml", "dplyr",
   "tibble", "tidyr", "readr", "ggplot2", "patchwork", "cowplot",
-  "ggrepel", "data.table", "SingleCellExperiment", "SpatialExperiment",
+  "ggrepel", "data.table", "dbscan", "sctransform", "SingleCellExperiment", "SpatialExperiment",
   "SummarizedExperiment", "BiocParallel", "BayesSpace", "decoupleR",
   "spatialDE", "spacexr", "CARD", "SPARK"
 )
