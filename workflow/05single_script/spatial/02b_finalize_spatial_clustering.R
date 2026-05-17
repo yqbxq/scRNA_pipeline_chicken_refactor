@@ -87,7 +87,6 @@ run_backend <- function(backend, panorama, reduction, dims, target_k, res_range,
       list(status = "ok", obj = obj, cluster_col = "cluster_b1_seurat_snn", message = "")
     } else if (identical(backend, "b2_bayesspace")) {
       obj <- cluster_b2_bayesspace(panorama, target_k = target_k, dims = dims)
-      obj$cluster_b2_bayesspace <- factor(obj@meta.data$spatial.cluster)
       list(status = "ok", obj = obj, cluster_col = "cluster_b2_bayesspace", message = "")
     } else if (identical(backend, "b3_spagcn")) {
       bridge <- cluster_b3_spagcn_bridge(panorama, cfg$spagcn_py_bin, cfg$spagcn_py_script, target_k = target_k, work_dir = file.path(cfg$clustering_variants_dir, backend, "bridge"), reduction = reduction)
@@ -105,7 +104,12 @@ run_backend <- function(backend, panorama, reduction, dims, target_k, res_range,
       stop(sprintf("unsupported backend: %s", backend), call. = FALSE)
     }
   }, error = function(e) {
-    status <- if (backend %in% c("b3_spagcn", "b4_stagate")) "failed_py_bridge" else if (identical(backend, "b2_bayesspace") && !requireNamespace("BayesSpace", quietly = TRUE)) "failed_dependency" else "failed"
+    bayesspace_dep_missing <- identical(backend, "b2_bayesspace") && (
+      !requireNamespace("BayesSpace", quietly = TRUE) ||
+        !requireNamespace("SingleCellExperiment", quietly = TRUE) ||
+        !requireNamespace("SummarizedExperiment", quietly = TRUE)
+    )
+    status <- if (backend %in% c("b3_spagcn", "b4_stagate")) "failed_py_bridge" else if (bayesspace_dep_missing) "failed_dependency" else "failed"
     list(status = status, obj = NULL, cluster_col = "", message = conditionMessage(e))
   })
   result$timing_sec <- round(proc.time()[["elapsed"]] - started, 3)

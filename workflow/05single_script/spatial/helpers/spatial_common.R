@@ -1198,7 +1198,7 @@ compute_marker_module_score <- function(panorama, panel) {
       panorama <- Seurat::AddModuleScore(panorama, features = list(features), name = score_col, assay = assay, search = FALSE)
       generated <- paste0(score_col, "1")
       if (generated %in% colnames(panorama@meta.data)) {
-        panorama[[score_col]] <- panorama@meta.data[[generated]]
+        panorama@meta.data[[score_col]] <- panorama@meta.data[[generated]]
         panorama@meta.data[[generated]] <- NULL
       }
     }
@@ -1263,6 +1263,8 @@ select_integration_mode <- function(layers_tsv, override_tsv = "", layer_id = "p
   settings <- spatial_layer_settings(layers_tsv, layer_id = layer_id)
   mode <- trimws(as.character(settings$integration_mode %||% ""))
   env_mode <- Sys.getenv("SPATIAL_INTEGRATION_MODE", unset = "")
+  # The env var is a temporary override only when it changes the configured default;
+  # otherwise a non-empty spatial_object_layers.tsv value remains the durable decision.
   if (nzchar(env_mode) && (!identical(env_mode, default) || !nzchar(mode))) {
     return(env_mode)
   }
@@ -1327,7 +1329,119 @@ cluster_b2_bayesspace <- function(panorama, target_k, dims = 1:30) {
   if (!requireNamespace("BayesSpace", quietly = TRUE)) {
     stop("BayesSpace package is not available", call. = FALSE)
   }
-  stop("BayesSpace backend requires project-specific SpatialExperiment conversion and is not available for this panorama object", call. = FALSE)
+  if (!requireNamespace("SingleCellExperiment", quietly = TRUE)) {
+    stop("SingleCellExperiment package is required for BayesSpace backend", call. = FALSE)
+  }
+  if (!requireNamespace("SummarizedExperiment", quietly = TRUE)) {
+    stop("SummarizedExperiment package is required for BayesSpace backend", call. = FALSE)
+  }
+  if (!requireNamespace("Matrix", quietly = TRUE)) {
+    stop("Matrix package is required for BayesSpace backend", call. = FALSE)
+  }
+
+  counts <- spatial_counts_matrix(panorama)
+  coords <- spatial_filter_coords(panorama)
+  cells <- intersect(colnames(panorama), rownames(coords))
+  if (length(cells) < 4) {
+    stop("BayesSpace backend requires at least 4 spatial spots with coordinates", call. = FALSE)
+  }
+  counts <- counts[, cells, drop = FALSE]
+  coords <- coords[cells, , drop = FALSE]
+  meta <- panorama@meta.data[cells, , drop = FALSE]
+  section_col <- if ("section_id" %in% colnames(meta)) "section_id" else if ("spatial_section_id" %in% colnames(meta)) "spatial_section_id" else ""
+  sections <- if (nzchar(section_col)) as.character(meta[[section_col]]) else rep("panorama", length(cells))
+  names(sections) <- cells
+  reduction_name <- if ("pca_none" %in% names(panorama@reductions)) "pca_none" else if ("pca" %in% names(panorama@reductions)) "pca" else ""
+  reduction_embeddings <- NULL
+  if (nzchar(reduction_name)) {
+    reduction_embeddings <- Seurat::Embeddings(panorama, reduction = reduction_name)
+    reduction_embeddings <- reduction_embeddings[intersect(cells, rownames(reduction_embeddings)), , drop = FALSE]
+  }
+  nrep <- suppressWarnings(as.integer(Sys.getenv("SPATIAL_BAYESSPACE_NREP", unset = "1000")))
+  if (is.na(nrep) || nrep <= 0) {
+    nrep <- 1000L
+  }
+  gamma <- suppressWarnings(as.numeric(Sys.getenv("SPATIAL_BAYESSPACE_GAMMA", unset = "2")))
+  if (!is.finite(gamma) || gamma <= 0) {
+    gamma <- 2
+  }
+
+  labels <- rep(NA_character_, length(cells))
+  names(labels) <- cells
+  section_results <- list()
+  for (section_id in unique(sections)) {
+    section_cells <- names(sections)[sections == section_id]
+    if (length(section_cells) < 4) {
+      next
+    }
+    section_counts <- counts[, section_cells, drop = FALSE]
+    sce <- SingleCellExperiment::SingleCellExperiment(assays = list(counts = section_counts))
+    lib_size <- Matrix::colSums(section_counts)
+    lib_size[!is.finite(lib_size) | lib_size <= 0] <- 1
+    norm_counts <- Matrix::t(Matrix::t(section_counts) / lib_size * 10000)
+    SingleCellExperiment::logcounts(sce) <- log1p(norm_counts)
+    section_coords <- coords[section_cells, , drop = FALSE]
+    SummarizedExperiment::colData(sce)$array_row <- as.integer(round(section_coords$row))
+    SummarizedExperiment::colData(sce)$array_col <- as.integer(round(section_coords$col))
+    SummarizedExperiment::colData(sce)$row <- section_coords$row
+    SummarizedExperiment::colData(sce)$col <- section_coords$col
+    SummarizedExperiment::colData(sce)$section_id <- section_id
+
+    has_pca <- !is.null(reduction_embeddings) && all(section_cells %in% rownames(reduction_embeddings))
+    if (has_pca) {
+      section_emb <- reduction_embeddings[section_cells, , drop = FALSE]
+      keep_dims <- dims[dims <= ncol(section_emb)]
+      if (length(keep_dims) == 0) {
+        keep_dims <- seq_len(min(10L, ncol(section_emb)))
+      }
+      SingleCellExperiment::reducedDim(sce, "PCA") <- as.matrix(section_emb[, keep_dims, drop = FALSE])
+      sce <- tryCatch(
+        BayesSpace::spatialPreprocess(sce, platform = "Visium", skip.PCA = TRUE),
+        error = function(e) sce
+      )
+    } else {
+      n_pcs <- min(max(dims), ncol(sce) - 1L, nrow(sce) - 1L)
+      n_hvgs <- min(2000L, nrow(sce))
+      sce <- BayesSpace::spatialPreprocess(sce, platform = "Visium", skip.PCA = FALSE, n.PCs = n_pcs, n.HVGs = n_hvgs, log.normalize = TRUE)
+    }
+
+    cluster_k <- min(as.integer(target_k), max(2L, floor(length(section_cells) / 2L)))
+    d_value <- if ("PCA" %in% SingleCellExperiment::reducedDimNames(sce)) min(length(dims), ncol(SingleCellExperiment::reducedDim(sce, "PCA"))) else min(length(dims), ncol(sce) - 1L)
+    d_value <- max(1L, d_value)
+    clustered <- BayesSpace::spatialCluster(
+      sce,
+      q = cluster_k,
+      platform = "Visium",
+      d = d_value,
+      init.method = "mclust",
+      model = "t",
+      gamma = gamma,
+      nrep = nrep,
+      save.chain = FALSE
+    )
+    section_labels <- as.character(SummarizedExperiment::colData(clustered)$spatial.cluster)
+    if (length(section_labels) != length(section_cells) || any(is.na(section_labels))) {
+      stop(sprintf("BayesSpace did not return valid spatial.cluster labels for section_id=%s", section_id), call. = FALSE)
+    }
+    labels[section_cells] <- paste(spatial_safe_id(section_id), section_labels, sep = "_")
+    section_results[[section_id]] <- list(n_spots = length(section_cells), q = cluster_k, d = d_value)
+  }
+  if (any(is.na(labels))) {
+    missing_n <- sum(is.na(labels))
+    stop(sprintf("BayesSpace backend skipped %d spots because one or more sections were too small", missing_n), call. = FALSE)
+  }
+  final_labels <- labels[colnames(panorama)]
+  if (any(is.na(final_labels))) {
+    stop("BayesSpace backend did not return labels for all panorama spots", call. = FALSE)
+  }
+  panorama$cluster_b2_bayesspace <- factor(final_labels)
+  panorama@misc$cluster_b2_bayesspace <- list(
+    nrep = nrep,
+    gamma = gamma,
+    target_clusters = target_k,
+    section_results = section_results
+  )
+  panorama
 }
 
 export_panorama_anndata <- function(panorama, h5ad_path, reduction = "pca_none", assay = NULL, py_bin = Sys.getenv("PY_SPATIAL_BIN", unset = "python")) {
@@ -1448,13 +1562,24 @@ compute_spatial_coherence_score <- function(panorama, cluster_col, k = 6L) {
   if (nrow(coords) < 3) {
     return(NA_real_)
   }
-  clusters <- as.character(panorama@meta.data[rownames(coords), cluster_col, drop = TRUE])
-  d <- as.matrix(stats::dist(coords[, c("col", "row"), drop = FALSE]))
-  diag(d) <- Inf
-  k <- min(as.integer(k), nrow(d) - 1L)
-  nn <- t(apply(d, 1, function(x) order(x)[seq_len(k)]))
-  same <- vapply(seq_len(nrow(nn)), function(i) mean(clusters[nn[i, ]] == clusters[[i]], na.rm = TRUE), numeric(1))
-  mean(same, na.rm = TRUE)
+  meta <- panorama@meta.data[rownames(coords), , drop = FALSE]
+  section_col <- if ("section_id" %in% colnames(meta)) "section_id" else if ("spatial_section_id" %in% colnames(meta)) "spatial_section_id" else ""
+  section_groups <- if (nzchar(section_col)) split(rownames(coords), as.character(meta[[section_col]])) else list(panorama = rownames(coords))
+  scores <- vapply(section_groups, function(idx) {
+    idx <- intersect(idx, rownames(coords))
+    if (length(idx) < 3) {
+      return(NA_real_)
+    }
+    sub_coords <- coords[idx, , drop = FALSE]
+    clusters <- as.character(meta[idx, cluster_col, drop = TRUE])
+    d <- as.matrix(stats::dist(sub_coords[, c("col", "row"), drop = FALSE]))
+    diag(d) <- Inf
+    k_local <- min(as.integer(k), nrow(d) - 1L)
+    nn <- t(apply(d, 1, function(x) order(x)[seq_len(k_local)]))
+    same <- vapply(seq_len(nrow(nn)), function(i) mean(clusters[nn[i, ]] == clusters[[i]], na.rm = TRUE), numeric(1))
+    mean(same, na.rm = TRUE)
+  }, numeric(1))
+  if (all(!is.finite(scores))) NA_real_ else mean(scores, na.rm = TRUE)
 }
 
 compute_marker_consistency_score <- function(panorama, cluster_col, panel) {
@@ -1480,11 +1605,25 @@ compute_silhouette_pca <- function(panorama, cluster_col, reduction = "pca_none"
   if (!requireNamespace("cluster", quietly = TRUE) || !cluster_col %in% colnames(panorama@meta.data) || !reduction %in% names(panorama@reductions)) {
     return(NA_real_)
   }
-  clusters <- as.factor(panorama@meta.data[[cluster_col]])
+  cells <- rownames(panorama@meta.data)
+  max_cells <- suppressWarnings(as.integer(Sys.getenv("SPATIAL_SILHOUETTE_MAX_CELLS", unset = "2000")))
+  if (is.na(max_cells) || max_cells <= 0) {
+    max_cells <- 2000L
+  }
+  if (length(cells) > max_cells) {
+    set.seed(42L)
+    cells <- unlist(lapply(split(cells, panorama@meta.data[cells, cluster_col, drop = TRUE]), function(idx) {
+      n <- max(1L, ceiling(length(idx) / length(rownames(panorama@meta.data)) * max_cells))
+      sample(idx, min(length(idx), n))
+    }), use.names = FALSE)
+    cells <- head(unique(cells), max_cells)
+  }
+  clusters <- as.factor(panorama@meta.data[cells, cluster_col, drop = TRUE])
   if (length(levels(clusters)) < 2 || length(levels(clusters)) >= length(clusters)) {
     return(NA_real_)
   }
   emb <- Seurat::Embeddings(panorama, reduction = reduction)
+  emb <- emb[cells, , drop = FALSE]
   d <- stats::dist(emb)
   sil <- cluster::silhouette(as.integer(clusters), d)
   mean(sil[, "sil_width"], na.rm = TRUE)

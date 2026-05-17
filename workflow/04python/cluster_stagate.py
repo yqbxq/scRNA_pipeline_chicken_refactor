@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -24,6 +25,7 @@ def main() -> int:
     parser.add_argument("--output-metadata-json", required=True)
     parser.add_argument("--target-clusters", type=int, default=8)
     parser.add_argument("--rad-cutoff", type=float, default=150.0)
+    parser.add_argument("--device", default=os.environ.get("STAGATE_DEVICE", "cpu"))
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
@@ -53,7 +55,7 @@ def main() -> int:
             hidden_dims=[512, 30],
             n_epochs=300,
             lr=0.001,
-            device="cpu",
+            device=args.device,
             random_seed=args.seed,
         )
         sc.pp.neighbors(adata, use_rep="STAGATE")
@@ -87,6 +89,7 @@ def main() -> int:
                 "target_clusters": int(args.target_clusters),
                 "cluster_key": chosen_key,
                 "rad_cutoff": float(args.rad_cutoff),
+                "device": args.device,
                 "stagate_version": getattr(st, "__version__", "unknown"),
             },
             handle,

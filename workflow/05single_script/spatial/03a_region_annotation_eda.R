@@ -101,10 +101,8 @@ triage_df <- compute_region_triage(panorama, region_assignment)
 
 region_summary_path <- file.path(cfg$spatial_region_annotation_dir, "region_summary.tsv")
 region_triage_path <- file.path(cfg$spatial_region_annotation_dir, "region_triage.tsv")
-cross_modality_path <- file.path(cfg$spatial_region_annotation_dir, "cross_modality_consistency.tsv")
 spatial_write_tsv(region_summary, region_summary_path)
 spatial_write_tsv(triage_df, region_triage_path)
-spatial_write_tsv(data.frame(status = "not_evaluated", message = "spatial reference annotation checkpoint not found or not configured", stringsAsFactors = FALSE), cross_modality_path)
 
 figures <- c(
   spatial_region_assignment = plot_spatial_region(panorama, file.path(cfg$spatial_region_annotation_figure_dir, "spatial_region_assignment.png")),
@@ -139,7 +137,6 @@ write_manifest_local(
   new_outputs = list(
     region_summary = build_output_entry(region_summary_path, "tsv", module_name, "spot counts and section balance by region", base_dir = cfg$project_root, schema = infer_schema_from_df(region_summary)),
     region_triage = build_output_entry(region_triage_path, "tsv", module_name, "region annotation triage signals", base_dir = cfg$project_root, schema = infer_schema_from_df(triage_df)),
-    cross_modality_consistency = build_output_entry(cross_modality_path, "tsv", module_name, "optional spatial-vs-reference marker overlap", base_dir = cfg$project_root),
     report = build_output_entry(file.path(cfg$spatial_region_annotation_dir, "report.md"), "md", module_name, "spatial region annotation EDA report", base_dir = cfg$project_root),
     figures_dir = build_output_entry(cfg$spatial_region_annotation_figure_dir, "directory", module_name, "region annotation EDA figures", base_dir = cfg$project_root)
   ),

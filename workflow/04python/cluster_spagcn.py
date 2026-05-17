@@ -48,6 +48,8 @@ def main() -> int:
         if "spatial" not in adata.obsm:
             raise ValueError("input h5ad is missing obsm['spatial']")
         coords = adata.obsm["spatial"]
+        # Histology is disabled in v1 because the R-side h5ad bridge exports
+        # spot coordinates and expression but not image tiles.
         adj = spg.calculate_adj_matrix(x=coords[:, 0], y=coords[:, 1], histology=False)
         l_value = spg.search_l(p=0.5, adj=adj)
         resolution = spg.search_res(

@@ -47,8 +47,8 @@ for (sec in c("sec_1", "sec_2")) {
   write.csv(
     data.frame(
       barcode = barcodes,
-      row = c(rep(seq_len(6), each = 5), rep(seq_len(6), each = 5)),
-      col = c(rep(seq_len(5), times = 6), rep(seq_len(5) + 10, times = 6)),
+      row = rep(seq_len(6), each = 10),
+      col = rep(seq_len(10), times = 6),
       in_tissue = TRUE
     ),
     file.path(root, sec, "coords.csv"),

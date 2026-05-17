@@ -1,10 +1,11 @@
 # Spatial Region Annotation
 
-Module 03 assigns cluster-level spatial regions with three evidence chains:
+Module 03 assigns cluster-level spatial regions with two operational evidence signals:
 
-- cluster markers from `FindAllMarkers`
-- curated marker-panel hits from active TSV files in `config/marker_panels/`
-- region module scores calculated on the panorama object
+- marker-panel hits among cluster markers from `FindAllMarkers`
+- region module scores calculated from active TSV files in `config/marker_panels/`
+
+The marker-panel signal combines exploratory cluster markers with curated panel membership, so it covers the planned marker and panel evidence without treating them as independent votes.
 
 The default panel template uses `GC_rich`, `TC_rich`, `stroma`, `vasculature`, and the reserved uncertain bucket. At runtime, `uncertain` is represented as `mixed_or_uncertain` in `panorama$region`.
 
