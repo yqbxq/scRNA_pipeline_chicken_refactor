@@ -855,3 +855,866 @@ select_normalization_method <- function(default, override = "", available_method
   }
   selected
 }
+
+spatial_tokenize <- function(value) {
+  value <- trimws(as.character(value %||% ""))
+  if (!nzchar(value)) {
+    return(character(0))
+  }
+  tokens <- trimws(unlist(strsplit(value, "[,;[:space:]]+", perl = TRUE), use.names = FALSE))
+  unique(tokens[nzchar(tokens)])
+}
+
+spatial_parse_dims <- function(value, fallback = 1:30) {
+  value <- trimws(as.character(value %||% ""))
+  if (!nzchar(value)) {
+    return(fallback)
+  }
+  if (grepl("^[0-9]+:[0-9]+$", value)) {
+    parts <- as.integer(strsplit(value, ":", fixed = TRUE)[[1]])
+    return(seq(parts[[1]], parts[[2]]))
+  }
+  dims <- suppressWarnings(as.integer(spatial_tokenize(value)))
+  dims <- dims[!is.na(dims) & dims > 0]
+  if (length(dims) == 0) fallback else dims
+}
+
+spatial_parse_numeric_vector <- function(value, fallback) {
+  values <- suppressWarnings(as.numeric(spatial_tokenize(value)))
+  values <- values[is.finite(values)]
+  if (length(values) == 0) fallback else values
+}
+
+spatial_layer_settings <- function(layer_file, layer_id = "panorama_st") {
+  layers <- spatial_read_tsv(layer_file)
+  if (nrow(layers) == 0) {
+    return(list())
+  }
+  if ("layer_id" %in% colnames(layers)) {
+    hit <- layers[layers$layer_id == layer_id, , drop = FALSE]
+    if (nrow(hit) == 0) {
+      hit <- layers[tolower(layers$layer_role %||% "") == "panorama", , drop = FALSE]
+    }
+    if (nrow(hit) == 0) {
+      hit <- layers[1, , drop = FALSE]
+    }
+  } else {
+    hit <- layers[1, , drop = FALSE]
+  }
+  as.list(hit[1, , drop = FALSE])
+}
+
+spatial_resolve_path <- function(path, base_dir) {
+  path <- trimws(as.character(path %||% ""))
+  if (!nzchar(path)) {
+    return("")
+  }
+  if (grepl("^/", path)) {
+    normalizePath(path, winslash = "/", mustWork = FALSE)
+  } else {
+    normalizePath(file.path(base_dir, path), winslash = "/", mustWork = FALSE)
+  }
+}
+
+spatial_get_assay_data <- function(obj, assay = NULL, slot = "data") {
+  assay <- assay %||% spatial_assay_name(obj)
+  tryCatch(
+    Seurat::GetAssayData(obj, assay = assay, layer = slot),
+    error = function(e) Seurat::GetAssayData(obj, assay = assay, slot = slot)
+  )
+}
+
+spatial_panorama_assay <- function(panorama) {
+  norm <- tryCatch(panorama@misc$normalization, error = function(e) NULL)
+  if (!is.null(norm$assay) && norm$assay %in% names(panorama@assays)) {
+    return(norm$assay)
+  }
+  if ("SCT" %in% names(panorama@assays)) {
+    return("SCT")
+  }
+  spatial_assay_name(panorama)
+}
+
+spatial_panorama_slot <- function(panorama) {
+  norm <- tryCatch(panorama@misc$normalization, error = function(e) NULL)
+  slot <- as.character(norm$data_slot %||% "")
+  if (nzchar(slot)) slot else "data"
+}
+
+spatial_valid_python <- function(py_bin) {
+  py_bin <- trimws(as.character(py_bin %||% ""))
+  if (!nzchar(py_bin)) {
+    return(FALSE)
+  }
+  if (grepl("/", py_bin, fixed = TRUE)) {
+    return(file.exists(py_bin) && file.access(py_bin, mode = 1) == 0)
+  }
+  nzchar(Sys.which(py_bin))
+}
+
+load_post_norm_objects <- function(cfg, selected_method_tsv) {
+  selected <- spatial_read_tsv(selected_method_tsv)
+  if (nrow(selected) == 0) {
+    stop(sprintf("selected normalization table is missing or empty: %s", selected_method_tsv), call. = FALSE)
+  }
+  required <- c("section_id", "final_choice", "data_slot", "canonical_rds")
+  missing <- setdiff(required, colnames(selected))
+  if (length(missing) > 0) {
+    stop(sprintf("selected_method.tsv missing required columns: %s", paste(missing, collapse = ", ")), call. = FALSE)
+  }
+  objects <- list()
+  for (i in seq_len(nrow(selected))) {
+    row <- selected[i, , drop = FALSE]
+    section_id <- spatial_safe_id(spatial_cell(row, "section_id", sprintf("section_%d", i)))
+    rds_path <- spatial_resolve_path(spatial_cell(row, "canonical_rds"), cfg$project_root)
+    if (!file.exists(rds_path)) {
+      stop(sprintf("selected normalized object is missing for section_id=%s: %s", section_id, rds_path), call. = FALSE)
+    }
+    obj <- readRDS(rds_path)
+    obj$section_id <- if ("section_id" %in% colnames(obj@meta.data)) obj$section_id else section_id
+    obj$spatial_section_id <- section_id
+    obj$normalization_method <- spatial_cell(row, "final_choice")
+    obj$normalization_data_slot <- spatial_cell(row, "data_slot", "data")
+    obj@misc$normalization <- modifyList(
+      obj@misc$normalization %||% list(),
+      list(
+        method = spatial_cell(row, "final_choice"),
+        data_slot = spatial_cell(row, "data_slot", "data"),
+        selected_method_tsv = selected_method_tsv,
+        canonical_rds = rds_path
+      )
+    )
+    objects[[section_id]] <- obj
+  }
+  objects
+}
+
+merge_spatial_panorama <- function(obj_list) {
+  if (length(obj_list) == 0) {
+    stop("no spatial objects supplied for panorama merge", call. = FALSE)
+  }
+  obj_list <- obj_list[vapply(obj_list, inherits, logical(1), what = "Seurat")]
+  if (length(obj_list) == 0) {
+    stop("no Seurat objects supplied for panorama merge", call. = FALSE)
+  }
+  section_ids <- names(obj_list)
+  if (is.null(section_ids) || any(!nzchar(section_ids))) {
+    section_ids <- paste0("section_", seq_along(obj_list))
+  }
+  for (i in seq_along(obj_list)) {
+    obj_list[[i]]$spot_barcode_raw <- colnames(obj_list[[i]])
+    obj_list[[i]]$spatial_section_id <- section_ids[[i]]
+  }
+  if (length(obj_list) == 1) {
+    panorama <- obj_list[[1]]
+  } else {
+    panorama <- Seurat::merge(
+      x = obj_list[[1]],
+      y = obj_list[-1],
+      add.cell.ids = section_ids,
+      merge.data = TRUE
+    )
+  }
+  panorama$panorama_id <- colnames(panorama)
+  panorama@misc$spatial_panorama <- list(section_ids = section_ids, n_sections = length(section_ids))
+  panorama
+}
+
+compute_panorama_hvg <- function(panorama, method = "", hvg_n = 2000L) {
+  hvg <- tryCatch(Seurat::VariableFeatures(panorama), error = function(e) character(0))
+  hvg <- intersect(hvg, rownames(panorama))
+  if (length(hvg) >= min(100L, hvg_n)) {
+    return(head(hvg, hvg_n))
+  }
+  assay <- spatial_panorama_assay(panorama)
+  mat <- tryCatch(spatial_get_assay_data(panorama, assay = assay, slot = spatial_panorama_slot(panorama)), error = function(e) spatial_counts_matrix(panorama))
+  vars <- spatial_row_vars(mat)
+  vars[!is.finite(vars)] <- 0
+  head(rownames(mat)[order(vars, decreasing = TRUE)], min(hvg_n, nrow(mat)))
+}
+
+spatial_create_umap_fallback <- function(obj, source_reduction, target_reduction) {
+  emb <- Seurat::Embeddings(obj, reduction = source_reduction)
+  if (ncol(emb) == 1) {
+    coords <- cbind(emb[, 1], rep(0, nrow(emb)))
+  } else {
+    coords <- emb[, seq_len(2), drop = FALSE]
+  }
+  colnames(coords) <- c("UMAP_1", "UMAP_2")
+  key <- paste0(toupper(gsub("[^A-Za-z0-9]+", "", target_reduction)), "_")
+  obj[[target_reduction]] <- Seurat::CreateDimReducObject(embeddings = coords, key = key, assay = spatial_panorama_assay(obj))
+  obj
+}
+
+spatial_run_umap_or_fallback <- function(obj, source_reduction, target_reduction, dims) {
+  out <- tryCatch(
+    Seurat::RunUMAP(obj, reduction = source_reduction, dims = dims, reduction.name = target_reduction, verbose = FALSE),
+    error = function(e) e
+  )
+  if (inherits(out, "error")) {
+    msg <- conditionMessage(out)
+    out <- spatial_create_umap_fallback(obj, source_reduction, target_reduction)
+    out@misc$umap_fallback <- modifyList(out@misc$umap_fallback %||% list(), stats::setNames(list(msg), target_reduction))
+  }
+  out
+}
+
+run_integration_none <- function(panorama, hvg, npcs = 30L) {
+  assay <- spatial_panorama_assay(panorama)
+  Seurat::DefaultAssay(panorama) <- assay
+  hvg <- intersect(hvg, rownames(panorama))
+  if (length(hvg) == 0) {
+    hvg <- compute_panorama_hvg(panorama, hvg_n = min(2000L, nrow(panorama)))
+  }
+  Seurat::VariableFeatures(panorama) <- hvg
+  panorama <- tryCatch(Seurat::ScaleData(panorama, assay = assay, features = hvg, verbose = FALSE), error = function(e) panorama)
+  pca_n <- min(as.integer(npcs), length(hvg), max(1L, ncol(panorama) - 1L))
+  panorama <- Seurat::RunPCA(panorama, assay = assay, features = hvg, npcs = pca_n, reduction.name = "pca_none", verbose = FALSE)
+  dims <- seq_len(max(1L, min(pca_n, 30L)))
+  panorama <- spatial_run_umap_or_fallback(panorama, "pca_none", "umap_none", dims)
+  panorama@misc$integration <- modifyList(panorama@misc$integration %||% list(), list(default_mode = "none", selected_mode = "none"))
+  panorama
+}
+
+run_integration_harmony <- function(panorama, hvg, npcs = 30L, group_by = "section_id") {
+  if (!requireNamespace("harmony", quietly = TRUE)) {
+    stop("harmony package is not available", call. = FALSE)
+  }
+  if (!group_by %in% colnames(panorama@meta.data)) {
+    stop(sprintf("harmony group column is missing: %s", group_by), call. = FALSE)
+  }
+  if (!"pca_none" %in% names(panorama@reductions)) {
+    panorama <- run_integration_none(panorama, hvg, npcs = npcs)
+  }
+  panorama <- harmony::RunHarmony(
+    object = panorama,
+    group.by.vars = group_by,
+    reduction = "pca_none",
+    reduction.save = "harmony",
+    verbose = FALSE
+  )
+  dims <- seq_len(min(ncol(Seurat::Embeddings(panorama, "harmony")), npcs))
+  spatial_run_umap_or_fallback(panorama, "harmony", "umap_harmony", dims)
+}
+
+run_integration_cca <- function(panorama, hvg, npcs = 30L) {
+  if (!"IntegrateLayers" %in% getNamespaceExports("Seurat")) {
+    stop("Seurat::IntegrateLayers is not available", call. = FALSE)
+  }
+  if (!"pca_none" %in% names(panorama@reductions)) {
+    panorama <- run_integration_none(panorama, hvg, npcs = npcs)
+  }
+  panorama <- Seurat::IntegrateLayers(
+    object = panorama,
+    method = Seurat::CCAIntegration,
+    orig.reduction = "pca_none",
+    new.reduction = "cca_integrated",
+    verbose = FALSE
+  )
+  dims <- seq_len(min(ncol(Seurat::Embeddings(panorama, "cca_integrated")), npcs))
+  spatial_run_umap_or_fallback(panorama, "cca_integrated", "umap_cca", dims)
+}
+
+compute_lisi <- function(panorama, reduction, group_col, perplexity = 30) {
+  emb <- Seurat::Embeddings(panorama, reduction = reduction)
+  meta <- panorama@meta.data[rownames(emb), , drop = FALSE]
+  if (!group_col %in% colnames(meta)) {
+    return(list(status = "missing_group", mean_lisi = NA_real_, implementation = "none", message = sprintf("missing group column: %s", group_col)))
+  }
+  groups <- as.character(meta[[group_col]])
+  perplexity <- max(2, min(perplexity, floor(nrow(emb) / 3)))
+  if (requireNamespace("lisi", quietly = TRUE) && nrow(emb) >= 4) {
+    result <- tryCatch(
+      lisi::compute_lisi(emb, meta[, group_col, drop = FALSE], label_colnames = group_col, perplexity = perplexity),
+      error = function(e) e
+    )
+    if (!inherits(result, "error")) {
+      return(list(status = "ok", mean_lisi = mean(result[[group_col]], na.rm = TRUE), implementation = "lisi", message = ""))
+    }
+  }
+  tab <- table(groups)
+  p <- as.numeric(tab) / sum(tab)
+  proxy <- if (length(p) == 0) NA_real_ else 1 / sum(p ^ 2)
+  list(status = "ok", mean_lisi = proxy, implementation = "inverse_simpson_proxy", message = "lisi package unavailable or failed; used group diversity proxy")
+}
+
+spatial_match_features <- function(genes, features) {
+  genes <- unique(trimws(as.character(genes)))
+  genes <- genes[nzchar(genes) & genes != "*"]
+  if (length(genes) == 0) {
+    return(character(0))
+  }
+  idx <- match(toupper(genes), toupper(features))
+  unique(features[idx[!is.na(idx)]])
+}
+
+read_spatial_region_panel <- function(marker_panel_dir, layer_id = "panorama_st") {
+  if (!dir.exists(marker_panel_dir)) {
+    stop(sprintf("marker panel directory is missing: %s", marker_panel_dir), call. = FALSE)
+  }
+  files <- list.files(marker_panel_dir, pattern = "\\.tsv$", full.names = TRUE)
+  if (length(files) == 0) {
+    stop(sprintf("no active marker panel TSV files found in %s", marker_panel_dir), call. = FALSE)
+  }
+  panels <- lapply(files, spatial_read_tsv)
+  panels <- panels[vapply(panels, function(x) is.data.frame(x) && nrow(x) > 0, logical(1))]
+  if (length(panels) == 0) {
+    stop("active marker panel TSV files are empty", call. = FALSE)
+  }
+  panel <- do.call(rbind, panels)
+  required <- c("layer_id", "celltype", "gene", "evidence_source")
+  missing <- setdiff(required, colnames(panel))
+  if (length(missing) > 0) {
+    stop(sprintf("marker panel missing required columns: %s", paste(missing, collapse = ", ")), call. = FALSE)
+  }
+  panel <- panel[panel$layer_id %in% c(layer_id, "*", "all", "ALL"), , drop = FALSE]
+  panel$celltype <- trimws(as.character(panel$celltype))
+  panel$gene <- trimws(as.character(panel$gene))
+  panel <- panel[nzchar(panel$celltype) & nzchar(panel$gene), , drop = FALSE]
+  if (nrow(panel) == 0) {
+    stop(sprintf("marker panel has no rows for layer_id=%s", layer_id), call. = FALSE)
+  }
+  panel
+}
+
+spatial_region_levels <- function(panel) {
+  levels <- unique(as.character(panel$celltype))
+  levels <- levels[nzchar(levels) & !tolower(levels) %in% c("uncertain", "mixed_or_uncertain")]
+  unique(c(levels, "mixed_or_uncertain"))
+}
+
+compute_marker_module_score <- function(panorama, panel) {
+  assay <- spatial_panorama_assay(panorama)
+  Seurat::DefaultAssay(panorama) <- assay
+  regions <- setdiff(spatial_region_levels(panel), "mixed_or_uncertain")
+  score_cols <- character()
+  for (region in regions) {
+    genes <- panel$gene[panel$celltype == region]
+    features <- spatial_match_features(genes, rownames(panorama))
+    score_col <- paste0("ms_", spatial_safe_id(region))
+    if (length(features) == 0) {
+      panorama[[score_col]] <- rep(0, ncol(panorama))
+    } else {
+      panorama <- Seurat::AddModuleScore(panorama, features = list(features), name = score_col, assay = assay, search = FALSE)
+      generated <- paste0(score_col, "1")
+      if (generated %in% colnames(panorama@meta.data)) {
+        panorama[[score_col]] <- panorama@meta.data[[generated]]
+        panorama@meta.data[[generated]] <- NULL
+      }
+    }
+    score_cols <- c(score_cols, score_col)
+  }
+  panorama@misc$region_module_score_cols <- stats::setNames(score_cols, regions)
+  panorama
+}
+
+compute_biological_consistency <- function(panorama, panel, reduction, target_k = 4L) {
+  if (is.null(panel) || nrow(panel) == 0 || !reduction %in% names(panorama@reductions)) {
+    return(data.frame(mode = reduction, region = character(), n_top_spots = integer(), marker_aligned_cluster_frac = numeric(), stringsAsFactors = FALSE))
+  }
+  obj <- tryCatch(compute_marker_module_score(panorama, panel), error = function(e) panorama)
+  dims <- seq_len(min(30L, ncol(Seurat::Embeddings(obj, reduction))))
+  obj <- tryCatch(Seurat::FindNeighbors(obj, reduction = reduction, dims = dims, verbose = FALSE), error = function(e) obj)
+  obj <- tryCatch(Seurat::FindClusters(obj, resolution = 0.4, verbose = FALSE), error = function(e) obj)
+  cluster_col <- if ("seurat_clusters" %in% colnames(obj@meta.data)) "seurat_clusters" else ""
+  rows <- list()
+  for (region in setdiff(spatial_region_levels(panel), "mixed_or_uncertain")) {
+    ms_col <- paste0("ms_", spatial_safe_id(region))
+    if (!ms_col %in% colnames(obj@meta.data) || !nzchar(cluster_col)) {
+      next
+    }
+    scores <- obj@meta.data[[ms_col]]
+    top_q <- stats::quantile(scores, 0.75, na.rm = TRUE)
+    top_clusters <- obj@meta.data[scores >= top_q, cluster_col, drop = TRUE]
+    aligned <- if (length(top_clusters) == 0) 0 else max(table(top_clusters)) / length(top_clusters)
+    rows[[length(rows) + 1L]] <- data.frame(
+      mode = reduction,
+      region = region,
+      n_top_spots = length(top_clusters),
+      marker_aligned_cluster_frac = as.numeric(aligned),
+      stringsAsFactors = FALSE
+    )
+  }
+  if (length(rows) == 0) {
+    return(data.frame(mode = character(), region = character(), n_top_spots = integer(), marker_aligned_cluster_frac = numeric(), stringsAsFactors = FALSE))
+  }
+  do.call(rbind, rows)
+}
+
+summarize_integration <- function(results) {
+  rows <- lapply(names(results), function(mode) {
+    x <- results[[mode]]
+    data.frame(
+      integration_mode = mode,
+      status = as.character(x$status %||% "failed"),
+      reduction = as.character(x$reduction %||% ""),
+      umap = as.character(x$umap %||% ""),
+      mean_lisi = as.numeric(x$mean_lisi %||% NA_real_),
+      lisi_implementation = as.character(x$lisi_implementation %||% ""),
+      biological_consistency = as.numeric(x$biological_consistency %||% NA_real_),
+      message = as.character(x$message %||% ""),
+      stringsAsFactors = FALSE
+    )
+  })
+  do.call(rbind, rows)
+}
+
+select_integration_mode <- function(layers_tsv, override_tsv = "", layer_id = "panorama_st", default = "none") {
+  settings <- spatial_layer_settings(layers_tsv, layer_id = layer_id)
+  mode <- trimws(as.character(settings$integration_mode %||% ""))
+  env_mode <- Sys.getenv("SPATIAL_INTEGRATION_MODE", unset = "")
+  if (nzchar(env_mode) && (!identical(env_mode, default) || !nzchar(mode))) {
+    return(env_mode)
+  }
+  if (nzchar(mode)) mode else default
+}
+
+cluster_b1_seurat <- function(panorama, reduction, dims, target_k, res_range, res_fine_step = 0.05) {
+  if (!reduction %in% names(panorama@reductions)) {
+    stop(sprintf("missing reduction for b1 clustering: %s", reduction), call. = FALSE)
+  }
+  max_dim <- ncol(Seurat::Embeddings(panorama, reduction))
+  dims <- dims[dims <= max_dim]
+  if (length(dims) == 0) {
+    dims <- seq_len(max_dim)
+  }
+  panorama <- tryCatch(
+    Seurat::FindNeighbors(panorama, reduction = reduction, dims = dims, graph.name = "b1_snn", verbose = FALSE),
+    error = function(e) Seurat::FindNeighbors(panorama, reduction = reduction, dims = dims, verbose = FALSE)
+  )
+  use_named_graph <- "b1_snn" %in% names(panorama@graphs)
+  if (length(res_range) >= 2 && is.finite(res_fine_step) && res_fine_step > 0) {
+    res_values <- sort(unique(c(res_range, seq(min(res_range), max(res_range), by = res_fine_step))))
+  } else {
+    res_values <- res_range
+  }
+  best <- NULL
+  search_rows <- list()
+  for (res in res_values) {
+    candidate <- tryCatch({
+      if (use_named_graph) {
+        Seurat::FindClusters(panorama, graph.name = "b1_snn", resolution = res, verbose = FALSE)
+      } else {
+        Seurat::FindClusters(panorama, resolution = res, verbose = FALSE)
+      }
+    }, error = function(e) e)
+    if (inherits(candidate, "error")) {
+      search_rows[[length(search_rows) + 1L]] <- data.frame(resolution = res, cluster_N = NA_integer_, status = "failed", message = conditionMessage(candidate), stringsAsFactors = FALSE)
+      next
+    }
+    clusters <- as.character(candidate@meta.data$seurat_clusters)
+    cluster_n <- length(unique(clusters))
+    score <- abs(cluster_n - target_k)
+    search_rows[[length(search_rows) + 1L]] <- data.frame(resolution = res, cluster_N = cluster_n, status = "ok", message = "", stringsAsFactors = FALSE)
+    if (is.null(best) || score < best$score) {
+      best <- list(obj = candidate, clusters = clusters, resolution = res, cluster_n = cluster_n, score = score)
+    }
+  }
+  if (is.null(best)) {
+    stop("Seurat SNN clustering failed for all requested resolutions", call. = FALSE)
+  }
+  out <- best$obj
+  out$cluster_b1_seurat_snn <- factor(best$clusters)
+  out@misc$cluster_b1_seurat_snn <- list(
+    selected_resolution = best$resolution,
+    target_clusters = target_k,
+    search_table = if (length(search_rows) > 0) do.call(rbind, search_rows) else data.frame()
+  )
+  out
+}
+
+cluster_b2_bayesspace <- function(panorama, target_k, dims = 1:30) {
+  if (!requireNamespace("BayesSpace", quietly = TRUE)) {
+    stop("BayesSpace package is not available", call. = FALSE)
+  }
+  stop("BayesSpace backend requires project-specific SpatialExperiment conversion and is not available for this panorama object", call. = FALSE)
+}
+
+export_panorama_anndata <- function(panorama, h5ad_path, reduction = "pca_none", assay = NULL, py_bin = Sys.getenv("PY_SPATIAL_BIN", unset = "python")) {
+  if (!spatial_valid_python(py_bin)) {
+    stop(sprintf("Python executable is not available for h5ad export: %s", py_bin), call. = FALSE)
+  }
+  if (!requireNamespace("Matrix", quietly = TRUE)) {
+    stop("Matrix package is required for h5ad export", call. = FALSE)
+  }
+  assay <- assay %||% spatial_panorama_assay(panorama)
+  counts <- spatial_counts_matrix(panorama)
+  coords <- spatial_filter_coords(panorama)
+  coords <- coords[colnames(panorama), , drop = FALSE]
+  emb <- if (reduction %in% names(panorama@reductions)) Seurat::Embeddings(panorama, reduction = reduction) else matrix(nrow = ncol(panorama), ncol = 0, dimnames = list(colnames(panorama), NULL))
+  emb <- emb[colnames(panorama), , drop = FALSE]
+  work_dir <- dirname(h5ad_path)
+  ensure_dir(work_dir)
+  counts_mtx <- file.path(work_dir, "counts_cells_by_genes.mtx")
+  features_tsv <- file.path(work_dir, "features.tsv")
+  barcodes_tsv <- file.path(work_dir, "barcodes.tsv")
+  coords_tsv <- file.path(work_dir, "coords.tsv")
+  pca_tsv <- file.path(work_dir, "pca.tsv")
+  writer_py <- file.path(work_dir, "write_h5ad.py")
+  Matrix::writeMM(Matrix::t(counts), counts_mtx)
+  writeLines(rownames(counts), features_tsv, useBytes = TRUE)
+  writeLines(colnames(counts), barcodes_tsv, useBytes = TRUE)
+  spatial_write_tsv(data.frame(barcode = rownames(coords), x = coords$col, y = coords$row, stringsAsFactors = FALSE), coords_tsv)
+  spatial_write_tsv(data.frame(barcode = rownames(emb), emb, check.names = FALSE), pca_tsv)
+  writeLines(c(
+    "import argparse",
+    "import anndata",
+    "import pandas as pd",
+    "from scipy.io import mmread",
+    "ap = argparse.ArgumentParser()",
+    "ap.add_argument('--counts', required=True)",
+    "ap.add_argument('--features', required=True)",
+    "ap.add_argument('--barcodes', required=True)",
+    "ap.add_argument('--coords', required=True)",
+    "ap.add_argument('--pca', required=True)",
+    "ap.add_argument('--output', required=True)",
+    "args = ap.parse_args()",
+    "X = mmread(args.counts).tocsr()",
+    "features = [line.strip() for line in open(args.features, encoding='utf-8') if line.strip()]",
+    "barcodes = [line.strip() for line in open(args.barcodes, encoding='utf-8') if line.strip()]",
+    "adata = anndata.AnnData(X=X)",
+    "adata.obs_names = barcodes",
+    "adata.var_names = features",
+    "coords = pd.read_csv(args.coords, sep='\\t').set_index('barcode').loc[barcodes]",
+    "adata.obsm['spatial'] = coords[['x', 'y']].to_numpy()",
+    "pca = pd.read_csv(args.pca, sep='\\t').set_index('barcode').loc[barcodes]",
+    "if pca.shape[1] > 0:",
+    "    adata.obsm['X_pca'] = pca.to_numpy()",
+    "adata.write_h5ad(args.output)"
+  ), writer_py, useBytes = TRUE)
+  status <- system2(py_bin, c(writer_py, "--counts", counts_mtx, "--features", features_tsv, "--barcodes", barcodes_tsv, "--coords", coords_tsv, "--pca", pca_tsv, "--output", h5ad_path), stdout = TRUE, stderr = TRUE)
+  exit_status <- attr(status, "status") %||% 0L
+  if (!identical(as.integer(exit_status), 0L) || !file.exists(h5ad_path)) {
+    stop(sprintf("h5ad export failed: %s", paste(status, collapse = "\n")), call. = FALSE)
+  }
+  invisible(h5ad_path)
+}
+
+spatial_read_bridge_clusters <- function(cluster_tsv, cells) {
+  clusters <- spatial_read_tsv(cluster_tsv)
+  if (nrow(clusters) == 0 || !"barcode" %in% colnames(clusters) || !"cluster" %in% colnames(clusters)) {
+    stop(sprintf("bridge output cluster TSV has invalid schema: %s", cluster_tsv), call. = FALSE)
+  }
+  lookup <- stats::setNames(as.character(clusters$cluster), as.character(clusters$barcode))
+  values <- lookup[cells]
+  if (any(is.na(values))) {
+    stop("bridge output is missing clusters for one or more panorama cells", call. = FALSE)
+  }
+  factor(values)
+}
+
+cluster_python_bridge <- function(panorama, backend, py_bin, script, target_k, work_dir, reduction = "pca_none") {
+  if (!spatial_valid_python(py_bin)) {
+    stop(sprintf("Python executable is not available: %s", py_bin), call. = FALSE)
+  }
+  if (!file.exists(script)) {
+    stop(sprintf("Python bridge script is missing: %s", script), call. = FALSE)
+  }
+  ensure_dir(work_dir)
+  h5ad_path <- file.path(work_dir, sprintf("%s_input.h5ad", backend))
+  cluster_tsv <- file.path(work_dir, sprintf("%s_clusters.tsv", backend))
+  metadata_json <- file.path(work_dir, sprintf("%s_metadata.json", backend))
+  export_panorama_anndata(panorama, h5ad_path, reduction = reduction, py_bin = py_bin)
+  status <- system2(
+    py_bin,
+    c(script, "--input", h5ad_path, "--output-cluster-tsv", cluster_tsv, "--output-metadata-json", metadata_json, "--target-clusters", as.character(target_k)),
+    stdout = TRUE,
+    stderr = TRUE
+  )
+  exit_status <- attr(status, "status") %||% 0L
+  if (!identical(as.integer(exit_status), 0L) || !file.exists(cluster_tsv)) {
+    stop(sprintf("%s bridge failed: %s", backend, paste(status, collapse = "\n")), call. = FALSE)
+  }
+  clusters <- spatial_read_bridge_clusters(cluster_tsv, colnames(panorama))
+  list(clusters = clusters, cluster_tsv = cluster_tsv, metadata_json = metadata_json)
+}
+
+cluster_b3_spagcn_bridge <- function(panorama, py_bin, script, target_k, work_dir, reduction = "pca_none") {
+  cluster_python_bridge(panorama, "b3_spagcn", py_bin, script, target_k, work_dir, reduction = reduction)
+}
+
+cluster_b4_stagate_bridge <- function(panorama, py_bin, script, target_k, work_dir, reduction = "pca_none") {
+  cluster_python_bridge(panorama, "b4_stagate", py_bin, script, target_k, work_dir, reduction = reduction)
+}
+
+compute_spatial_coherence_score <- function(panorama, cluster_col, k = 6L) {
+  if (!cluster_col %in% colnames(panorama@meta.data)) {
+    return(NA_real_)
+  }
+  coords <- spatial_filter_coords(panorama)
+  coords <- coords[rownames(panorama@meta.data), , drop = FALSE]
+  finite <- is.finite(coords$row) & is.finite(coords$col)
+  coords <- coords[finite, , drop = FALSE]
+  if (nrow(coords) < 3) {
+    return(NA_real_)
+  }
+  clusters <- as.character(panorama@meta.data[rownames(coords), cluster_col, drop = TRUE])
+  d <- as.matrix(stats::dist(coords[, c("col", "row"), drop = FALSE]))
+  diag(d) <- Inf
+  k <- min(as.integer(k), nrow(d) - 1L)
+  nn <- t(apply(d, 1, function(x) order(x)[seq_len(k)]))
+  same <- vapply(seq_len(nrow(nn)), function(i) mean(clusters[nn[i, ]] == clusters[[i]], na.rm = TRUE), numeric(1))
+  mean(same, na.rm = TRUE)
+}
+
+compute_marker_consistency_score <- function(panorama, cluster_col, panel) {
+  if (!cluster_col %in% colnames(panorama@meta.data)) {
+    return(NA_real_)
+  }
+  obj <- tryCatch(compute_marker_module_score(panorama, panel), error = function(e) panorama)
+  score_cols <- unlist(obj@misc$region_module_score_cols %||% list(), use.names = FALSE)
+  score_cols <- intersect(score_cols, colnames(obj@meta.data))
+  if (length(score_cols) == 0) {
+    return(NA_real_)
+  }
+  clusters <- unique(as.character(obj@meta.data[[cluster_col]]))
+  winners <- vapply(clusters, function(cl) {
+    meta <- obj@meta.data[obj@meta.data[[cluster_col]] == cl, score_cols, drop = FALSE]
+    means <- colMeans(meta, na.rm = TRUE)
+    if (all(!is.finite(means))) "" else names(means)[which.max(means)]
+  }, character(1))
+  max(table(winners)) / length(winners)
+}
+
+compute_silhouette_pca <- function(panorama, cluster_col, reduction = "pca_none") {
+  if (!requireNamespace("cluster", quietly = TRUE) || !cluster_col %in% colnames(panorama@meta.data) || !reduction %in% names(panorama@reductions)) {
+    return(NA_real_)
+  }
+  clusters <- as.factor(panorama@meta.data[[cluster_col]])
+  if (length(levels(clusters)) < 2 || length(levels(clusters)) >= length(clusters)) {
+    return(NA_real_)
+  }
+  emb <- Seurat::Embeddings(panorama, reduction = reduction)
+  d <- stats::dist(emb)
+  sil <- cluster::silhouette(as.integer(clusters), d)
+  mean(sil[, "sil_width"], na.rm = TRUE)
+}
+
+summarize_clustering <- function(results, panel) {
+  rows <- lapply(names(results), function(backend) {
+    x <- results[[backend]]
+    obj <- x$obj
+    cluster_col <- as.character(x$cluster_col %||% "")
+    data.frame(
+      backend = backend,
+      status = as.character(x$status %||% "failed"),
+      cluster_col = cluster_col,
+      cluster_N = if (!is.null(obj) && nzchar(cluster_col) && cluster_col %in% colnames(obj@meta.data)) length(unique(obj@meta.data[[cluster_col]])) else NA_integer_,
+      spatial_coherence_score = if (!is.null(obj) && nzchar(cluster_col)) compute_spatial_coherence_score(obj, cluster_col) else NA_real_,
+      marker_consistency_score = if (!is.null(obj) && nzchar(cluster_col)) compute_marker_consistency_score(obj, cluster_col, panel) else NA_real_,
+      silhouette_pca = if (!is.null(obj) && nzchar(cluster_col)) compute_silhouette_pca(obj, cluster_col, x$reduction %||% "pca_none") else NA_real_,
+      timing_sec = as.numeric(x$timing_sec %||% NA_real_),
+      message = as.character(x$message %||% ""),
+      stringsAsFactors = FALSE
+    )
+  })
+  do.call(rbind, rows)
+}
+
+read_clustering_override <- function(path, section_id = "__DEFAULT__") {
+  if (!nzchar(path) || !file.exists(path) || file.info(path)$size == 0) {
+    return("")
+  }
+  overrides <- spatial_read_tsv(path)
+  if (nrow(overrides) == 0) {
+    return("")
+  }
+  if ("section_id" %in% colnames(overrides)) {
+    overrides <- overrides[!startsWith(trimws(as.character(overrides$section_id)), "#"), , drop = FALSE]
+  }
+  choice_col <- intersect(c("override_choice", "final_choice", "selected_clustering_backend", "backend", "method"), colnames(overrides))[1]
+  if (is.na(choice_col) || nrow(overrides) == 0) {
+    return("")
+  }
+  if ("section_id" %in% colnames(overrides)) {
+    for (candidate in c(section_id, "__DEFAULT__", "all", "ALL")) {
+      hit <- overrides[overrides$section_id == candidate, , drop = FALSE]
+      if (nrow(hit) > 0) {
+        return(spatial_cell(hit[1, , drop = FALSE], choice_col, ""))
+      }
+    }
+    return("")
+  }
+  spatial_cell(overrides[1, , drop = FALSE], choice_col, "")
+}
+
+select_clustering_backend <- function(override_tsv, results, default = "b1_seurat_snn") {
+  override <- read_clustering_override(override_tsv)
+  available <- names(results)[vapply(results, function(x) identical(x$status, "ok") && !is.null(x$obj), logical(1))]
+  selected <- if (nzchar(override)) override else default
+  if (selected %in% available) {
+    return(selected)
+  }
+  if (default %in% available) {
+    return(default)
+  }
+  if (length(available) > 0) {
+    return(available[[1]])
+  }
+  ""
+}
+
+read_region_annotation_override <- function(path) {
+  if (!nzchar(path) || !file.exists(path) || file.info(path)$size == 0) {
+    return(data.frame(cluster_id = character(), override_region = character(), stringsAsFactors = FALSE))
+  }
+  overrides <- spatial_read_tsv(path)
+  if (nrow(overrides) == 0) {
+    return(data.frame(cluster_id = character(), override_region = character(), stringsAsFactors = FALSE))
+  }
+  if ("cluster_id" %in% colnames(overrides)) {
+    overrides <- overrides[!startsWith(trimws(as.character(overrides$cluster_id)), "#"), , drop = FALSE]
+  }
+  region_col <- intersect(c("override_region", "region", "final_region"), colnames(overrides))[1]
+  if (is.na(region_col) || !"cluster_id" %in% colnames(overrides)) {
+    return(data.frame(cluster_id = character(), override_region = character(), stringsAsFactors = FALSE))
+  }
+  data.frame(
+    cluster_id = trimws(as.character(overrides$cluster_id)),
+    override_region = trimws(as.character(overrides[[region_col]])),
+    stringsAsFactors = FALSE
+  )
+}
+
+region_three_evidence_chain <- function(panorama, cluster_col, panel, thresholds = list(), override_file = "") {
+  if (!cluster_col %in% colnames(panorama@meta.data)) {
+    stop(sprintf("cluster column is missing: %s", cluster_col), call. = FALSE)
+  }
+  panorama <- compute_marker_module_score(panorama, panel)
+  Seurat::Idents(panorama) <- panorama@meta.data[[cluster_col]]
+  marker_table <- tryCatch(
+    Seurat::FindAllMarkers(panorama, assay = spatial_panorama_assay(panorama), only.pos = TRUE, logfc.threshold = 0, min.pct = 0.05, verbose = FALSE),
+    error = function(e) data.frame(cluster = character(), gene = character(), avg_log2FC = numeric(), p_val_adj = numeric(), pct.1 = numeric(), pct.2 = numeric(), stringsAsFactors = FALSE)
+  )
+  if (nrow(marker_table) > 0 && !"avg_log2FC" %in% colnames(marker_table) && "avg_logFC" %in% colnames(marker_table)) {
+    marker_table$avg_log2FC <- marker_table$avg_logFC
+  }
+  levels <- spatial_region_levels(panel)
+  regions <- setdiff(levels, "mixed_or_uncertain")
+  clusters <- sort(unique(as.character(panorama@meta.data[[cluster_col]])))
+  score_cols <- panorama@misc$region_module_score_cols %||% list()
+  module_matrix <- matrix(NA_real_, nrow = length(clusters), ncol = length(regions), dimnames = list(clusters, regions))
+  rows <- list()
+  overrides <- read_region_annotation_override(override_file)
+  override_lookup <- stats::setNames(overrides$override_region, overrides$cluster_id)
+  for (cluster_id in clusters) {
+    cells <- rownames(panorama@meta.data)[as.character(panorama@meta.data[[cluster_col]]) == cluster_id]
+    marker_genes <- if (nrow(marker_table) > 0 && "cluster" %in% colnames(marker_table)) as.character(marker_table$gene[as.character(marker_table$cluster) == cluster_id]) else character(0)
+    panel_hits <- vapply(regions, function(region) {
+      genes <- spatial_match_features(panel$gene[panel$celltype == region], rownames(panorama))
+      length(intersect(toupper(marker_genes), toupper(genes)))
+    }, integer(1))
+    module_scores <- vapply(regions, function(region) {
+      col <- score_cols[[region]] %||% ""
+      if (!nzchar(col) || !col %in% colnames(panorama@meta.data)) {
+        return(NA_real_)
+      }
+      mean(panorama@meta.data[cells, col], na.rm = TRUE)
+    }, numeric(1))
+    module_matrix[cluster_id, regions] <- module_scores
+    panel_winner <- if (length(panel_hits) == 0 || max(panel_hits) == 0) "" else names(panel_hits)[which.max(panel_hits)]
+    module_winner <- if (length(module_scores) == 0 || all(!is.finite(module_scores))) "" else names(module_scores)[which.max(module_scores)]
+    winner <- if (cluster_id %in% names(override_lookup) && nzchar(override_lookup[[cluster_id]])) {
+      override_lookup[[cluster_id]]
+    } else if (nzchar(panel_winner) && identical(panel_winner, module_winner)) {
+      module_winner
+    } else if (nzchar(module_winner) && is.finite(max(module_scores, na.rm = TRUE))) {
+      module_winner
+    } else {
+      "mixed_or_uncertain"
+    }
+    if (tolower(winner) %in% c("uncertain", "mixed")) {
+      winner <- "mixed_or_uncertain"
+    }
+    if (!winner %in% levels) {
+      winner <- "mixed_or_uncertain"
+    }
+    agreement <- nzchar(panel_winner) && nzchar(module_winner) && identical(panel_winner, module_winner)
+    rows[[length(rows) + 1L]] <- data.frame(
+      cluster = cluster_id,
+      region = winner,
+      n_spots = length(cells),
+      module_score_max = if (all(!is.finite(module_scores))) NA_real_ else max(module_scores, na.rm = TRUE),
+      module_score_winner = module_winner,
+      panel_hit_count_winner = if (nzchar(panel_winner)) as.integer(panel_hits[[panel_winner]]) else 0L,
+      panel_hit_winner = panel_winner,
+      evidence_agreement = agreement,
+      confidence = if (agreement && nzchar(panel_winner)) "high" else if (winner != "mixed_or_uncertain") "medium" else "low",
+      stringsAsFactors = FALSE
+    )
+  }
+  evidence_df <- do.call(rbind, rows)
+  attr(evidence_df, "region_levels") <- levels
+  list(
+    panorama = panorama,
+    evidence_df = evidence_df,
+    marker_table = marker_table,
+    module_score_matrix = as.data.frame(module_matrix, stringsAsFactors = FALSE)
+  )
+}
+
+assign_region_labels <- function(panorama, evidence_df) {
+  levels <- attr(evidence_df, "region_levels") %||% unique(c(as.character(evidence_df$region), "mixed_or_uncertain"))
+  levels <- unique(c(setdiff(levels, "mixed_or_uncertain"), "mixed_or_uncertain"))
+  lookup <- stats::setNames(as.character(evidence_df$region), as.character(evidence_df$cluster))
+  cluster_col <- if ("cluster_default" %in% colnames(panorama@meta.data)) "cluster_default" else "seurat_clusters"
+  values <- lookup[as.character(panorama@meta.data[[cluster_col]])]
+  values[is.na(values) | !nzchar(values)] <- "mixed_or_uncertain"
+  panorama$region <- factor(values, levels = levels)
+  panorama@misc$region_annotation <- list(
+    cluster_col = cluster_col,
+    evidence = evidence_df,
+    levels = levels,
+    timestamp = as.character(Sys.time())
+  )
+  panorama
+}
+
+compute_region_triage <- function(panorama, evidence_df) {
+  region_counts <- table(panorama$region)
+  mixed_n <- if ("mixed_or_uncertain" %in% names(region_counts)) as.numeric(region_counts[["mixed_or_uncertain"]]) else 0
+  mixed_fraction <- if (length(region_counts) == 0) NA_real_ else mixed_n / sum(region_counts)
+  section_col <- if ("section_id" %in% colnames(panorama@meta.data)) "section_id" else if ("spatial_section_id" %in% colnames(panorama@meta.data)) "spatial_section_id" else ""
+  balance_ratio <- NA_real_
+  if (nzchar(section_col)) {
+    cross <- table(panorama$region, panorama@meta.data[[section_col]])
+    ratios <- apply(cross, 1, function(x) {
+      x <- as.numeric(x)
+      positive <- x[x > 0]
+      if (length(positive) <= 1) 1 else max(positive) / min(positive)
+    })
+    balance_ratio <- max(ratios, na.rm = TRUE)
+  }
+  coherence <- compute_spatial_coherence_score(panorama, "region")
+  low_region_n <- if (length(region_counts) == 0) 0L else sum(region_counts < 5)
+  marker_strength <- if (nrow(evidence_df) == 0) NA_real_ else mean(evidence_df$panel_hit_count_winner + evidence_df$module_score_max, na.rm = TRUE)
+  data.frame(
+    signal_name = c("per_region_spot_count", "cluster_region_mapping_table", "mixed_uncertain_fraction", "region_marker_evidence_strength", "cross_section_balance", "region_spatial_coherence"),
+    value = c(
+      paste(names(region_counts), as.integer(region_counts), sep = ":", collapse = ","),
+      sprintf("%d clusters", nrow(evidence_df)),
+      sprintf("%.3f", mixed_fraction),
+      sprintf("%.3f", marker_strength),
+      sprintf("%.3f", balance_ratio),
+      sprintf("%.3f", coherence)
+    ),
+    threshold = c("warn if any region < 5 spots", "must map every cluster", "<=0.20", ">0 preferred", "<=5", ">0.50 preferred"),
+    status = c(
+      if (low_region_n > 0) "warn" else "ok",
+      if (nrow(evidence_df) > 0) "ok" else "fail",
+      if (is.finite(mixed_fraction) && mixed_fraction > 0.2) "warn" else "ok",
+      if (is.finite(marker_strength) && marker_strength > 0) "ok" else "warn",
+      if (is.finite(balance_ratio) && balance_ratio > 5) "warn" else "ok",
+      if (is.finite(coherence) && coherence < 0.5) "warn" else "ok"
+    ),
+    message = c(
+      sprintf("%d regions have fewer than 5 spots", low_region_n),
+      "cluster to region mapping available",
+      "mixed_or_uncertain spot fraction",
+      "mean panel-hit plus module-score evidence",
+      "maximum non-zero section imbalance ratio across regions",
+      "mean kNN same-region fraction"
+    ),
+    stringsAsFactors = FALSE
+  )
+}

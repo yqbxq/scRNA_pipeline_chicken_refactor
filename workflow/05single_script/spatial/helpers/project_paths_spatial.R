@@ -30,8 +30,14 @@ get_spatial_script_config <- function() {
   spatial_pre_qc_report_dir <- spatial_env_or_default("SPATIAL_PRE_QC_REPORT_DIR", file.path(eda_report_dir, "spatial_pre_qc"))
   spatial_post_qc_report_dir <- spatial_env_or_default("SPATIAL_POST_QC_REPORT_DIR", file.path(eda_report_dir, "spatial_post_qc"))
   normalization_compare_dir <- spatial_env_or_default("SPATIAL_NORMALIZATION_COMPARE_DIR", file.path(report_dir, "spatial", "normalization_compare"))
+  spatial_integration_compare_dir <- spatial_env_or_default("SPATIAL_INTEGRATION_COMPARE_DIR", spatial_env_or_default("SPATIAL_INTEGRATION_REPORT_DIR", file.path(eda_report_dir, "spatial_integration")))
+  clustering_compare_dir <- spatial_env_or_default("SPATIAL_CLUSTERING_COMPARE_DIR", file.path(report_dir, "spatial", "clustering_compare"))
+  spatial_region_annotation_dir <- spatial_env_or_default("SPATIAL_REGION_ANNOTATION_DIR", spatial_env_or_default("SPATIAL_REGION_ANNOTATION_REPORT_DIR", file.path(eda_report_dir, "spatial_region_annotation")))
+  spatial_region_annotation_table_dir <- spatial_env_or_default("SPATIAL_REGION_ANNOTATION_TABLE_DIR", file.path(spatial_table_dir, "spatial_region_annotation"))
   py_spatial_prefix <- spatial_env_or_default("PY_SPATIAL_ENV_PREFIX", "")
+  py_spatial_legacy_prefix <- spatial_env_or_default("PY_SPATIAL_LEGACY_ENV_PREFIX", "")
   py_spatial_bin_default <- if (nzchar(py_spatial_prefix)) file.path(py_spatial_prefix, "bin", "python") else "python"
+  py_spatial_legacy_bin_default <- if (nzchar(py_spatial_legacy_prefix)) file.path(py_spatial_legacy_prefix, "bin", "python") else "python"
 
   list(
     project_root = project_root,
@@ -58,6 +64,17 @@ get_spatial_script_config <- function() {
     spatial_post_qc_overlay_dir = file.path(spatial_post_qc_report_dir, "figures", "raw_vs_post_qc"),
     normalization_variants_dir = spatial_env_or_default("SPATIAL_NORMALIZATION_VARIANTS_DIR", file.path(spatial_checkpoint_dir, "normalization_variants")),
     normalization_compare_dir = normalization_compare_dir,
+    spatial_integration_compare_dir = spatial_integration_compare_dir,
+    spatial_integration_figure_dir = file.path(spatial_integration_compare_dir, "figures"),
+    spatial_panorama_integrated_rds = file.path(spatial_checkpoint_dir, "spatial_panorama_integrated.rds"),
+    spatial_panorama_clustered_rds = file.path(spatial_checkpoint_dir, "spatial_panorama_clustered.rds"),
+    spatial_panorama_annotated_rds = file.path(spatial_checkpoint_dir, "spatial_panorama_annotated.rds"),
+    clustering_variants_dir = spatial_env_or_default("SPATIAL_CLUSTERING_VARIANTS_DIR", file.path(spatial_checkpoint_dir, "clustering_variants")),
+    clustering_compare_dir = clustering_compare_dir,
+    clustering_compare_figure_dir = file.path(clustering_compare_dir, "figures"),
+    spatial_region_annotation_dir = spatial_region_annotation_dir,
+    spatial_region_annotation_figure_dir = file.path(spatial_region_annotation_dir, "figures"),
+    spatial_region_annotation_table_dir = spatial_region_annotation_table_dir,
     sample_sheet = spatial_env_or_default("SAMPLE_SHEET", file.path(metadata_dir, "samples.tsv")),
     canonical_sample_sheet = spatial_env_or_default("CANONICAL_SAMPLE_SHEET", file.path(metadata_dir, "samples.canonical.tsv")),
     section_sheet = spatial_env_or_default("SECTION_SHEET", file.path(metadata_dir, "sections.tsv")),
@@ -73,6 +90,10 @@ get_spatial_script_config <- function() {
     module_02_filter_manifest_path = file.path(manifest_dir, "spatial_01b_qc_filter", "_manifest.json"),
     module_02_eda_manifest_path = file.path(manifest_dir, "spatial_01c_post_qc_eda", "_manifest.json"),
     module_02_norm_manifest_path = file.path(manifest_dir, "spatial_02_normalize", "_manifest.json"),
+    module_02a_integration_manifest_path = file.path(manifest_dir, "spatial_02a_integration_eda", "_manifest.json"),
+    module_02b_clustering_manifest_path = file.path(manifest_dir, "spatial_02b_finalize_clustering", "_manifest.json"),
+    module_03_region_annotation_manifest_path = file.path(manifest_dir, "spatial_03_region_annotation", "_manifest.json"),
+    module_03a_region_annotation_eda_manifest_path = file.path(manifest_dir, "spatial_03a_region_annotation_eda", "_manifest.json"),
     load_summary_csv = file.path(spatial_table_dir, "load_summary.csv"),
     load_diagnostics_tsv = file.path(spatial_table_dir, "load_diagnostics.tsv"),
     pre_qc_report_md = file.path(spatial_pre_qc_report_dir, "report.md"),
@@ -82,8 +103,15 @@ get_spatial_script_config <- function() {
     post_filter_triage_tsv = file.path(spatial_table_dir, "spatial_post_qc", "post_filter_triage.tsv"),
     selected_method_tsv = file.path(normalization_compare_dir, "selected_method.tsv"),
     selected_method_override_file = spatial_env_or_default("SPATIAL_NORMALIZATION_OVERRIDE_FILE", file.path(config_dir, "spatial_normalization_override.tsv")),
+    selected_backend_tsv = file.path(clustering_compare_dir, "selected_backend.tsv"),
+    selected_clustering_backend_override_file = spatial_env_or_default("SPATIAL_CLUSTERING_OVERRIDE_FILE", file.path(config_dir, "spatial_clustering_override.tsv")),
+    selected_region_annotation_override_file = spatial_env_or_default("SPATIAL_REGION_ANNOTATION_OVERRIDE_FILE", file.path(config_dir, "spatial_region_annotation_override.tsv")),
     pearson_residuals_py = spatial_env_or_default("SPATIAL_PEARSON_RESIDUALS_PY", file.path(pipeline_root, "workflow", "04python", "normalize_pearson_residuals.py")),
     py_spatial_bin = spatial_env_or_default("PY_SPATIAL_BIN", py_spatial_bin_default),
+    spagcn_py_bin = spatial_env_or_default("SPAGCN_PY_BIN", py_spatial_legacy_bin_default),
+    spagcn_py_script = spatial_env_or_default("SPAGCN_PY_SCRIPT", file.path(pipeline_root, "workflow", "04python", "cluster_spagcn.py")),
+    stagate_py_bin = spatial_env_or_default("STAGATE_PY_BIN", py_spatial_bin_default),
+    stagate_py_script = spatial_env_or_default("STAGATE_PY_SCRIPT", file.path(pipeline_root, "workflow", "04python", "cluster_stagate.py")),
     random_seed = spatial_env_integer("RANDOM_SEED", 42L),
     qc_min_nfeature_default = spatial_env_numeric("SPATIAL_QC_MIN_NFEATURE", 200),
     qc_min_ncount_default = spatial_env_numeric("SPATIAL_QC_MIN_NCOUNT", 500),
@@ -93,9 +121,15 @@ get_spatial_script_config <- function() {
     excessive_drop_threshold = spatial_env_numeric("SPATIAL_EXCESSIVE_DROP_THRESHOLD", 0.5),
     spatial_dbscan_eps_factor = spatial_env_numeric("SPATIAL_DBSCAN_EPS_FACTOR", 1.5),
     default_normalization_method = spatial_env_or_default("SPATIAL_DEFAULT_NORMALIZATION_METHOD", "m3_sct_v2"),
+    default_integration_mode = spatial_env_or_default("SPATIAL_DEFAULT_INTEGRATION_MODE", "none"),
+    integration_run_modes = spatial_env_or_default("SPATIAL_INTEGRATION_RUN_MODES", "none,harmony,cca"),
+    default_clustering_backend = spatial_env_or_default("SPATIAL_DEFAULT_CLUSTERING_BACKEND", "b1_seurat_snn"),
+    clustering_backends = spatial_env_or_default("SPATIAL_CLUSTERING_BACKENDS", "b1_seurat_snn,b2_bayesspace,b3_spagcn,b4_stagate"),
+    clustering_target = spatial_env_integer("SPATIAL_CLUSTER_TARGET", spatial_env_integer("TARGET_CLUSTERS", 8L)),
     default_hvg_n = spatial_env_integer("SPATIAL_HVG_NFEATURES", spatial_env_integer("HVG_NFEATURES", 2000L)),
     module_version = spatial_env_or_default("MODULE_SPATIAL_01_VERSION", "1.0"),
-    module_02_version = spatial_env_or_default("MODULE_SPATIAL_02_VERSION", "1.0")
+    module_02_version = spatial_env_or_default("MODULE_SPATIAL_02_VERSION", "1.0"),
+    module_03_version = spatial_env_or_default("MODULE_SPATIAL_03_VERSION", "1.0")
   )
 }
 
@@ -115,11 +149,23 @@ prepare_dirs_spatial <- function(cfg) {
     cfg$spatial_post_qc_overlay_dir,
     cfg$normalization_variants_dir,
     cfg$normalization_compare_dir,
+    cfg$spatial_integration_compare_dir,
+    cfg$spatial_integration_figure_dir,
+    cfg$clustering_variants_dir,
+    cfg$clustering_compare_dir,
+    cfg$clustering_compare_figure_dir,
+    cfg$spatial_region_annotation_dir,
+    cfg$spatial_region_annotation_figure_dir,
+    cfg$spatial_region_annotation_table_dir,
     dirname(cfg$module_01_manifest_path),
     dirname(cfg$module_01a_manifest_path),
     dirname(cfg$module_02_filter_manifest_path),
     dirname(cfg$module_02_eda_manifest_path),
     dirname(cfg$module_02_norm_manifest_path),
+    dirname(cfg$module_02a_integration_manifest_path),
+    dirname(cfg$module_02b_clustering_manifest_path),
+    dirname(cfg$module_03_region_annotation_manifest_path),
+    dirname(cfg$module_03a_region_annotation_eda_manifest_path),
     dirname(cfg$load_summary_csv),
     dirname(cfg$load_diagnostics_tsv),
     dirname(cfg$pre_qc_report_md),
@@ -127,7 +173,8 @@ prepare_dirs_spatial <- function(cfg) {
     dirname(cfg$qc_filter_summary_tsv),
     dirname(cfg$post_qc_report_md),
     dirname(cfg$post_filter_triage_tsv),
-    dirname(cfg$selected_method_tsv)
+    dirname(cfg$selected_method_tsv),
+    dirname(cfg$selected_backend_tsv)
   )
   invisible(lapply(dirs[nzchar(dirs)], ensure_dir))
 }

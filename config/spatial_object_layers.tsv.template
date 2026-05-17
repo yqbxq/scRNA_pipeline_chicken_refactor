@@ -1,6 +1,6 @@
-layer_id	layer_role	enabled	parent_layer	sample_include	sample_exclude	selection_column	selection_values	rebuild_normalization	hvg_nfeatures	pca_dims	target_clusters	res_range	res_fine_step	normalization_methods	integration_mode	vars_to_regress	description
-panorama_st	panorama	yes					yes	2000	1:30	8	0.4,0.6,0.8	0.05	sct	none		Merged spatial panorama across all enabled sections; Harmony is not default because stage and section are confounded at N=2.
-section_syf_1	section	yes	panorama_st			section_id	syf_1	yes	2000	1:30	6	0.4,0.6,0.8	0.05	sct	none		Per-section diagnostic view for syf_1.
-section_f5_1	section	yes	panorama_st			section_id	f5_1	yes	2000	1:30	6	0.4,0.6,0.8	0.05	sct	none		Per-section diagnostic view for f5_1.
-region_gc	region_subset	no	panorama_st			region	GC_rich	yes	1500	1:20	5	0.2,0.4,0.6	0.05	sct	none		Optional GC-rich region drilldown.
-region_tc	region_subset	no	panorama_st			region	TC_rich	yes	1500	1:20	5	0.2,0.4,0.6	0.05	sct	none		Optional TC-rich region drilldown.
+layer_id	layer_role	enabled	parent_layer	sample_include	sample_exclude	selection_column	selection_values	rebuild_normalization	hvg_nfeatures	pca_dims	target_clusters	res_range	res_fine_step	normalization_methods	integration_mode	clustering_backends	selected_clustering_backend	vars_to_regress	description
+panorama_st	panorama	yes					yes	2000	1:30	8	0.4,0.6,0.8	0.05	sct	none	b1_seurat_snn,b2_bayesspace,b3_spagcn,b4_stagate			Merged spatial panorama across all enabled sections; Harmony is not default because stage and section are confounded at N=2.
+section_syf_1	section	yes	panorama_st			section_id	syf_1	yes	2000	1:30	6	0.4,0.6,0.8	0.05	sct	none	b1_seurat_snn	b1_seurat_snn		Per-section diagnostic view for syf_1.
+section_f5_1	section	yes	panorama_st			section_id	f5_1	yes	2000	1:30	6	0.4,0.6,0.8	0.05	sct	none	b1_seurat_snn	b1_seurat_snn		Per-section diagnostic view for f5_1.
+region_gc	region_subset	no	panorama_st			region	GC_rich	yes	1500	1:20	5	0.2,0.4,0.6	0.05	sct	none	b1_seurat_snn	b1_seurat_snn		Optional GC-rich region drilldown.
+region_tc	region_subset	no	panorama_st			region	TC_rich	yes	1500	1:20	5	0.2,0.4,0.6	0.05	sct	none	b1_seurat_snn	b1_seurat_snn		Optional TC-rich region drilldown.

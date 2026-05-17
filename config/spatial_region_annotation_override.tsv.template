@@ -1,0 +1,2 @@
+cluster_id	override_region	notes
+# 3	GC_rich	Force cluster 3 to GC_rich when curated evidence supersedes the automatic call.

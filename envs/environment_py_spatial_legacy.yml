@@ -16,3 +16,7 @@ dependencies:
   - louvain
   - pytorch
   - pip
+  - pip:
+      - SpaGCN
+      - opencv-python
+      - python-louvain

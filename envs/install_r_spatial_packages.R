@@ -84,14 +84,15 @@ ensure_cran("BiocManager")
 for (pkg in c(
   "Seurat", "SeuratObject", "hdf5r", "reticulate", "yaml", "dplyr",
   "tibble", "tidyr", "readr", "ggplot2", "patchwork", "cowplot",
-  "ggrepel", "data.table", "broom", "dbscan", "sctransform"
+  "ggrepel", "data.table", "broom", "dbscan", "sctransform",
+  "harmony", "anndataR"
 )) {
   ensure_cran(pkg)
 }
 
 for (pkg in c(
   "SingleCellExperiment", "SpatialExperiment", "SummarizedExperiment",
-  "BiocParallel", "BiocNeighbors", "BayesSpace", "spatialDE"
+  "BiocParallel", "BiocNeighbors", "BayesSpace", "spatialDE", "rhdf5"
 )) {
   ensure_bioc(pkg)
 }
@@ -101,13 +102,15 @@ ensure_decoupleR()
 ensure_github("spacexr", "dmcable/spacexr")
 ensure_github("CARD", "YingMa0107/CARD")
 ensure_github("SPARK", "xzhoulab/SPARK")
+ensure_github("lisi", "immunogenomics/LISI")
 
 required_pkgs <- c(
   "Seurat", "SeuratObject", "hdf5r", "reticulate", "yaml", "dplyr",
   "tibble", "tidyr", "readr", "ggplot2", "patchwork", "cowplot",
-  "ggrepel", "data.table", "dbscan", "sctransform", "SingleCellExperiment", "SpatialExperiment",
+  "ggrepel", "data.table", "dbscan", "sctransform", "harmony", "anndataR",
+  "SingleCellExperiment", "SpatialExperiment",
   "SummarizedExperiment", "BiocParallel", "BayesSpace", "decoupleR",
-  "spatialDE", "spacexr", "CARD", "SPARK"
+  "spatialDE", "rhdf5", "spacexr", "CARD", "SPARK", "lisi"
 )
 assert_pkgs(required_pkgs, "空间分析")
 

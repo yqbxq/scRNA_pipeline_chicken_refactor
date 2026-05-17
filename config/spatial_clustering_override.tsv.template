@@ -1,0 +1,2 @@
+section_id	override_choice	notes
+# __DEFAULT__	b1_seurat_snn	Allowed choices: b1_seurat_snn,b2_bayesspace,b3_spagcn,b4_stagate.

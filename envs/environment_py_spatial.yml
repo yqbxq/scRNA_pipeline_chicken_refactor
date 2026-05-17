@@ -17,3 +17,6 @@ dependencies:
   - scikit-image
   - h5py
   - pip
+  - pip:
+      - STAGATE_pyG
+      - torch_geometric
