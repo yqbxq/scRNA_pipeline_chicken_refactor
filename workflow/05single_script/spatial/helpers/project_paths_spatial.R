@@ -34,6 +34,7 @@ get_spatial_script_config <- function() {
   clustering_compare_dir <- spatial_env_or_default("SPATIAL_CLUSTERING_COMPARE_DIR", file.path(report_dir, "spatial", "clustering_compare"))
   spatial_region_annotation_dir <- spatial_env_or_default("SPATIAL_REGION_ANNOTATION_DIR", spatial_env_or_default("SPATIAL_REGION_ANNOTATION_REPORT_DIR", file.path(eda_report_dir, "spatial_region_annotation")))
   spatial_region_annotation_table_dir <- spatial_env_or_default("SPATIAL_REGION_ANNOTATION_TABLE_DIR", file.path(spatial_table_dir, "spatial_region_annotation"))
+  spatial_subregion_annotation_dir <- spatial_env_or_default("SPATIAL_SUBREGION_ANNOTATION_REPORT_DIR", file.path(eda_report_dir, "spatial_subregion_annotation"))
   py_spatial_prefix <- spatial_env_or_default("PY_SPATIAL_ENV_PREFIX", "")
   py_spatial_legacy_prefix <- spatial_env_or_default("PY_SPATIAL_LEGACY_ENV_PREFIX", "")
   py_spatial_bin_default <- if (nzchar(py_spatial_prefix)) file.path(py_spatial_prefix, "bin", "python") else "python"
@@ -69,12 +70,21 @@ get_spatial_script_config <- function() {
     spatial_panorama_integrated_rds = file.path(spatial_checkpoint_dir, "spatial_panorama_integrated.rds"),
     spatial_panorama_clustered_rds = file.path(spatial_checkpoint_dir, "spatial_panorama_clustered.rds"),
     spatial_panorama_annotated_rds = file.path(spatial_checkpoint_dir, "spatial_panorama_annotated.rds"),
+    spatial_panorama_subannotated_rds = file.path(spatial_checkpoint_dir, "spatial_panorama_subannotated.rds"),
     clustering_variants_dir = spatial_env_or_default("SPATIAL_CLUSTERING_VARIANTS_DIR", file.path(spatial_checkpoint_dir, "clustering_variants")),
     clustering_compare_dir = clustering_compare_dir,
     clustering_compare_figure_dir = file.path(clustering_compare_dir, "figures"),
     spatial_region_annotation_dir = spatial_region_annotation_dir,
     spatial_region_annotation_figure_dir = file.path(spatial_region_annotation_dir, "figures"),
     spatial_region_annotation_table_dir = spatial_region_annotation_table_dir,
+    spatial_region_dir = spatial_env_or_default("SPATIAL_REGION_DIR", file.path(spatial_checkpoint_dir, "region_subsets")),
+    spatial_region_annotated_dir = spatial_env_or_default("SPATIAL_REGION_ANNOTATED_DIR", file.path(spatial_checkpoint_dir, "region_subsets_annotated")),
+    spatial_subcluster_build_table_dir = spatial_env_or_default("SPATIAL_SUBCLUSTER_BUILD_TABLE_DIR", file.path(spatial_table_dir, "spatial_04a_subcluster_build")),
+    spatial_subcluster_build_figure_dir = spatial_env_or_default("SPATIAL_SUBCLUSTER_BUILD_FIGURE_DIR", file.path(spatial_figure_dir, "spatial_04a_subcluster_build")),
+    spatial_subcluster_annotate_table_dir = spatial_env_or_default("SPATIAL_SUBCLUSTER_ANNOTATE_TABLE_DIR", file.path(spatial_table_dir, "spatial_04b_subcluster_annotate")),
+    spatial_subcluster_eda_table_dir = spatial_env_or_default("SPATIAL_SUBCLUSTER_EDA_TABLE_DIR", file.path(spatial_table_dir, "spatial_04c_subcluster_eda")),
+    spatial_subcluster_eda_figure_dir = spatial_env_or_default("SPATIAL_SUBCLUSTER_EDA_FIGURE_DIR", file.path(spatial_figure_dir, "spatial_04c_subcluster_eda")),
+    spatial_subregion_annotation_dir = spatial_subregion_annotation_dir,
     sample_sheet = spatial_env_or_default("SAMPLE_SHEET", file.path(metadata_dir, "samples.tsv")),
     canonical_sample_sheet = spatial_env_or_default("CANONICAL_SAMPLE_SHEET", file.path(metadata_dir, "samples.canonical.tsv")),
     section_sheet = spatial_env_or_default("SECTION_SHEET", file.path(metadata_dir, "sections.tsv")),
@@ -94,6 +104,9 @@ get_spatial_script_config <- function() {
     module_02b_clustering_manifest_path = file.path(manifest_dir, "spatial_02b_finalize_clustering", "_manifest.json"),
     module_03_region_annotation_manifest_path = file.path(manifest_dir, "spatial_03_region_annotation", "_manifest.json"),
     module_03a_region_annotation_eda_manifest_path = file.path(manifest_dir, "spatial_03a_region_annotation_eda", "_manifest.json"),
+    module_04a_subcluster_build_manifest_path = file.path(manifest_dir, "spatial_04a_subcluster_build", "_manifest.json"),
+    module_04b_subcluster_annotate_manifest_path = file.path(manifest_dir, "spatial_04b_subcluster_annotate", "_manifest.json"),
+    module_04c_subcluster_eda_manifest_path = file.path(manifest_dir, "spatial_04c_subcluster_eda", "_manifest.json"),
     load_summary_csv = file.path(spatial_table_dir, "load_summary.csv"),
     load_diagnostics_tsv = file.path(spatial_table_dir, "load_diagnostics.tsv"),
     pre_qc_report_md = file.path(spatial_pre_qc_report_dir, "report.md"),
@@ -127,9 +140,14 @@ get_spatial_script_config <- function() {
     clustering_backends = spatial_env_or_default("SPATIAL_CLUSTERING_BACKENDS", "b1_seurat_snn,b2_bayesspace,b3_spagcn,b4_stagate"),
     clustering_target = spatial_env_integer("SPATIAL_CLUSTER_TARGET", spatial_env_integer("TARGET_CLUSTERS", 8L)),
     default_hvg_n = spatial_env_integer("SPATIAL_HVG_NFEATURES", spatial_env_integer("HVG_NFEATURES", 2000L)),
+    subcluster_min_spots = spatial_env_integer("SPATIAL_SUBCLUSTER_MIN_SPOTS", 50L),
+    subcluster_small_cluster_frac = spatial_env_numeric("SPATIAL_SUBCLUSTER_SMALL_CLUSTER_FRAC", 0.02),
+    subcluster_triage_coherence_threshold = spatial_env_numeric("SPATIAL_SUBCLUSTER_TRIAGE_COHERENCE_THRESHOLD", 0.4),
+    subcluster_triage_overlap_threshold = spatial_env_numeric("SPATIAL_SUBCLUSTER_TRIAGE_OVERLAP_THRESHOLD", 0.30),
     module_version = spatial_env_or_default("MODULE_SPATIAL_01_VERSION", "1.0"),
     module_02_version = spatial_env_or_default("MODULE_SPATIAL_02_VERSION", "1.0"),
-    module_03_version = spatial_env_or_default("MODULE_SPATIAL_03_VERSION", "1.0")
+    module_03_version = spatial_env_or_default("MODULE_SPATIAL_03_VERSION", "1.0"),
+    module_04_version = spatial_env_or_default("MODULE_SPATIAL_04_VERSION", "1.0")
   )
 }
 
@@ -157,6 +175,14 @@ prepare_dirs_spatial <- function(cfg) {
     cfg$spatial_region_annotation_dir,
     cfg$spatial_region_annotation_figure_dir,
     cfg$spatial_region_annotation_table_dir,
+    cfg$spatial_region_dir,
+    cfg$spatial_region_annotated_dir,
+    cfg$spatial_subcluster_build_table_dir,
+    cfg$spatial_subcluster_build_figure_dir,
+    cfg$spatial_subcluster_annotate_table_dir,
+    cfg$spatial_subcluster_eda_table_dir,
+    cfg$spatial_subcluster_eda_figure_dir,
+    cfg$spatial_subregion_annotation_dir,
     dirname(cfg$module_01_manifest_path),
     dirname(cfg$module_01a_manifest_path),
     dirname(cfg$module_02_filter_manifest_path),
@@ -166,6 +192,9 @@ prepare_dirs_spatial <- function(cfg) {
     dirname(cfg$module_02b_clustering_manifest_path),
     dirname(cfg$module_03_region_annotation_manifest_path),
     dirname(cfg$module_03a_region_annotation_eda_manifest_path),
+    dirname(cfg$module_04a_subcluster_build_manifest_path),
+    dirname(cfg$module_04b_subcluster_annotate_manifest_path),
+    dirname(cfg$module_04c_subcluster_eda_manifest_path),
     dirname(cfg$load_summary_csv),
     dirname(cfg$load_diagnostics_tsv),
     dirname(cfg$pre_qc_report_md),

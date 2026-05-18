@@ -1,0 +1,7 @@
+layer_id	celltype	gene	evidence_source	tissue	panel_name	evidence_note	confidence_ceiling
+region_tc	inner_cuff	CD8A	template	ovary	subregion_tc_v1	Example TC inner-cuff marker; replace before enabling.	open
+region_tc	inner_cuff	CD8B	template	ovary	subregion_tc_v1	Example TC inner-cuff marker; replace before enabling.	open
+region_tc	outer_cuff	CD4	template	ovary	subregion_tc_v1	Example TC outer-cuff marker; replace before enabling.	open
+region_tc	outer_cuff	IL7R	template	ovary	subregion_tc_v1	Example TC outer-cuff marker; replace before enabling.	open
+region_tc	fdc_zone	CR2	template	ovary	subregion_tc_v1	Example TC FDC-zone marker; replace before enabling.	open
+region_tc	fdc_zone	FDCSP	template	ovary	subregion_tc_v1	Example TC FDC-zone marker; replace before enabling.	open

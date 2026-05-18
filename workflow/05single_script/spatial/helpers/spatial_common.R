@@ -904,6 +904,202 @@ spatial_layer_settings <- function(layer_file, layer_id = "panorama_st") {
   as.list(hit[1, , drop = FALSE])
 }
 
+spatial_region_subset_layers <- function(layer_file) {
+  layers <- spatial_read_tsv(layer_file)
+  if (nrow(layers) == 0 || !"layer_role" %in% colnames(layers)) {
+    return(data.frame(stringsAsFactors = FALSE))
+  }
+  layers[tolower(trimws(as.character(layers$layer_role))) == "region_subset", , drop = FALSE]
+}
+
+spatial_subset_panorama_by_region <- function(panorama, selection_column, selection_values) {
+  selection_column <- trimws(as.character(selection_column %||% ""))
+  if (!nzchar(selection_column) || !selection_column %in% colnames(panorama@meta.data)) {
+    stop(sprintf("selection column is missing from panorama metadata: %s", selection_column), call. = FALSE)
+  }
+  values <- spatial_tokenize(selection_values)
+  if (length(values) == 0) {
+    stop("selection_values is empty for region subset layer", call. = FALSE)
+  }
+  meta_values <- as.character(panorama@meta.data[[selection_column]])
+  keep <- rownames(panorama@meta.data)[meta_values %in% values]
+  if (length(keep) == 0) {
+    stop(sprintf("region subset selection returned no spots: %s in %s", paste(values, collapse = ","), selection_column), call. = FALSE)
+  }
+  Seurat::subset(panorama, cells = keep)
+}
+
+spatial_layer_normalization_method <- function(layer_settings) {
+  method <- spatial_tokenize(layer_settings$normalization_methods %||% "")
+  method <- tolower(if (length(method) == 0) "log" else method[[1]])
+  if (method %in% c("sct", "sctransform", "m2_sct_v1", "m3_sct_v2")) {
+    "sct"
+  } else {
+    "log"
+  }
+}
+
+rebuild_layer_normalization_st <- function(subset_obj, layer_settings) {
+  rebuild <- spatial_bool(layer_settings$rebuild_normalization %||% "yes", default = TRUE)
+  method <- spatial_layer_normalization_method(layer_settings)
+  hvg_n <- as.integer(spatial_numeric_or(layer_settings$hvg_nfeatures, 1500L))
+  hvg_n <- max(50L, min(hvg_n, nrow(subset_obj)))
+  vars_to_regress <- intersect(spatial_tokenize(layer_settings$vars_to_regress %||% ""), colnames(subset_obj@meta.data))
+  if (!rebuild) {
+    subset_obj@misc$subcluster_normalization <- list(method = "inherited", hvg_nfeatures = length(Seurat::VariableFeatures(subset_obj)), vars_to_regress = vars_to_regress)
+    return(subset_obj)
+  }
+  if (identical(method, "sct")) {
+    vst_flavor <- Sys.getenv("SPATIAL_SCT_VST_FLAVOR", unset = "v2")
+    regress_arg <- if (length(vars_to_regress) > 0) vars_to_regress else NULL
+    subset_obj <- Seurat::SCTransform(
+      subset_obj,
+      variable.features.n = hvg_n,
+      vars.to.regress = regress_arg,
+      vst.flavor = vst_flavor,
+      verbose = FALSE
+    )
+    Seurat::DefaultAssay(subset_obj) <- "SCT"
+  } else {
+    assay <- spatial_assay_name(subset_obj)
+    Seurat::DefaultAssay(subset_obj) <- assay
+    subset_obj <- Seurat::NormalizeData(subset_obj, assay = assay, verbose = FALSE)
+    subset_obj <- Seurat::FindVariableFeatures(subset_obj, assay = assay, nfeatures = hvg_n, verbose = FALSE)
+    regress_arg <- if (length(vars_to_regress) > 0) vars_to_regress else NULL
+    subset_obj <- Seurat::ScaleData(subset_obj, assay = assay, vars.to.regress = regress_arg, verbose = FALSE)
+  }
+  subset_obj@misc$subcluster_normalization <- list(method = method, hvg_nfeatures = hvg_n, vars_to_regress = vars_to_regress)
+  subset_obj
+}
+
+pick_subcluster_resolution <- function(metrics_df, target_clusters) {
+  if (nrow(metrics_df) == 0 || !"cluster_N" %in% colnames(metrics_df)) {
+    return("")
+  }
+  ok <- metrics_df[metrics_df$status == "ok" & is.finite(metrics_df$cluster_N), , drop = FALSE]
+  if (nrow(ok) == 0) {
+    return("")
+  }
+  ok$distance <- abs(as.numeric(ok$cluster_N) - as.numeric(target_clusters))
+  ok$silhouette_sort <- if ("silhouette_pca" %in% colnames(ok)) ifelse(is.finite(ok$silhouette_pca), ok$silhouette_pca, -Inf) else -Inf
+  ok <- ok[order(ok$distance, -ok$silhouette_sort, as.numeric(ok$resolution)), , drop = FALSE]
+  as.character(ok$resolution[[1]])
+}
+
+cluster_subset_snn_st <- function(subset_obj, layer_settings) {
+  dims <- spatial_parse_dims(layer_settings$pca_dims %||% "1:20", fallback = 1:20)
+  target_clusters <- as.integer(spatial_numeric_or(layer_settings$target_clusters, 5L))
+  res_range <- spatial_parse_numeric_vector(layer_settings$res_range %||% "", fallback = c(0.2, 0.4, 0.6))
+  res_fine_step <- spatial_numeric_or(layer_settings$res_fine_step, 0.05)
+  if (length(res_range) >= 2 && is.finite(res_fine_step) && res_fine_step > 0) {
+    res_values <- sort(unique(c(res_range, seq(min(res_range), max(res_range), by = res_fine_step))))
+  } else {
+    res_values <- res_range
+  }
+  res_values <- res_values[is.finite(res_values) & res_values >= 0]
+  if (length(res_values) == 0) {
+    res_values <- c(0.4, 0.6)
+  }
+
+  assay <- spatial_panorama_assay(subset_obj)
+  Seurat::DefaultAssay(subset_obj) <- assay
+  features <- intersect(Seurat::VariableFeatures(subset_obj), rownames(subset_obj))
+  if (length(features) < 10) {
+    features <- compute_panorama_hvg(subset_obj, hvg_n = min(1500L, nrow(subset_obj)))
+  }
+  features <- intersect(features, rownames(subset_obj))
+  npcs <- min(max(dims), length(features), max(1L, ncol(subset_obj) - 1L))
+  if (npcs < 1L || length(features) == 0) {
+    stop("subset PCA cannot run with zero features or fewer than two spots", call. = FALSE)
+  }
+  subset_obj <- Seurat::RunPCA(subset_obj, assay = assay, features = features, npcs = npcs, reduction.name = "pca_subcluster", verbose = FALSE)
+  dims <- dims[dims <= npcs]
+  if (length(dims) == 0) {
+    dims <- seq_len(npcs)
+  }
+  subset_obj <- spatial_run_umap_or_fallback(subset_obj, "pca_subcluster", "umap_subcluster", dims)
+  k_param <- max(5L, min(20L, floor(ncol(subset_obj) / 3L)))
+  if (k_param >= ncol(subset_obj)) {
+    k_param <- max(1L, ncol(subset_obj) - 1L)
+  }
+  subset_obj <- tryCatch(
+    Seurat::FindNeighbors(subset_obj, reduction = "pca_subcluster", dims = dims, k.param = k_param, graph.name = "subcluster_snn", verbose = FALSE),
+    error = function(e) Seurat::FindNeighbors(subset_obj, reduction = "pca_subcluster", dims = dims, k.param = k_param, verbose = FALSE)
+  )
+  use_named_graph <- "subcluster_snn" %in% names(subset_obj@graphs)
+
+  search_rows <- list()
+  candidates <- list()
+  for (res in res_values) {
+    candidate <- tryCatch({
+      if (use_named_graph) {
+        Seurat::FindClusters(subset_obj, graph.name = "subcluster_snn", resolution = res, verbose = FALSE)
+      } else {
+        Seurat::FindClusters(subset_obj, resolution = res, verbose = FALSE)
+      }
+    }, error = function(e) e)
+    if (inherits(candidate, "error")) {
+      search_rows[[length(search_rows) + 1L]] <- data.frame(
+        resolution = res,
+        cluster_N = NA_integer_,
+        silhouette_pca = NA_real_,
+        spatial_coherence_score = NA_real_,
+        status = "failed",
+        message = conditionMessage(candidate),
+        stringsAsFactors = FALSE
+      )
+      next
+    }
+    candidate$cluster_default <- factor(candidate@meta.data$seurat_clusters)
+    cluster_n <- length(unique(as.character(candidate$cluster_default)))
+    candidates[[as.character(res)]] <- candidate
+    search_rows[[length(search_rows) + 1L]] <- data.frame(
+      resolution = res,
+      cluster_N = cluster_n,
+      silhouette_pca = compute_silhouette_pca(candidate, "cluster_default", reduction = "pca_subcluster"),
+      spatial_coherence_score = compute_spatial_coherence_score(candidate, "cluster_default", k = 6L),
+      status = "ok",
+      message = "",
+      stringsAsFactors = FALSE
+    )
+  }
+  metrics_df <- if (length(search_rows) > 0) do.call(rbind, search_rows) else data.frame()
+  picked <- pick_subcluster_resolution(metrics_df, target_clusters)
+  if (!nzchar(picked) || is.null(candidates[[picked]])) {
+    stop("subcluster SNN failed for all requested resolutions", call. = FALSE)
+  }
+  out <- candidates[[picked]]
+  out@misc$subcluster_snn <- list(
+    selected_resolution = picked,
+    target_clusters = target_clusters,
+    k_param = k_param,
+    dims = dims,
+    search_table = metrics_df
+  )
+  list(obj = out, metrics_df = metrics_df, picked_resolution = picked)
+}
+
+merge_small_subclusters <- function(subset_obj, cluster_col, threshold_frac) {
+  if (!cluster_col %in% colnames(subset_obj@meta.data)) {
+    return(subset_obj)
+  }
+  threshold_frac <- suppressWarnings(as.numeric(threshold_frac))
+  if (!is.finite(threshold_frac) || threshold_frac <= 0) {
+    return(subset_obj)
+  }
+  clusters <- as.character(subset_obj@meta.data[[cluster_col]])
+  counts <- table(clusters)
+  cutoff <- length(clusters) * threshold_frac
+  small <- names(counts)[as.numeric(counts) < cutoff]
+  if (length(small) == 0) {
+    return(subset_obj)
+  }
+  clusters[clusters %in% small] <- paste0(clusters[clusters %in% small], "_merged_small")
+  subset_obj@meta.data[[cluster_col]] <- factor(clusters)
+  subset_obj@misc$subcluster_small_clusters <- list(threshold_frac = threshold_frac, small_clusters = small)
+  subset_obj
+}
+
 spatial_resolve_path <- function(path, base_dir) {
   path <- trimws(as.character(path %||% ""))
   if (!nzchar(path)) {
@@ -1807,6 +2003,174 @@ assign_region_labels <- function(panorama, evidence_df) {
     timestamp = as.character(Sys.time())
   )
   panorama
+}
+
+read_spatial_subregion_panel <- function(marker_panel_dir, layer_id) {
+  read_spatial_region_panel(marker_panel_dir, layer_id = layer_id)
+}
+
+spatial_prefix_subregion <- function(parent_region, sub_label) {
+  parent_region <- spatial_safe_id(parent_region)
+  sub_label <- spatial_safe_id(sub_label)
+  prefix <- paste0(parent_region, "_")
+  if (startsWith(sub_label, prefix)) {
+    sub_label
+  } else {
+    paste(parent_region, sub_label, sep = "_")
+  }
+}
+
+assign_subregion_labels <- function(subset_obj, evidence_df, parent_region) {
+  if (nrow(evidence_df) == 0) {
+    subset_obj$sub_region <- factor(rep(spatial_prefix_subregion(parent_region, "mixed_or_uncertain"), ncol(subset_obj)))
+    return(subset_obj)
+  }
+  cluster_col <- if ("cluster_default" %in% colnames(subset_obj@meta.data)) "cluster_default" else "seurat_clusters"
+  if (!cluster_col %in% colnames(subset_obj@meta.data)) {
+    stop("subset object does not contain cluster_default or seurat_clusters", call. = FALSE)
+  }
+  lookup <- stats::setNames(as.character(evidence_df$region), as.character(evidence_df$cluster))
+  raw <- lookup[as.character(subset_obj@meta.data[[cluster_col]])]
+  raw[is.na(raw) | !nzchar(raw)] <- "mixed_or_uncertain"
+  labels <- vapply(raw, function(x) spatial_prefix_subregion(parent_region, x), character(1))
+  subset_obj$sub_region <- factor(labels, levels = unique(labels))
+  evidence_out <- evidence_df
+  evidence_out$sub_region <- vapply(as.character(evidence_out$region), function(x) spatial_prefix_subregion(parent_region, x), character(1))
+  subset_obj@misc$subregion_annotation <- list(
+    parent_region = parent_region,
+    cluster_col = cluster_col,
+    evidence = evidence_out,
+    timestamp = as.character(Sys.time())
+  )
+  subset_obj
+}
+
+project_subregion_to_panorama <- function(panorama, subset_objs_list) {
+  values <- rep(NA_character_, ncol(panorama))
+  names(values) <- colnames(panorama)
+  projected <- list()
+  for (name in names(subset_objs_list)) {
+    obj <- subset_objs_list[[name]]
+    if (is.null(obj) || !"sub_region" %in% colnames(obj@meta.data)) {
+      next
+    }
+    common <- intersect(colnames(panorama), colnames(obj))
+    values[common] <- as.character(obj@meta.data[common, "sub_region", drop = TRUE])
+    projected[[name]] <- length(common)
+  }
+  levels <- unique(values[!is.na(values) & nzchar(values)])
+  panorama$sub_region <- factor(values, levels = levels)
+  panorama@misc$subregion_annotation <- list(
+    projected_layers = projected,
+    n_projected_spots = sum(!is.na(values)),
+    timestamp = as.character(Sys.time())
+  )
+  panorama
+}
+
+write_region_subset_assignment_tsv <- function(layer_results, out_path) {
+  rows <- lapply(layer_results, function(x) x$assignment %||% data.frame())
+  rows <- rows[vapply(rows, function(x) is.data.frame(x) && nrow(x) > 0, logical(1))]
+  if (length(rows) == 0) {
+    out <- data.frame(
+      layer_id = character(),
+      parent_region = character(),
+      cluster = character(),
+      sub_region = character(),
+      n_spots = integer(),
+      module_score_max = numeric(),
+      panel_hit_count_winner = integer(),
+      evidence_agreement = logical(),
+      confidence = character(),
+      stringsAsFactors = FALSE
+    )
+  } else {
+    out <- do.call(rbind, rows)
+  }
+  spatial_write_tsv(out, out_path)
+  out
+}
+
+summarize_subcluster_triage <- function(layer_results, cfg) {
+  rows <- list()
+  for (layer_id in names(layer_results)) {
+    result <- layer_results[[layer_id]]
+    status <- as.character(result$status %||% "")
+    obj <- result$obj
+    assignment <- result$assignment %||% data.frame()
+    if (!identical(status, "ok") || is.null(obj) || !"sub_region" %in% colnames(obj@meta.data)) {
+      rows[[length(rows) + 1L]] <- data.frame(
+        layer_id = layer_id,
+        signal = if (nzchar(status)) status else "missing_subregion",
+        status = if (status %in% c("skipped_no_enabled_layers", "no_subsets_built", "skipped")) "skipped" else "warn",
+        value = status,
+        threshold = "",
+        message = as.character(result$message %||% ""),
+        stringsAsFactors = FALSE
+      )
+      next
+    }
+    labels <- as.character(obj@meta.data$sub_region)
+    clusters <- if ("cluster_default" %in% colnames(obj@meta.data)) as.character(obj@meta.data$cluster_default) else labels
+    cluster_counts <- table(clusters)
+    small_any <- any(grepl("_merged_small$", names(cluster_counts)))
+    overlap_fraction <- if (nrow(assignment) == 0 || !"panel_hit_count_winner" %in% colnames(assignment)) {
+      NA_real_
+    } else {
+      mean(as.numeric(assignment$panel_hit_count_winner) > 0, na.rm = TRUE)
+    }
+    coherence <- compute_spatial_coherence_score(obj, "sub_region", k = 6L)
+    all_undetermined <- all(grepl("mixed_or_uncertain$", labels))
+    single_subcluster <- length(unique(labels[!is.na(labels)])) <= 1L
+    section_col <- if ("section_id" %in% colnames(obj@meta.data)) "section_id" else if ("spatial_section_id" %in% colnames(obj@meta.data)) "spatial_section_id" else ""
+    imbalance <- NA_real_
+    if (nzchar(section_col) && length(unique(obj@meta.data[[section_col]])) >= 2L) {
+      tab <- prop.table(table(obj@meta.data$sub_region, obj@meta.data[[section_col]]), margin = 2)
+      imbalance <- max(apply(tab, 1, function(x) max(x) - min(x)), na.rm = TRUE)
+    }
+    signal_df <- data.frame(
+      layer_id = layer_id,
+      signal = c("small_subcluster", "weak_marker_overlap", "low_spatial_coherence", "all_undetermined", "single_subcluster", "cross_section_imbalance"),
+      status = c(
+        if (small_any) "warn" else "ok",
+        if (is.finite(overlap_fraction) && overlap_fraction < cfg$subcluster_triage_overlap_threshold) "warn" else "ok",
+        if (is.finite(coherence) && coherence < cfg$subcluster_triage_coherence_threshold) "warn" else "ok",
+        if (all_undetermined) "warn" else "ok",
+        if (single_subcluster) "warn" else "ok",
+        if (is.finite(imbalance) && imbalance > 0.5) "warn" else "ok"
+      ),
+      value = c(
+        paste(names(cluster_counts), as.integer(cluster_counts), sep = ":", collapse = ","),
+        sprintf("%.3f", overlap_fraction),
+        sprintf("%.3f", coherence),
+        as.character(all_undetermined),
+        as.character(single_subcluster),
+        sprintf("%.3f", imbalance)
+      ),
+      threshold = c(
+        sprintf("< %.3f of layer spots", cfg$subcluster_small_cluster_frac),
+        sprintf(">= %.3f", cfg$subcluster_triage_overlap_threshold),
+        sprintf(">= %.3f", cfg$subcluster_triage_coherence_threshold),
+        "FALSE",
+        "FALSE",
+        "<= 0.500"
+      ),
+      message = c(
+        "cluster sizes after small-cluster suffixing",
+        "fraction of subclusters with at least one winning panel marker hit",
+        "mean same-sub_region spatial kNN fraction within section",
+        "all labels are mixed_or_uncertain",
+        "layer produced only one sub_region label",
+        if (is.finite(imbalance)) "maximum section-wise fraction difference for any sub_region" else "skipped because fewer than two sections are available"
+      ),
+      stringsAsFactors = FALSE
+    )
+    rows[[length(rows) + 1L]] <- signal_df
+  }
+  if (length(rows) == 0) {
+    return(data.frame(layer_id = character(), signal = character(), status = character(), value = character(), threshold = character(), message = character(), stringsAsFactors = FALSE))
+  }
+  do.call(rbind, rows)
 }
 
 compute_region_triage <- function(panorama, evidence_df) {

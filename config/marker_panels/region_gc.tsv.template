@@ -1,0 +1,7 @@
+layer_id	celltype	gene	evidence_source	tissue	panel_name	evidence_note	confidence_ceiling
+region_gc	inner_ring	BCL6	template	ovary	subregion_gc_v1	Example GC inner-ring marker; replace before enabling.	open
+region_gc	inner_ring	AICDA	template	ovary	subregion_gc_v1	Example GC inner-ring marker; replace before enabling.	open
+region_gc	inner_ring	MEF2B	template	ovary	subregion_gc_v1	Example GC inner-ring marker; replace before enabling.	open
+region_gc	outer_ring	CD20	template	ovary	subregion_gc_v1	Example GC outer-ring marker; replace before enabling.	open
+region_gc	outer_ring	MS4A1	template	ovary	subregion_gc_v1	Example GC outer-ring marker; replace before enabling.	open
+region_gc	outer_ring	BANK1	template	ovary	subregion_gc_v1	Example GC outer-ring marker; replace before enabling.	open

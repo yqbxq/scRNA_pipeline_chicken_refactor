@@ -457,6 +457,8 @@ EOF
   cp -f "${PIPELINE_ROOT}/config/spatial_region_annotation_override.tsv.template" "${SPATIAL_REGION_ANNOTATION_OVERRIDE_FILE}"
   cp -f "${PIPELINE_ROOT}/config/spatial_intake_contract.tsv.template" "${SPATIAL_INTAKE_CONTRACT_FILE}"
   cp -f "${PIPELINE_ROOT}/config/marker_panels/spatial_region_panel.tsv.template" "${MARKER_PANEL_DIR}/spatial_region_panel.tsv.template"
+  cp -f "${PIPELINE_ROOT}/config/marker_panels/region_gc.tsv.template" "${MARKER_PANEL_DIR}/region_gc.tsv.template"
+  cp -f "${PIPELINE_ROOT}/config/marker_panels/region_tc.tsv.template" "${MARKER_PANEL_DIR}/region_tc.tsv.template"
 }
 
 write_status_json() {

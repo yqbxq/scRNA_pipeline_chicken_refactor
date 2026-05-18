@@ -144,6 +144,8 @@ EOF
   cp "${pipeline_root}/config/spatial_region_annotation_override.tsv.template" "${tmp_root}/project/config/spatial_region_annotation_override.tsv"
   cp "${pipeline_root}/config/eda_gates.tsv.template" "${tmp_root}/project/config/eda_gates.tsv"
   cp "${pipeline_root}/config/marker_panels/spatial_region_panel.tsv.template" "${tmp_root}/project/config/marker_panels/spatial_region_panel.tsv"
+  cp "${pipeline_root}/config/marker_panels/region_gc.tsv.template" "${tmp_root}/project/config/marker_panels/region_gc.tsv.template"
+  cp "${pipeline_root}/config/marker_panels/region_tc.tsv.template" "${tmp_root}/project/config/marker_panels/region_tc.tsv.template"
 
   export SCRNA_PIPELINE_CONFIG="${tmp_root}/project/config/project_config.sh"
   set -a
