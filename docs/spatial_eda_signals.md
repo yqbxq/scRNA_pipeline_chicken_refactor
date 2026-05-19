@@ -24,4 +24,4 @@ ST 04 sub-region EDA adds six signals in `tables/spatial_04c_subcluster_eda/tria
 | `low_spatial_coherence` | Mean same-label spatial kNN coherence for `sub_region` is below `SPATIAL_SUBCLUSTER_TRIAGE_COHERENCE_THRESHOLD`. |
 | `all_undetermined` | Every assigned sub-region for the layer is `mixed_or_uncertain`. |
 | `single_subcluster` | A layer produced only one sub-region label, so it is not informative as a drilldown. |
-| `cross_section_imbalance` | With two or more sections, a sub-region's relative section fraction differs by more than 50 percentage points. |
+| `cross_section_imbalance` | With two or more sections, a sub-region's relative section fraction differs by more than `SPATIAL_SUBCLUSTER_TRIAGE_IMBALANCE_THRESHOLD`, default `0.5`. |

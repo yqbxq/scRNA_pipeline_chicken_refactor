@@ -2049,12 +2049,28 @@ project_subregion_to_panorama <- function(panorama, subset_objs_list) {
   values <- rep(NA_character_, ncol(panorama))
   names(values) <- colnames(panorama)
   projected <- list()
+  mismatches <- list()
   for (name in names(subset_objs_list)) {
     obj <- subset_objs_list[[name]]
     if (is.null(obj) || !"sub_region" %in% colnames(obj@meta.data)) {
       next
     }
     common <- intersect(colnames(panorama), colnames(obj))
+    missing <- setdiff(colnames(obj), colnames(panorama))
+    if (length(missing) > 0) {
+      mismatch_rate <- length(missing) / ncol(obj)
+      mismatches[[name]] <- list(n_missing = length(missing), rate = mismatch_rate, head = head(missing, 5))
+      if (mismatch_rate > 0.01) {
+        warning(sprintf(
+          "project_subregion_to_panorama: layer %s has %d/%d (%.1f%%) barcodes missing from panorama (first: %s)",
+          name,
+          length(missing),
+          ncol(obj),
+          mismatch_rate * 100,
+          paste(head(missing, 3), collapse = ",")
+        ), call. = FALSE)
+      }
+    }
     values[common] <- as.character(obj@meta.data[common, "sub_region", drop = TRUE])
     projected[[name]] <- length(common)
   }
@@ -2062,6 +2078,7 @@ project_subregion_to_panorama <- function(panorama, subset_objs_list) {
   panorama$sub_region <- factor(values, levels = levels)
   panorama@misc$subregion_annotation <- list(
     projected_layers = projected,
+    barcode_mismatches = mismatches,
     n_projected_spots = sum(!is.na(values)),
     timestamp = as.character(Sys.time())
   )
@@ -2137,7 +2154,7 @@ summarize_subcluster_triage <- function(layer_results, cfg) {
         if (is.finite(coherence) && coherence < cfg$subcluster_triage_coherence_threshold) "warn" else "ok",
         if (all_undetermined) "warn" else "ok",
         if (single_subcluster) "warn" else "ok",
-        if (is.finite(imbalance) && imbalance > 0.5) "warn" else "ok"
+        if (is.finite(imbalance) && imbalance > cfg$subcluster_triage_imbalance_threshold) "warn" else "ok"
       ),
       value = c(
         paste(names(cluster_counts), as.integer(cluster_counts), sep = ":", collapse = ","),
@@ -2153,7 +2170,7 @@ summarize_subcluster_triage <- function(layer_results, cfg) {
         sprintf(">= %.3f", cfg$subcluster_triage_coherence_threshold),
         "FALSE",
         "FALSE",
-        "<= 0.500"
+        sprintf("> %.3f", cfg$subcluster_triage_imbalance_threshold)
       ),
       message = c(
         "cluster sizes after small-cluster suffixing",

@@ -144,10 +144,11 @@ get_spatial_script_config <- function() {
     subcluster_small_cluster_frac = spatial_env_numeric("SPATIAL_SUBCLUSTER_SMALL_CLUSTER_FRAC", 0.02),
     subcluster_triage_coherence_threshold = spatial_env_numeric("SPATIAL_SUBCLUSTER_TRIAGE_COHERENCE_THRESHOLD", 0.4),
     subcluster_triage_overlap_threshold = spatial_env_numeric("SPATIAL_SUBCLUSTER_TRIAGE_OVERLAP_THRESHOLD", 0.30),
+    subcluster_triage_imbalance_threshold = spatial_env_numeric("SPATIAL_SUBCLUSTER_TRIAGE_IMBALANCE_THRESHOLD", 0.5),
     module_version = spatial_env_or_default("MODULE_SPATIAL_01_VERSION", "1.0"),
     module_02_version = spatial_env_or_default("MODULE_SPATIAL_02_VERSION", "1.0"),
     module_03_version = spatial_env_or_default("MODULE_SPATIAL_03_VERSION", "1.0"),
-    module_04_version = spatial_env_or_default("MODULE_SPATIAL_04_VERSION", "1.0")
+    module_04_version = spatial_env_or_default("MODULE_SPATIAL_04_VERSION", "1.1")
   )
 }
 
