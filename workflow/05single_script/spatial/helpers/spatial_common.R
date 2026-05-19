@@ -2238,3 +2238,396 @@ compute_region_triage <- function(panorama, evidence_df) {
     stringsAsFactors = FALSE
   )
 }
+
+spatial_split_csv <- function(value) {
+  value <- trimws(as.character(value %||% ""))
+  if (!nzchar(value)) {
+    return(character(0))
+  }
+  out <- trimws(unlist(strsplit(value, "[,;]+", perl = TRUE), use.names = FALSE))
+  out[nzchar(out)]
+}
+
+filter_comparisons_by_modality <- function(comparisons_df, modality = "spatial") {
+  if (nrow(comparisons_df) == 0) {
+    return(comparisons_df)
+  }
+  if (!"analysis_modality" %in% colnames(comparisons_df)) {
+    comparisons_df$analysis_modality <- "scrna"
+  }
+  if (!"enabled" %in% colnames(comparisons_df)) {
+    comparisons_df$enabled <- "yes"
+  }
+  keep <- tolower(trimws(as.character(comparisons_df$analysis_modality))) == tolower(modality) &
+    tolower(trimws(as.character(comparisons_df$enabled))) != "no"
+  comparisons_df[keep, , drop = FALSE]
+}
+
+read_spatial_comparisons_05 <- function(cfg) {
+  expected <- c(
+    "comparison_id", "source_question_id", "display_question_id", "output_alias",
+    "report_title", "layer_scope", "contrast_axis", "analysis_mode",
+    "analysis_modality", "analysis_unit", "stat_level", "group_var", "ident_1",
+    "ident_2", "subset_column", "subset_value", "aggregation_group_var",
+    "composition_group_var", "batch_var", "enabled", "min_biological_replicates",
+    "force_exploratory", "min_cells_per_group", "logfc_threshold",
+    "produces_gene_program", "gene_program_role", "notes"
+  )
+  df <- spatial_read_tsv(cfg$comparison_sheet)
+  for (col in expected) {
+    if (!col %in% colnames(df)) {
+      df[[col]] <- character(nrow(df))
+    }
+  }
+  if (nrow(df) == 0) {
+    return(df[, expected, drop = FALSE])
+  }
+  df <- df[, expected, drop = FALSE]
+  char_cols <- setdiff(expected, c("min_biological_replicates", "min_cells_per_group", "logfc_threshold"))
+  for (col in char_cols) {
+    df[[col]] <- trimws(as.character(df[[col]]))
+    df[[col]][is.na(df[[col]])] <- ""
+  }
+  df$enabled[!nzchar(df$enabled)] <- "yes"
+  df$analysis_modality[!nzchar(df$analysis_modality)] <- "scrna"
+  df$layer_scope[!nzchar(df$layer_scope)] <- "panorama_st"
+  df$group_var[!nzchar(df$group_var)] <- "condition"
+  df$analysis_mode[!nzchar(df$analysis_mode)] <- "condition_pairwise"
+  df$analysis_unit[!nzchar(df$analysis_unit)] <- "region"
+  df$stat_level[!nzchar(df$stat_level)] <- "spot_level_exploratory"
+  df$force_exploratory[!nzchar(df$force_exploratory)] <- "no"
+  df$min_biological_replicates <- suppressWarnings(as.integer(df$min_biological_replicates))
+  df$min_biological_replicates[is.na(df$min_biological_replicates)] <- 3L
+  df$min_cells_per_group <- suppressWarnings(as.integer(df$min_cells_per_group))
+  df$min_cells_per_group[is.na(df$min_cells_per_group)] <- 3L
+  df$logfc_threshold <- suppressWarnings(as.numeric(df$logfc_threshold))
+  df$logfc_threshold[is.na(df$logfc_threshold)] <- cfg$spatial_marker_logfc_threshold %||% 0.25
+  filter_comparisons_by_modality(df, "spatial")
+}
+
+spatial_comparison_vars_05 <- function(row, cfg) {
+  comparison_id <- spatial_cell(row, "comparison_id", "")
+  if (!nzchar(comparison_id)) {
+    comparison_id <- sprintf("%s_vs_%s", spatial_cell(row, "ident_1", "ident1"), spatial_cell(row, "ident_2", "ident2"))
+  }
+  list(
+    comparison_id = comparison_id,
+    ident_1 = spatial_cell(row, "ident_1", ""),
+    ident_2 = spatial_cell(row, "ident_2", ""),
+    group_var = spatial_cell(row, "group_var", "condition"),
+    batch_var = spatial_cell(row, "batch_var", "batch"),
+    layer_scope = spatial_cell(row, "layer_scope", "panorama_st"),
+    analysis_mode = spatial_cell(row, "analysis_mode", "condition_pairwise"),
+    analysis_unit = spatial_cell(row, "analysis_unit", "region"),
+    stat_level = spatial_cell(row, "stat_level", "spot_level_exploratory"),
+    gene_program_role = spatial_cell(row, "gene_program_role", ""),
+    subset_column = spatial_cell(row, "subset_column", ""),
+    subset_value = spatial_cell(row, "subset_value", ""),
+    force_exploratory = tolower(spatial_cell(row, "force_exploratory", "no")) %in% c("yes", "true", "1", "on"),
+    min_biological_replicates = as.integer(row$min_biological_replicates[[1]] %||% 3L),
+    min_cells_per_group = as.integer(row$min_cells_per_group[[1]] %||% 3L),
+    logfc_threshold = as.numeric(row$logfc_threshold[[1]] %||% (cfg$spatial_marker_logfc_threshold %||% 0.25)),
+    min_pct = cfg$spatial_marker_min_pct %||% 0.10,
+    top_n = cfg$spatial_marker_top_n %||% 20L
+  )
+}
+
+load_panorama_for_05 <- function(cfg) {
+  path <- if (file.exists(cfg$spatial_panorama_subannotated_rds)) {
+    cfg$spatial_panorama_subannotated_rds
+  } else {
+    cfg$spatial_panorama_annotated_rds
+  }
+  if (!file.exists(path)) {
+    stop(sprintf("missing spatial panorama for module 05: %s", path), call. = FALSE)
+  }
+  obj <- readRDS(path)
+  list(object = obj, path = path, has_sub_region = "sub_region" %in% colnames(obj@meta.data))
+}
+
+spatial_layer_ids_for_comparison <- function(vars) {
+  values <- spatial_split_csv(vars$layer_scope)
+  if (length(values) == 0 || any(values %in% c("*", "all"))) {
+    return("panorama_st")
+  }
+  values
+}
+
+subset_panorama_for_comparison_05 <- function(obj, vars) {
+  if (!nzchar(vars$subset_column) || !nzchar(vars$subset_value)) {
+    return(list(object = obj, status = "ok", reason = ""))
+  }
+  if (!vars$subset_column %in% colnames(obj@meta.data)) {
+    return(list(object = obj[, FALSE], status = "failed_design_resolution", reason = sprintf("missing subset_column=%s", vars$subset_column)))
+  }
+  keep_values <- spatial_split_csv(vars$subset_value)
+  keep <- as.character(obj@meta.data[[vars$subset_column]]) %in% keep_values
+  if (!any(keep, na.rm = TRUE)) {
+    return(list(object = obj[, FALSE], status = "skipped_too_few_spots", reason = "comparison subset matched no spots"))
+  }
+  list(object = subset(obj, cells = colnames(obj)[keep]), status = "ok", reason = "")
+}
+
+spatial_group_bys_05 <- function(obj) {
+  out <- "region"
+  if ("sub_region" %in% colnames(obj@meta.data)) {
+    out <- c(out, "sub_region")
+  }
+  out
+}
+
+spatial_valid_group_values_05 <- function(meta, group_by_col, include_undetermined = FALSE) {
+  values <- unique(as.character(meta[[group_by_col]]))
+  values <- values[!is.na(values) & nzchar(values)]
+  if (identical(group_by_col, "sub_region") && !include_undetermined) {
+    values <- setdiff(values, c("mixed_or_uncertain", "undetermined", "unknown", "NA"))
+  }
+  sort(values)
+}
+
+spatial_parent_region_for_value <- function(meta, group_by_col, group_value) {
+  if (!identical(group_by_col, "sub_region") || !"region" %in% colnames(meta)) {
+    return("")
+  }
+  hits <- meta[as.character(meta[[group_by_col]]) == group_value, "region", drop = TRUE]
+  hits <- unique(as.character(hits[!is.na(hits) & nzchar(hits)]))
+  if (length(hits) == 0) "" else paste(hits, collapse = ",")
+}
+
+replicate_gate_check_st <- function(panorama, group_by_col, group_var, vars, sample_col = "sample_id") {
+  meta <- panorama@meta.data
+  if (!group_var %in% colnames(meta)) {
+    return(list(status = "failed_design_resolution", pass = FALSE, reason = sprintf("missing group_var=%s", group_var), table = data.frame()))
+  }
+  if (!sample_col %in% colnames(meta)) {
+    sample_col <- if ("orig.ident" %in% colnames(meta)) "orig.ident" else ""
+  }
+  if (!nzchar(sample_col)) {
+    return(list(status = "skipped_replicate_gate", pass = FALSE, reason = "missing sample_id/orig.ident metadata", table = data.frame()))
+  }
+  groups <- c(vars$ident_1, vars$ident_2)
+  gate_rows <- lapply(groups[nzchar(groups)], function(group_id) {
+    sub <- meta[as.character(meta[[group_var]]) == group_id, , drop = FALSE]
+    samples <- unique(as.character(sub[[sample_col]]))
+    samples <- samples[!is.na(samples) & nzchar(samples)]
+    data.frame(group_id = group_id, sample_n = length(samples), spot_n = nrow(sub), stringsAsFactors = FALSE)
+  })
+  gate_table <- if (length(gate_rows) > 0) do.call(rbind, gate_rows) else data.frame(group_id = character(), sample_n = integer(), spot_n = integer())
+  min_n <- if (nrow(gate_table) > 0) min(gate_table$sample_n, na.rm = TRUE) else 0L
+  pass <- is.finite(min_n) && min_n >= vars$min_biological_replicates
+  list(
+    status = if (pass) "pass" else "skip",
+    pass = pass,
+    reason = if (pass) "" else sprintf("min sample_n=%s < min_biological_replicates=%s", min_n, vars$min_biological_replicates),
+    table = gate_table
+  )
+}
+
+compute_region_markers_st <- function(panorama, group_by_col, vars, include_undetermined = FALSE) {
+  meta <- panorama@meta.data
+  if (!group_by_col %in% colnames(meta)) {
+    return(list(markers = data.frame(), summary = data.frame(), status = "failed_design_resolution", reason = sprintf("missing group_by=%s", group_by_col)))
+  }
+  values <- spatial_valid_group_values_05(meta, group_by_col, include_undetermined)
+  count_df <- data.frame(
+    group_value = values,
+    n_spots = vapply(values, function(value) sum(as.character(meta[[group_by_col]]) == value, na.rm = TRUE), integer(1)),
+    stringsAsFactors = FALSE
+  )
+  count_df$status <- ifelse(count_df$n_spots >= vars$min_cells_per_group, "ok", "skipped_too_few_spots")
+  count_df$reason <- ifelse(count_df$status == "ok", "", sprintf("n_spots < min_cells_per_group=%s", vars$min_cells_per_group))
+  ok_values <- count_df$group_value[count_df$status == "ok"]
+  if (length(ok_values) < 2L) {
+    return(list(markers = data.frame(), summary = count_df, status = "skipped_too_few_spots", reason = "fewer than two groups have enough spots"))
+  }
+  keep <- as.character(meta[[group_by_col]]) %in% ok_values
+  obj <- subset(panorama, cells = colnames(panorama)[keep])
+  assay <- spatial_assay_name(obj)
+  Seurat::DefaultAssay(obj) <- assay
+  Seurat::Idents(obj) <- group_by_col
+  res <- tryCatch(
+    Seurat::FindAllMarkers(
+      obj,
+      only.pos = TRUE,
+      group.by = group_by_col,
+      logfc.threshold = vars$logfc_threshold,
+      min.pct = vars$min_pct,
+      test.use = "wilcox",
+      verbose = FALSE
+    ),
+    error = function(e) e
+  )
+  if (inherits(res, "error")) {
+    count_df$status[count_df$status == "ok"] <- "failed_findmarkers"
+    count_df$reason[count_df$status == "failed_findmarkers"] <- conditionMessage(res)
+    return(list(markers = data.frame(), summary = count_df, status = "failed_findmarkers", reason = conditionMessage(res)))
+  }
+  markers <- as.data.frame(res, stringsAsFactors = FALSE)
+  if (nrow(markers) > 0 && !"gene" %in% colnames(markers)) {
+    markers$gene <- rownames(markers)
+  }
+  if (nrow(markers) > 0 && "cluster" %in% colnames(markers)) {
+    markers$group_value <- as.character(markers$cluster)
+  }
+  list(markers = markers, summary = count_df, status = if (nrow(markers) > 0) "ok" else "failed_findmarkers", reason = if (nrow(markers) > 0) "" else "FindAllMarkers returned no rows")
+}
+
+compute_spatial_composition <- function(panorama, group_by_col, vars) {
+  meta <- panorama@meta.data
+  section_col <- if ("section_id" %in% colnames(meta)) "section_id" else if ("spatial_section_id" %in% colnames(meta)) "spatial_section_id" else if ("sample_id" %in% colnames(meta)) "sample_id" else "orig.ident"
+  sample_col <- if ("sample_id" %in% colnames(meta)) "sample_id" else if ("orig.ident" %in% colnames(meta)) "orig.ident" else section_col
+  if (!group_by_col %in% colnames(meta) || !vars$group_var %in% colnames(meta)) {
+    return(data.frame())
+  }
+  tab <- as.data.frame(table(
+    section_id = as.character(meta[[section_col]]),
+    sample_id = as.character(meta[[sample_col]]),
+    condition = as.character(meta[[vars$group_var]]),
+    group_value = as.character(meta[[group_by_col]])
+  ), stringsAsFactors = FALSE)
+  colnames(tab)[ncol(tab)] <- "n_spots"
+  tab <- tab[tab$n_spots > 0, , drop = FALSE]
+  totals <- aggregate(n_spots ~ section_id + sample_id + condition, tab, sum)
+  colnames(totals)[ncol(totals)] <- "section_total_spots"
+  out <- merge(tab, totals, by = c("section_id", "sample_id", "condition"), all.x = TRUE)
+  out$proportion <- ifelse(out$section_total_spots > 0, out$n_spots / out$section_total_spots, NA_real_)
+  out
+}
+
+run_formal_propeller_st <- function(prop_df, vars) {
+  if (nrow(prop_df) == 0) {
+    return(list(result = data.frame(), status = "failed_propeller", reason = "empty proportion table"))
+  }
+  if (!requireNamespace("limma", quietly = TRUE)) {
+    return(list(result = data.frame(), status = "skipped_no_packages", reason = "limma is required for formal composition testing"))
+  }
+  res <- tryCatch({
+    groups <- sort(unique(as.character(prop_df$group_value)))
+    samples <- sort(unique(as.character(prop_df$sample_id)))
+    mat <- matrix(NA_real_, nrow = length(groups), ncol = length(samples), dimnames = list(groups, samples))
+    for (i in seq_len(nrow(prop_df))) {
+      mat[as.character(prop_df$group_value[[i]]), as.character(prop_df$sample_id[[i]])] <- as.numeric(prop_df$proportion[[i]])
+    }
+    mat[is.na(mat)] <- 0
+    sample_info <- unique(prop_df[, c("sample_id", "condition"), drop = FALSE])
+    sample_info <- sample_info[match(samples, sample_info$sample_id), , drop = FALSE]
+    group <- factor(sample_info$condition, levels = c(vars$ident_2, vars$ident_1))
+    if (length(unique(group[!is.na(group)])) < 2L) {
+      stop("composition design has fewer than two groups", call. = FALSE)
+    }
+    y <- qlogis(pmin(pmax(mat, 1e-5), 1 - 1e-5))
+    design <- stats::model.matrix(~group)
+    fit <- limma::eBayes(limma::lmFit(y, design))
+    out <- limma::topTable(fit, coef = 2, number = Inf, sort.by = "P")
+    out$group_value <- rownames(out)
+    out
+  }, error = function(e) e)
+  if (inherits(res, "error")) {
+    return(list(result = data.frame(), status = "failed_propeller", reason = conditionMessage(res)))
+  }
+  list(result = res, status = if (nrow(res) > 0) "ok" else "failed_propeller", reason = if (nrow(res) > 0) "" else "limma returned no rows")
+}
+
+run_spatial_pseudobulk_de <- function(panorama, vars, group_by_col, region_value) {
+  if (!requireNamespace("edgeR", quietly = TRUE) || !requireNamespace("Matrix", quietly = TRUE)) {
+    return(list(result = data.frame(), status = "skipped_no_packages", reason = "edgeR and Matrix are required for formal pseudobulk DE"))
+  }
+  meta <- panorama@meta.data
+  if (!all(c(group_by_col, vars$group_var) %in% colnames(meta))) {
+    return(list(result = data.frame(), status = "failed_design_resolution", reason = "missing group_by or group_var column"))
+  }
+  sample_col <- if ("sample_id" %in% colnames(meta)) "sample_id" else if ("orig.ident" %in% colnames(meta)) "orig.ident" else ""
+  if (!nzchar(sample_col)) {
+    return(list(result = data.frame(), status = "failed_aggregation", reason = "missing sample_id/orig.ident metadata"))
+  }
+  keep <- as.character(meta[[group_by_col]]) == region_value & as.character(meta[[vars$group_var]]) %in% c(vars$ident_1, vars$ident_2)
+  cells <- rownames(meta)[keep]
+  if (length(cells) == 0) {
+    return(list(result = data.frame(), status = "skipped_too_few_spots", reason = "region has no spots for this comparison"))
+  }
+  counts <- spatial_counts_matrix(panorama)[, cells, drop = FALSE]
+  meta_sub <- meta[cells, , drop = FALSE]
+  sample_ids <- as.character(meta_sub[[sample_col]])
+  samples <- unique(sample_ids[nzchar(sample_ids)])
+  if (length(samples) < 2L) {
+    return(list(result = data.frame(), status = "failed_singular_design", reason = "fewer than two pseudobulk samples"))
+  }
+  pb_counts <- do.call(cbind, lapply(samples, function(sample_id) {
+    Matrix::rowSums(counts[, sample_ids == sample_id, drop = FALSE])
+  }))
+  rownames(pb_counts) <- rownames(counts)
+  colnames(pb_counts) <- samples
+  sample_meta <- do.call(rbind, lapply(samples, function(sample_id) {
+    rows <- meta_sub[sample_ids == sample_id, , drop = FALSE]
+    group_values <- unique(as.character(rows[[vars$group_var]]))
+    group_values <- group_values[nzchar(group_values)]
+    group_value <- if (length(group_values) > 0) group_values[[1]] else ""
+    data.frame(sample_id = sample_id, group = group_value, stringsAsFactors = FALSE)
+  }))
+  sample_meta <- sample_meta[sample_meta$group %in% c(vars$ident_1, vars$ident_2), , drop = FALSE]
+  pb_counts <- pb_counts[, sample_meta$sample_id, drop = FALSE]
+  if (length(unique(sample_meta$group)) < 2L) {
+    return(list(result = data.frame(), status = "failed_singular_design", reason = "pseudobulk design has fewer than two groups"))
+  }
+  res <- tryCatch({
+    group <- factor(sample_meta$group, levels = c(vars$ident_2, vars$ident_1))
+    y <- edgeR::DGEList(counts = pb_counts, group = group)
+    keep_genes <- edgeR::filterByExpr(y, group = group)
+    y <- y[keep_genes, , keep.lib.sizes = FALSE]
+    if (nrow(y) == 0) {
+      stop("no genes retained after edgeR filterByExpr", call. = FALSE)
+    }
+    y <- edgeR::calcNormFactors(y)
+    design <- stats::model.matrix(~group)
+    y <- edgeR::estimateDisp(y, design)
+    fit <- edgeR::glmQLFit(y, design)
+    test <- edgeR::glmQLFTest(fit, coef = 2)
+    out <- as.data.frame(edgeR::topTags(test, n = Inf), stringsAsFactors = FALSE)
+    out$gene <- rownames(out)
+    out
+  }, error = function(e) e)
+  if (inherits(res, "error")) {
+    msg <- conditionMessage(res)
+    status <- if (grepl("design|singular|coef|contrast", msg, ignore.case = TRUE)) "failed_singular_design" else "failed_aggregation"
+    return(list(result = data.frame(), status = status, reason = msg))
+  }
+  list(result = res, status = if (nrow(res) > 0) "ok" else "failed_aggregation", reason = if (nrow(res) > 0) "" else "edgeR returned no rows")
+}
+
+run_spotlevel_findmarkers_st <- function(panorama, group_by_col, region_value, vars) {
+  meta <- panorama@meta.data
+  if (!group_by_col %in% colnames(meta) || !vars$group_var %in% colnames(meta)) {
+    return(list(result = data.frame(), status = "failed_design_resolution", reason = "missing group_by or group_var column", n1 = NA_integer_, n2 = NA_integer_))
+  }
+  keep <- as.character(meta[[group_by_col]]) == region_value
+  obj <- subset(panorama, cells = colnames(panorama)[keep])
+  groups <- as.character(obj@meta.data[[vars$group_var]])
+  n1 <- sum(groups == vars$ident_1, na.rm = TRUE)
+  n2 <- sum(groups == vars$ident_2, na.rm = TRUE)
+  if (n1 < vars$min_cells_per_group || n2 < vars$min_cells_per_group) {
+    return(list(result = data.frame(), status = "skipped_too_few_spots", reason = sprintf("%s=%s, %s=%s, min=%s", vars$ident_1, n1, vars$ident_2, n2, vars$min_cells_per_group), n1 = n1, n2 = n2))
+  }
+  assay <- spatial_assay_name(obj)
+  Seurat::DefaultAssay(obj) <- assay
+  Seurat::Idents(obj) <- vars$group_var
+  res <- tryCatch(
+    Seurat::FindMarkers(
+      obj,
+      ident.1 = vars$ident_1,
+      ident.2 = vars$ident_2,
+      logfc.threshold = vars$logfc_threshold,
+      min.pct = vars$min_pct,
+      test.use = "wilcox",
+      verbose = FALSE
+    ),
+    error = function(e) e
+  )
+  if (inherits(res, "error")) {
+    return(list(result = data.frame(), status = "failed_findmarkers", reason = conditionMessage(res), n1 = n1, n2 = n2))
+  }
+  out <- as.data.frame(res, stringsAsFactors = FALSE)
+  if (nrow(out) > 0 && !"gene" %in% colnames(out)) {
+    out$gene <- rownames(out)
+  }
+  list(result = out, status = if (nrow(out) > 0) "ok" else "failed_findmarkers", reason = if (nrow(out) > 0) "" else "FindMarkers returned no rows", n1 = n1, n2 = n2)
+}

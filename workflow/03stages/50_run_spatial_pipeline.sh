@@ -63,6 +63,8 @@ run_future_spatial_r_stage "05_region_marker_discovery.R" "spatial_05_region_mar
 run_future_spatial_r_stage "05a_region_pseudobulk.R" "spatial_05a_region_pseudobulk"
 run_future_spatial_r_stage "05b_region_composition.R" "spatial_05b_region_composition"
 run_future_spatial_r_stage "05_spatial_de.R" "spatial_05_spatial_de"
+set_eda_gate_status "spatial_marker_de" "pending" "" "Review spatial region marker / DE / composition outputs before enrichment and deconvolution."
+hold_for_gate spatial_marker_de
 
 update_workflow_status \
   "spatial_main_completed" \

@@ -20,6 +20,7 @@ spatial_pre_qc	pending			default	Review spatial pre-QC report before spatial fil
 spatial_post_qc	pending			default	Review spatial post-QC report before spatial normalization.
 spatial_integration	pending			default	Review spatial integration diagnostics before clustering.
 spatial_region_annotation	pending			default	Review region annotation before marker/DE/composition.
+spatial_marker_de	pending			default	Review spatial region marker / DE / composition outputs before enrichment and deconvolution.
 spatial_deconv	pending			default	Review deconvolution + scDesign3 validation.
 joint_trajectory	pending			default	Review joint trajectory projection outputs.
 joint_communication	pending			default	Review joint communication evidence outputs.

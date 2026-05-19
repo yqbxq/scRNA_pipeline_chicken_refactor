@@ -35,6 +35,15 @@ get_spatial_script_config <- function() {
   spatial_region_annotation_dir <- spatial_env_or_default("SPATIAL_REGION_ANNOTATION_DIR", spatial_env_or_default("SPATIAL_REGION_ANNOTATION_REPORT_DIR", file.path(eda_report_dir, "spatial_region_annotation")))
   spatial_region_annotation_table_dir <- spatial_env_or_default("SPATIAL_REGION_ANNOTATION_TABLE_DIR", file.path(spatial_table_dir, "spatial_region_annotation"))
   spatial_subregion_annotation_dir <- spatial_env_or_default("SPATIAL_SUBREGION_ANNOTATION_REPORT_DIR", file.path(eda_report_dir, "spatial_subregion_annotation"))
+  spatial_marker_table_dir <- spatial_env_or_default("SPATIAL_MARKER_TABLE_DIR", file.path(spatial_table_dir, "spatial_05_region_marker"))
+  spatial_marker_figure_dir <- spatial_env_or_default("SPATIAL_MARKER_FIGURE_DIR", file.path(spatial_figure_dir, "spatial_05_region_marker"))
+  spatial_pseudobulk_table_dir <- spatial_env_or_default("SPATIAL_PSEUDOBULK_TABLE_DIR", file.path(spatial_table_dir, "spatial_05a_region_pseudobulk"))
+  spatial_pseudobulk_figure_dir <- spatial_env_or_default("SPATIAL_PSEUDOBULK_FIGURE_DIR", file.path(spatial_figure_dir, "spatial_05a_region_pseudobulk"))
+  spatial_composition_table_dir <- spatial_env_or_default("SPATIAL_COMPOSITION_TABLE_DIR", file.path(spatial_table_dir, "spatial_05b_region_composition"))
+  spatial_composition_figure_dir <- spatial_env_or_default("SPATIAL_COMPOSITION_FIGURE_DIR", file.path(spatial_figure_dir, "spatial_05b_region_composition"))
+  spatial_de_table_dir <- spatial_env_or_default("SPATIAL_DE_TABLE_DIR", file.path(spatial_table_dir, "spatial_05_spatial_de"))
+  spatial_de_figure_dir <- spatial_env_or_default("SPATIAL_DE_FIGURE_DIR", file.path(spatial_figure_dir, "spatial_05_spatial_de"))
+  spatial_marker_de_report_dir <- spatial_env_or_default("SPATIAL_MARKER_DE_REPORT_DIR", file.path(eda_report_dir, "spatial_marker_de"))
   py_spatial_prefix <- spatial_env_or_default("PY_SPATIAL_ENV_PREFIX", "")
   py_spatial_legacy_prefix <- spatial_env_or_default("PY_SPATIAL_LEGACY_ENV_PREFIX", "")
   py_spatial_bin_default <- if (nzchar(py_spatial_prefix)) file.path(py_spatial_prefix, "bin", "python") else "python"
@@ -85,8 +94,18 @@ get_spatial_script_config <- function() {
     spatial_subcluster_eda_table_dir = spatial_env_or_default("SPATIAL_SUBCLUSTER_EDA_TABLE_DIR", file.path(spatial_table_dir, "spatial_04c_subcluster_eda")),
     spatial_subcluster_eda_figure_dir = spatial_env_or_default("SPATIAL_SUBCLUSTER_EDA_FIGURE_DIR", file.path(spatial_figure_dir, "spatial_04c_subcluster_eda")),
     spatial_subregion_annotation_dir = spatial_subregion_annotation_dir,
+    spatial_marker_table_dir = spatial_marker_table_dir,
+    spatial_marker_figure_dir = spatial_marker_figure_dir,
+    spatial_pseudobulk_table_dir = spatial_pseudobulk_table_dir,
+    spatial_pseudobulk_figure_dir = spatial_pseudobulk_figure_dir,
+    spatial_composition_table_dir = spatial_composition_table_dir,
+    spatial_composition_figure_dir = spatial_composition_figure_dir,
+    spatial_de_table_dir = spatial_de_table_dir,
+    spatial_de_figure_dir = spatial_de_figure_dir,
+    spatial_marker_de_report_dir = spatial_marker_de_report_dir,
     sample_sheet = spatial_env_or_default("SAMPLE_SHEET", file.path(metadata_dir, "samples.tsv")),
     canonical_sample_sheet = spatial_env_or_default("CANONICAL_SAMPLE_SHEET", file.path(metadata_dir, "samples.canonical.tsv")),
+    comparison_sheet = spatial_env_or_default("COMPARISON_SHEET", file.path(metadata_dir, "comparisons.tsv")),
     section_sheet = spatial_env_or_default("SECTION_SHEET", file.path(metadata_dir, "sections.tsv")),
     spatial_reference_inventory_file = spatial_env_or_default("SPATIAL_REFERENCE_INVENTORY_FILE", file.path(metadata_dir, "spatial_reference_inventory.tsv")),
     spatial_input_inventory_file = spatial_env_or_default("SPATIAL_INPUT_INVENTORY_FILE", file.path(intake_report_dir, "spatial_input_inventory.tsv")),
@@ -107,6 +126,10 @@ get_spatial_script_config <- function() {
     module_04a_subcluster_build_manifest_path = file.path(manifest_dir, "spatial_04a_subcluster_build", "_manifest.json"),
     module_04b_subcluster_annotate_manifest_path = file.path(manifest_dir, "spatial_04b_subcluster_annotate", "_manifest.json"),
     module_04c_subcluster_eda_manifest_path = file.path(manifest_dir, "spatial_04c_subcluster_eda", "_manifest.json"),
+    module_05_region_marker_manifest_path = file.path(manifest_dir, "spatial_05_region_marker", "_manifest.json"),
+    module_05a_region_pseudobulk_manifest_path = file.path(manifest_dir, "spatial_05a_region_pseudobulk", "_manifest.json"),
+    module_05b_region_composition_manifest_path = file.path(manifest_dir, "spatial_05b_region_composition", "_manifest.json"),
+    module_05_spatial_de_manifest_path = file.path(manifest_dir, "spatial_05_spatial_de", "_manifest.json"),
     load_summary_csv = file.path(spatial_table_dir, "load_summary.csv"),
     load_diagnostics_tsv = file.path(spatial_table_dir, "load_diagnostics.tsv"),
     pre_qc_report_md = file.path(spatial_pre_qc_report_dir, "report.md"),
@@ -145,10 +168,15 @@ get_spatial_script_config <- function() {
     subcluster_triage_coherence_threshold = spatial_env_numeric("SPATIAL_SUBCLUSTER_TRIAGE_COHERENCE_THRESHOLD", 0.4),
     subcluster_triage_overlap_threshold = spatial_env_numeric("SPATIAL_SUBCLUSTER_TRIAGE_OVERLAP_THRESHOLD", 0.30),
     subcluster_triage_imbalance_threshold = spatial_env_numeric("SPATIAL_SUBCLUSTER_TRIAGE_IMBALANCE_THRESHOLD", 0.5),
+    spatial_marker_logfc_threshold = spatial_env_numeric("SPATIAL_MARKER_LOGFC_THRESHOLD", 0.25),
+    spatial_marker_min_pct = spatial_env_numeric("SPATIAL_MARKER_MIN_PCT", 0.10),
+    spatial_marker_top_n = spatial_env_integer("SPATIAL_MARKER_TOP_N", 20L),
+    spatial_de_include_undetermined = spatial_env_or_default("SPATIAL_DE_INCLUDE_UNDETERMINED", "no"),
     module_version = spatial_env_or_default("MODULE_SPATIAL_01_VERSION", "1.0"),
     module_02_version = spatial_env_or_default("MODULE_SPATIAL_02_VERSION", "1.0"),
     module_03_version = spatial_env_or_default("MODULE_SPATIAL_03_VERSION", "1.0"),
-    module_04_version = spatial_env_or_default("MODULE_SPATIAL_04_VERSION", "1.1")
+    module_04_version = spatial_env_or_default("MODULE_SPATIAL_04_VERSION", "1.1"),
+    module_05_version = spatial_env_or_default("MODULE_SPATIAL_05_VERSION", "1.0")
   )
 }
 
@@ -184,6 +212,15 @@ prepare_dirs_spatial <- function(cfg) {
     cfg$spatial_subcluster_eda_table_dir,
     cfg$spatial_subcluster_eda_figure_dir,
     cfg$spatial_subregion_annotation_dir,
+    cfg$spatial_marker_table_dir,
+    cfg$spatial_marker_figure_dir,
+    cfg$spatial_pseudobulk_table_dir,
+    cfg$spatial_pseudobulk_figure_dir,
+    cfg$spatial_composition_table_dir,
+    cfg$spatial_composition_figure_dir,
+    cfg$spatial_de_table_dir,
+    cfg$spatial_de_figure_dir,
+    cfg$spatial_marker_de_report_dir,
     dirname(cfg$module_01_manifest_path),
     dirname(cfg$module_01a_manifest_path),
     dirname(cfg$module_02_filter_manifest_path),
@@ -196,6 +233,10 @@ prepare_dirs_spatial <- function(cfg) {
     dirname(cfg$module_04a_subcluster_build_manifest_path),
     dirname(cfg$module_04b_subcluster_annotate_manifest_path),
     dirname(cfg$module_04c_subcluster_eda_manifest_path),
+    dirname(cfg$module_05_region_marker_manifest_path),
+    dirname(cfg$module_05a_region_pseudobulk_manifest_path),
+    dirname(cfg$module_05b_region_composition_manifest_path),
+    dirname(cfg$module_05_spatial_de_manifest_path),
     dirname(cfg$load_summary_csv),
     dirname(cfg$load_diagnostics_tsv),
     dirname(cfg$pre_qc_report_md),
