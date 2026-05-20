@@ -236,9 +236,9 @@ m3_fanout_st <- function(q) {
     )
   } else if (identical(qid, "I08_deconv_panorama")) {
     deconv_rows[[length(deconv_rows) + 1L]] <- m3_st_deconv_row(
-      q, "panorama", "panorama", "rctd,cell2location",
+      q, "panorama", "panorama", "all",
       section_filter = "*", split_var = split$var, split_values = split$values,
-      notes = "panorama reference deconvolution into ST sections"
+      notes = "panorama reference deconvolution into ST sections; all methods are eligible unless disabled downstream"
     )
   } else if (identical(qid, "I12_ST_region_compo")) {
     condition <- m3_condition_pair(q$condition_split[[1]])

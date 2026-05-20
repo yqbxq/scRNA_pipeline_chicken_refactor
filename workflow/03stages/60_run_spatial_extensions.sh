@@ -10,6 +10,7 @@ source "${WORKFLOW_ROOT}/02lib/common.sh"
 RUN_SVG="yes"
 RUN_DECONV="yes"
 RUN_DECONV_EXTRA="no"
+RUN_DECONV_VALIDATION="no"
 RUN_NEIGHBORHOOD="yes"
 RUN_DECOUPLER="no"
 RUN_PYSCENIC="no"
@@ -22,6 +23,8 @@ while [[ $# -gt 0 ]]; do
     --with-deconv) RUN_DECONV="yes"; shift ;;
     --without-deconv) RUN_DECONV="no"; shift ;;
     --with-deconv-extra) RUN_DECONV_EXTRA="yes"; shift ;;
+    --with-deconv-validation) RUN_DECONV_VALIDATION="yes"; shift ;;
+    --without-deconv-validation) RUN_DECONV_VALIDATION="no"; shift ;;
     --with-neighborhood) RUN_NEIGHBORHOOD="yes"; shift ;;
     --without-neighborhood) RUN_NEIGHBORHOOD="no"; shift ;;
     --with-decoupler) RUN_DECOUPLER="yes"; shift ;;
@@ -36,6 +39,7 @@ Usage: 60_run_spatial_extensions.sh [flags]
 Flags:
   --with-svg / --without-svg
   --with-deconv / --without-deconv / --with-deconv-extra
+  --with-deconv-validation / --without-deconv-validation
   --with-neighborhood / --without-neighborhood
   --with-decoupler / --without-decoupler
   --with-pyscenic
@@ -76,9 +80,22 @@ if [[ "${RUN_NEIGHBORHOOD}" == "yes" ]]; then
   hold_for_gate spatial_neighborhood
 fi
 if [[ "${RUN_DECONV}" == "yes" ]]; then
-  run_future_spatial_r_stage "07_deconvolution.R" "spatial_07_deconvolution" "${SPATIAL_REFERENCE_INVENTORY_FILE}"
-  run_future_spatial_r_stage "07a_deconvolution_validation.R" "spatial_07a_deconvolution_validation"
-  set_eda_gate_status "spatial_deconv" "pending" "" "Review deconvolution and scDesign3 validation outputs."
+  run_future_spatial_r_stage "07a_deconvolution_rctd.R" "spatial_07a_deconvolution_rctd" \
+    "${SPATIAL_REFERENCE_INVENTORY_FILE}" "${DECONV_PAIRS_SHEET}"
+  if [[ "${RUN_DECONV_EXTRA}" == "yes" ]]; then
+    run_future_spatial_r_stage "07b_deconvolution_transfer.R" "spatial_07b_deconvolution_transfer" \
+      "${SPATIAL_REFERENCE_INVENTORY_FILE}" "${DECONV_PAIRS_SHEET}"
+    run_future_spatial_r_stage "07c_deconvolution_card.R" "spatial_07c_deconvolution_card" \
+      "${SPATIAL_REFERENCE_INVENTORY_FILE}" "${DECONV_PAIRS_SHEET}"
+    run_future_spatial_r_stage "07d_deconvolution_cell2location.R" "spatial_07d_deconvolution_cell2location" \
+      "${SPATIAL_REFERENCE_INVENTORY_FILE}" "${DECONV_PAIRS_SHEET}"
+  fi
+  run_future_spatial_r_stage "07e_deconvolution_compare.R" "spatial_07e_deconvolution_compare"
+  if [[ "${RUN_DECONV_VALIDATION}" == "yes" ]]; then
+    run_future_spatial_r_stage "07f_deconvolution_validation.R" "spatial_07f_deconvolution_validation" \
+      "${SPATIAL_REFERENCE_INVENTORY_FILE}"
+  fi
+  set_eda_gate_status "spatial_deconv" "pending" "" "Review deconvolution outputs, multi-method comparison, and optional scDesign3 validation."
   hold_for_gate spatial_deconv
 fi
 [[ "${RUN_DECOUPLER}" == "yes" ]] && run_future_spatial_r_stage "08a_spatial_decoupler.R" "spatial_08a_decoupler"

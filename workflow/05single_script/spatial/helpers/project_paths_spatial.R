@@ -55,10 +55,24 @@ get_spatial_script_config <- function() {
   spatial_neighborhood_figure_dir <- spatial_env_or_default("SPATIAL_NEIGHBORHOOD_FIGURE_DIR", file.path(spatial_figure_dir, "spatial_06d_neighborhood"))
   spatial_niche_table_dir <- spatial_env_or_default("SPATIAL_NICHE_TABLE_DIR", file.path(spatial_table_dir, "spatial_06e_niche"))
   spatial_niche_figure_dir <- spatial_env_or_default("SPATIAL_NICHE_FIGURE_DIR", file.path(spatial_figure_dir, "spatial_06e_niche"))
+  spatial_rctd_table_dir <- spatial_env_or_default("SPATIAL_RCTD_TABLE_DIR", file.path(spatial_table_dir, "spatial_07a_deconvolution_rctd"))
+  spatial_rctd_figure_dir <- spatial_env_or_default("SPATIAL_RCTD_FIGURE_DIR", file.path(spatial_figure_dir, "spatial_07a_deconvolution_rctd"))
+  spatial_transfer_table_dir <- spatial_env_or_default("SPATIAL_TRANSFER_TABLE_DIR", file.path(spatial_table_dir, "spatial_07b_deconvolution_transfer"))
+  spatial_transfer_figure_dir <- spatial_env_or_default("SPATIAL_TRANSFER_FIGURE_DIR", file.path(spatial_figure_dir, "spatial_07b_deconvolution_transfer"))
+  spatial_card_table_dir <- spatial_env_or_default("SPATIAL_CARD_TABLE_DIR", file.path(spatial_table_dir, "spatial_07c_deconvolution_card"))
+  spatial_card_figure_dir <- spatial_env_or_default("SPATIAL_CARD_FIGURE_DIR", file.path(spatial_figure_dir, "spatial_07c_deconvolution_card"))
+  spatial_c2l_table_dir <- spatial_env_or_default("SPATIAL_C2L_TABLE_DIR", file.path(spatial_table_dir, "spatial_07d_deconvolution_cell2location"))
+  spatial_c2l_figure_dir <- spatial_env_or_default("SPATIAL_C2L_FIGURE_DIR", file.path(spatial_figure_dir, "spatial_07d_deconvolution_cell2location"))
+  spatial_deconv_compare_table_dir <- spatial_env_or_default("SPATIAL_DECONV_COMPARE_TABLE_DIR", file.path(spatial_table_dir, "spatial_07e_deconvolution_compare"))
+  spatial_deconv_compare_report_dir <- spatial_env_or_default("SPATIAL_DECONV_COMPARE_REPORT_DIR", file.path(eda_report_dir, "spatial_deconv_compare"))
+  spatial_deconv_validation_table_dir <- spatial_env_or_default("SPATIAL_DECONV_VALIDATION_TABLE_DIR", file.path(spatial_table_dir, "spatial_07f_deconvolution_validation"))
+  spatial_deconv_validation_report_dir <- spatial_env_or_default("SPATIAL_DECONV_VALIDATION_REPORT_DIR", file.path(eda_report_dir, "spatial_deconv_validation"))
+  py_cell2location_prefix <- spatial_env_or_default("PY_CELL2LOCATION_ENV_PREFIX", "")
   py_spatial_prefix <- spatial_env_or_default("PY_SPATIAL_ENV_PREFIX", "")
   py_spatial_legacy_prefix <- spatial_env_or_default("PY_SPATIAL_LEGACY_ENV_PREFIX", "")
   py_spatial_bin_default <- if (nzchar(py_spatial_prefix)) file.path(py_spatial_prefix, "bin", "python") else "python"
   py_spatial_legacy_bin_default <- if (nzchar(py_spatial_legacy_prefix)) file.path(py_spatial_legacy_prefix, "bin", "python") else "python"
+  py_cell2location_bin_default <- if (nzchar(py_cell2location_prefix)) file.path(py_cell2location_prefix, "bin", "python") else "python"
 
   list(
     project_root = project_root,
@@ -125,9 +139,23 @@ get_spatial_script_config <- function() {
     spatial_neighborhood_figure_dir = spatial_neighborhood_figure_dir,
     spatial_niche_table_dir = spatial_niche_table_dir,
     spatial_niche_figure_dir = spatial_niche_figure_dir,
+    spatial_rctd_table_dir = spatial_rctd_table_dir,
+    spatial_rctd_figure_dir = spatial_rctd_figure_dir,
+    spatial_transfer_table_dir = spatial_transfer_table_dir,
+    spatial_transfer_figure_dir = spatial_transfer_figure_dir,
+    spatial_card_table_dir = spatial_card_table_dir,
+    spatial_card_figure_dir = spatial_card_figure_dir,
+    spatial_c2l_table_dir = spatial_c2l_table_dir,
+    spatial_c2l_figure_dir = spatial_c2l_figure_dir,
+    spatial_deconv_compare_table_dir = spatial_deconv_compare_table_dir,
+    spatial_deconv_compare_report_dir = spatial_deconv_compare_report_dir,
+    spatial_deconv_validation_table_dir = spatial_deconv_validation_table_dir,
+    spatial_deconv_validation_report_dir = spatial_deconv_validation_report_dir,
+    spatial_recommended_deconv_method_file = file.path(spatial_deconv_compare_table_dir, "recommended_method.txt"),
     sample_sheet = spatial_env_or_default("SAMPLE_SHEET", file.path(metadata_dir, "samples.tsv")),
     canonical_sample_sheet = spatial_env_or_default("CANONICAL_SAMPLE_SHEET", file.path(metadata_dir, "samples.canonical.tsv")),
     comparison_sheet = spatial_env_or_default("COMPARISON_SHEET", file.path(metadata_dir, "comparisons.tsv")),
+    deconv_pairs_sheet = spatial_env_or_default("DECONV_PAIRS_SHEET", file.path(metadata_dir, "deconv_pairs.tsv")),
     section_sheet = spatial_env_or_default("SECTION_SHEET", file.path(metadata_dir, "sections.tsv")),
     spatial_reference_inventory_file = spatial_env_or_default("SPATIAL_REFERENCE_INVENTORY_FILE", file.path(metadata_dir, "spatial_reference_inventory.tsv")),
     spatial_input_inventory_file = spatial_env_or_default("SPATIAL_INPUT_INVENTORY_FILE", file.path(intake_report_dir, "spatial_input_inventory.tsv")),
@@ -158,6 +186,12 @@ get_spatial_script_config <- function() {
     module_06c_region_enrichment_eda_manifest_path = file.path(manifest_dir, "spatial_06c_region_enrichment_eda", "_manifest.json"),
     module_06d_neighborhood_manifest_path = file.path(manifest_dir, "spatial_06d_neighborhood", "_manifest.json"),
     module_06e_niche_manifest_path = file.path(manifest_dir, "spatial_06e_niche", "_manifest.json"),
+    module_07a_deconvolution_rctd_manifest_path = file.path(manifest_dir, "spatial_07a_deconvolution_rctd", "_manifest.json"),
+    module_07b_deconvolution_transfer_manifest_path = file.path(manifest_dir, "spatial_07b_deconvolution_transfer", "_manifest.json"),
+    module_07c_deconvolution_card_manifest_path = file.path(manifest_dir, "spatial_07c_deconvolution_card", "_manifest.json"),
+    module_07d_deconvolution_cell2location_manifest_path = file.path(manifest_dir, "spatial_07d_deconvolution_cell2location", "_manifest.json"),
+    module_07e_deconvolution_compare_manifest_path = file.path(manifest_dir, "spatial_07e_deconvolution_compare", "_manifest.json"),
+    module_07f_deconvolution_validation_manifest_path = file.path(manifest_dir, "spatial_07f_deconvolution_validation", "_manifest.json"),
     spatial_panorama_niched_rds = file.path(spatial_checkpoint_dir, "spatial_panorama_niched.rds"),
     load_summary_csv = file.path(spatial_table_dir, "load_summary.csv"),
     load_diagnostics_tsv = file.path(spatial_table_dir, "load_diagnostics.tsv"),
@@ -173,6 +207,7 @@ get_spatial_script_config <- function() {
     selected_region_annotation_override_file = spatial_env_or_default("SPATIAL_REGION_ANNOTATION_OVERRIDE_FILE", file.path(config_dir, "spatial_region_annotation_override.tsv")),
     pearson_residuals_py = spatial_env_or_default("SPATIAL_PEARSON_RESIDUALS_PY", file.path(pipeline_root, "workflow", "04python", "normalize_pearson_residuals.py")),
     py_spatial_bin = spatial_env_or_default("PY_SPATIAL_BIN", py_spatial_bin_default),
+    py_cell2location_bin = spatial_env_or_default("PY_CELL2LOCATION_BIN", py_cell2location_bin_default),
     spagcn_py_bin = spatial_env_or_default("SPAGCN_PY_BIN", py_spatial_legacy_bin_default),
     spagcn_py_script = spatial_env_or_default("SPAGCN_PY_SCRIPT", file.path(pipeline_root, "workflow", "04python", "cluster_spagcn.py")),
     stagate_py_bin = spatial_env_or_default("STAGATE_PY_BIN", py_spatial_bin_default),
@@ -210,12 +245,30 @@ get_spatial_script_config <- function() {
     spatial_neighborhood_coord_type = spatial_env_or_default("SPATIAL_NEIGHBORHOOD_COORD_TYPE", "generic"),
     spatial_niche_k = spatial_env_integer("SPATIAL_NICHE_K", 5L),
     spatial_niche_k_neighbors = spatial_env_integer("SPATIAL_NICHE_K_NEIGHBORS", 15L),
+    spatial_deconv_min_spots = spatial_env_integer("SPATIAL_DECONV_MIN_SPOTS", 100L),
+    spatial_deconv_primary = spatial_env_or_default("SPATIAL_DECONV_PRIMARY", "rctd"),
+    spatial_rctd_cores = spatial_env_integer("SPATIAL_RCTD_CORES", 4L),
+    spatial_rctd_gene_cutoff = spatial_env_integer("SPATIAL_RCTD_GENE_CUTOFF", 125L),
+    spatial_rctd_doublet_mode = spatial_env_or_default("SPATIAL_RCTD_DOUBLET_MODE", "full"),
+    spatial_transfer_reduction = spatial_env_or_default("SPATIAL_TRANSFER_REDUCTION", "cca"),
+    spatial_transfer_weight_reduction = spatial_env_or_default("SPATIAL_TRANSFER_WEIGHT_REDUCTION", "pca"),
+    spatial_card_min_count_gene = spatial_env_integer("SPATIAL_CARD_MIN_COUNT_GENE", 100L),
+    spatial_card_min_count_spot = spatial_env_integer("SPATIAL_CARD_MIN_COUNT_SPOT", 5L),
+    spatial_c2l_ref_epochs = spatial_env_integer("SPATIAL_C2L_REF_EPOCHS", 250L),
+    spatial_c2l_st_epochs = spatial_env_integer("SPATIAL_C2L_ST_EPOCHS", 5000L),
+    spatial_c2l_detection_alpha = spatial_env_numeric("SPATIAL_C2L_DETECTION_ALPHA", 20),
+    spatial_c2l_use_gpu = spatial_env_or_default("SPATIAL_C2L_USE_GPU", "no"),
+    spatial_deconv_compare_top_n_celltypes = spatial_env_integer("SPATIAL_DECONV_COMPARE_TOP_N_CELLTYPES", 10L),
+    spatial_deconv_compare_region_consistency_weight = spatial_env_numeric("SPATIAL_DECONV_COMPARE_REGION_CONSISTENCY_WEIGHT", 0.4),
+    spatial_validation_n_spots = spatial_env_integer("SPATIAL_VALIDATION_N_SPOTS", 1000L),
+    spatial_validation_dirichlet_alpha = spatial_env_numeric("SPATIAL_VALIDATION_DIRICHLET_ALPHA", 1.0),
     module_version = spatial_env_or_default("MODULE_SPATIAL_01_VERSION", "1.0"),
     module_02_version = spatial_env_or_default("MODULE_SPATIAL_02_VERSION", "1.0"),
     module_03_version = spatial_env_or_default("MODULE_SPATIAL_03_VERSION", "1.0"),
     module_04_version = spatial_env_or_default("MODULE_SPATIAL_04_VERSION", "1.1"),
     module_05_version = spatial_env_or_default("MODULE_SPATIAL_05_VERSION", "1.1"),
-    module_06_version = spatial_env_or_default("MODULE_SPATIAL_06_VERSION", "1.0")
+    module_06_version = spatial_env_or_default("MODULE_SPATIAL_06_VERSION", "1.0"),
+    module_07_version = spatial_env_or_default("MODULE_SPATIAL_07_VERSION", "1.0")
   )
 }
 
@@ -270,6 +323,18 @@ prepare_dirs_spatial <- function(cfg) {
     cfg$spatial_neighborhood_figure_dir,
     cfg$spatial_niche_table_dir,
     cfg$spatial_niche_figure_dir,
+    cfg$spatial_rctd_table_dir,
+    cfg$spatial_rctd_figure_dir,
+    cfg$spatial_transfer_table_dir,
+    cfg$spatial_transfer_figure_dir,
+    cfg$spatial_card_table_dir,
+    cfg$spatial_card_figure_dir,
+    cfg$spatial_c2l_table_dir,
+    cfg$spatial_c2l_figure_dir,
+    cfg$spatial_deconv_compare_table_dir,
+    cfg$spatial_deconv_compare_report_dir,
+    cfg$spatial_deconv_validation_table_dir,
+    cfg$spatial_deconv_validation_report_dir,
     dirname(cfg$module_01_manifest_path),
     dirname(cfg$module_01a_manifest_path),
     dirname(cfg$module_02_filter_manifest_path),
@@ -291,6 +356,12 @@ prepare_dirs_spatial <- function(cfg) {
     dirname(cfg$module_06c_region_enrichment_eda_manifest_path),
     dirname(cfg$module_06d_neighborhood_manifest_path),
     dirname(cfg$module_06e_niche_manifest_path),
+    dirname(cfg$module_07a_deconvolution_rctd_manifest_path),
+    dirname(cfg$module_07b_deconvolution_transfer_manifest_path),
+    dirname(cfg$module_07c_deconvolution_card_manifest_path),
+    dirname(cfg$module_07d_deconvolution_cell2location_manifest_path),
+    dirname(cfg$module_07e_deconvolution_compare_manifest_path),
+    dirname(cfg$module_07f_deconvolution_validation_manifest_path),
     dirname(cfg$load_summary_csv),
     dirname(cfg$load_diagnostics_tsv),
     dirname(cfg$pre_qc_report_md),
