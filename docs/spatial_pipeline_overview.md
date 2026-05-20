@@ -13,5 +13,13 @@ The main ST workflow currently runs:
 | `05a` | `spatial_05a_region_pseudobulk` | Formal region pseudobulk DE when the replicate gate passes, with spot-level fallback links otherwise. |
 | `05b` | `spatial_05b_region_composition` | Descriptive region composition and formal propeller output when the replicate gate passes. |
 | `05_spatial_de` | `spatial_05_spatial_de` | Exploratory spot-level spatial DE for N=2 rescue. |
+| `06a` / `06b` / `06c` | `spatial_06a_region_go`, `spatial_06b_region_kegg`, `spatial_06c_region_enrichment_eda` | Region GO/KEGG enrichment and review summaries. |
+| `06d` | `spatial_06d_neighborhood` | Squidpy-gated radius neighborhood enrichment and co-occurrence tables. |
 
-The `spatial_region_annotation` gate is held twice: once after `03a` for region review, then reset and held again after `04c` for sub-region review. ST 05 adds `spatial_marker_de` after marker, DE, and composition outputs are written.
+The `spatial_region_annotation` gate is held twice: once after `03a` for region review, then reset and held again after `04c` for sub-region review. ST 05 adds `spatial_marker_de` after marker, DE, and composition outputs are written. ST 06 adds `spatial_enrichment` after `06c` and `spatial_neighborhood` after `06d`.
+
+Additional ST06 docs:
+
+- `docs/spatial_enrichment_overview.md`
+- `docs/spatial_neighborhood_overview.md`
+- `docs/spatial_niche_overview.md`

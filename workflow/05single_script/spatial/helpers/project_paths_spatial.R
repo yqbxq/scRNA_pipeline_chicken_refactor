@@ -20,6 +20,7 @@ get_spatial_script_config <- function() {
   config_dir <- spatial_env_or_default("PROJECT_CONFIG_DIR", file.path(project_root, "config"))
   results_dir <- spatial_env_or_default("RESULTS_DIR", file.path(project_root, "results"))
   report_dir <- spatial_env_or_default("REPORT_DIR", file.path(project_root, "reports"))
+  ortholog_cache_dir <- spatial_env_or_default("ORTHOLOG_CACHE_DIR", file.path(results_dir, "ortholog_cache"))
   eda_report_dir <- spatial_env_or_default("EDA_REPORT_DIR", file.path(report_dir, "eda"))
   intake_report_dir <- spatial_env_or_default("INTAKE_REPORT_DIR", file.path(report_dir, "intake"))
   manifest_dir <- spatial_env_or_default("MANIFEST_DIR", file.path(results_dir, "manifests"))
@@ -44,6 +45,16 @@ get_spatial_script_config <- function() {
   spatial_de_table_dir <- spatial_env_or_default("SPATIAL_DE_TABLE_DIR", file.path(spatial_table_dir, "spatial_05_spatial_de"))
   spatial_de_figure_dir <- spatial_env_or_default("SPATIAL_DE_FIGURE_DIR", file.path(spatial_figure_dir, "spatial_05_spatial_de"))
   spatial_marker_de_report_dir <- spatial_env_or_default("SPATIAL_MARKER_DE_REPORT_DIR", file.path(eda_report_dir, "spatial_marker_de"))
+  spatial_region_go_table_dir <- spatial_env_or_default("SPATIAL_REGION_GO_TABLE_DIR", file.path(spatial_table_dir, "spatial_06a_region_go"))
+  spatial_region_go_figure_dir <- spatial_env_or_default("SPATIAL_REGION_GO_FIGURE_DIR", file.path(spatial_figure_dir, "spatial_06a_region_go"))
+  spatial_region_kegg_table_dir <- spatial_env_or_default("SPATIAL_REGION_KEGG_TABLE_DIR", file.path(spatial_table_dir, "spatial_06b_region_kegg"))
+  spatial_region_kegg_figure_dir <- spatial_env_or_default("SPATIAL_REGION_KEGG_FIGURE_DIR", file.path(spatial_figure_dir, "spatial_06b_region_kegg"))
+  spatial_region_enrichment_eda_table_dir <- spatial_env_or_default("SPATIAL_REGION_ENRICHMENT_EDA_TABLE_DIR", file.path(spatial_table_dir, "spatial_06c_region_enrichment_eda"))
+  spatial_enrichment_report_dir <- spatial_env_or_default("SPATIAL_ENRICHMENT_REPORT_DIR", file.path(eda_report_dir, "spatial_enrichment"))
+  spatial_neighborhood_table_dir <- spatial_env_or_default("SPATIAL_NEIGHBORHOOD_TABLE_DIR", file.path(spatial_table_dir, "spatial_06d_neighborhood"))
+  spatial_neighborhood_figure_dir <- spatial_env_or_default("SPATIAL_NEIGHBORHOOD_FIGURE_DIR", file.path(spatial_figure_dir, "spatial_06d_neighborhood"))
+  spatial_niche_table_dir <- spatial_env_or_default("SPATIAL_NICHE_TABLE_DIR", file.path(spatial_table_dir, "spatial_06e_niche"))
+  spatial_niche_figure_dir <- spatial_env_or_default("SPATIAL_NICHE_FIGURE_DIR", file.path(spatial_figure_dir, "spatial_06e_niche"))
   py_spatial_prefix <- spatial_env_or_default("PY_SPATIAL_ENV_PREFIX", "")
   py_spatial_legacy_prefix <- spatial_env_or_default("PY_SPATIAL_LEGACY_ENV_PREFIX", "")
   py_spatial_bin_default <- if (nzchar(py_spatial_prefix)) file.path(py_spatial_prefix, "bin", "python") else "python"
@@ -57,6 +68,7 @@ get_spatial_script_config <- function() {
     config_dir = config_dir,
     results_dir = results_dir,
     report_dir = report_dir,
+    ortholog_cache_dir = ortholog_cache_dir,
     eda_report_dir = eda_report_dir,
     intake_report_dir = intake_report_dir,
     manifest_dir = manifest_dir,
@@ -103,6 +115,16 @@ get_spatial_script_config <- function() {
     spatial_de_table_dir = spatial_de_table_dir,
     spatial_de_figure_dir = spatial_de_figure_dir,
     spatial_marker_de_report_dir = spatial_marker_de_report_dir,
+    spatial_region_go_table_dir = spatial_region_go_table_dir,
+    spatial_region_go_figure_dir = spatial_region_go_figure_dir,
+    spatial_region_kegg_table_dir = spatial_region_kegg_table_dir,
+    spatial_region_kegg_figure_dir = spatial_region_kegg_figure_dir,
+    spatial_region_enrichment_eda_table_dir = spatial_region_enrichment_eda_table_dir,
+    spatial_enrichment_report_dir = spatial_enrichment_report_dir,
+    spatial_neighborhood_table_dir = spatial_neighborhood_table_dir,
+    spatial_neighborhood_figure_dir = spatial_neighborhood_figure_dir,
+    spatial_niche_table_dir = spatial_niche_table_dir,
+    spatial_niche_figure_dir = spatial_niche_figure_dir,
     sample_sheet = spatial_env_or_default("SAMPLE_SHEET", file.path(metadata_dir, "samples.tsv")),
     canonical_sample_sheet = spatial_env_or_default("CANONICAL_SAMPLE_SHEET", file.path(metadata_dir, "samples.canonical.tsv")),
     comparison_sheet = spatial_env_or_default("COMPARISON_SHEET", file.path(metadata_dir, "comparisons.tsv")),
@@ -114,6 +136,7 @@ get_spatial_script_config <- function() {
     spatial_object_layer_file = spatial_env_or_default("SPATIAL_OBJECT_LAYER_FILE", file.path(config_dir, "spatial_object_layers.tsv")),
     eda_gate_file = spatial_env_or_default("EDA_GATE_FILE", file.path(config_dir, "eda_gates.tsv")),
     clean_gtf = spatial_env_or_default("CLEAN_GTF", file.path(project_root, "reference", "genes.clean.gtf")),
+    ortholog_manifest_path = spatial_env_or_default("ORTHOLOG_MANIFEST", file.path(ortholog_cache_dir, "_manifest.json")),
     module_01_manifest_path = file.path(manifest_dir, "spatial_01_build_objects", "_manifest.json"),
     module_01a_manifest_path = file.path(manifest_dir, "spatial_01a_pre_qc_eda", "_manifest.json"),
     module_02_filter_manifest_path = file.path(manifest_dir, "spatial_01b_qc_filter", "_manifest.json"),
@@ -130,6 +153,12 @@ get_spatial_script_config <- function() {
     module_05a_region_pseudobulk_manifest_path = file.path(manifest_dir, "spatial_05a_region_pseudobulk", "_manifest.json"),
     module_05b_region_composition_manifest_path = file.path(manifest_dir, "spatial_05b_region_composition", "_manifest.json"),
     module_05_spatial_de_manifest_path = file.path(manifest_dir, "spatial_05_spatial_de", "_manifest.json"),
+    module_06a_region_go_manifest_path = file.path(manifest_dir, "spatial_06a_region_go", "_manifest.json"),
+    module_06b_region_kegg_manifest_path = file.path(manifest_dir, "spatial_06b_region_kegg", "_manifest.json"),
+    module_06c_region_enrichment_eda_manifest_path = file.path(manifest_dir, "spatial_06c_region_enrichment_eda", "_manifest.json"),
+    module_06d_neighborhood_manifest_path = file.path(manifest_dir, "spatial_06d_neighborhood", "_manifest.json"),
+    module_06e_niche_manifest_path = file.path(manifest_dir, "spatial_06e_niche", "_manifest.json"),
+    spatial_panorama_niched_rds = file.path(spatial_checkpoint_dir, "spatial_panorama_niched.rds"),
     load_summary_csv = file.path(spatial_table_dir, "load_summary.csv"),
     load_diagnostics_tsv = file.path(spatial_table_dir, "load_diagnostics.tsv"),
     pre_qc_report_md = file.path(spatial_pre_qc_report_dir, "report.md"),
@@ -148,6 +177,7 @@ get_spatial_script_config <- function() {
     spagcn_py_script = spatial_env_or_default("SPAGCN_PY_SCRIPT", file.path(pipeline_root, "workflow", "04python", "cluster_spagcn.py")),
     stagate_py_bin = spatial_env_or_default("STAGATE_PY_BIN", py_spatial_bin_default),
     stagate_py_script = spatial_env_or_default("STAGATE_PY_SCRIPT", file.path(pipeline_root, "workflow", "04python", "cluster_stagate.py")),
+    spatial_neighborhood_py = spatial_env_or_default("SPATIAL_NEIGHBORHOOD_PY", file.path(pipeline_root, "workflow", "04python", "spatial_neighborhood.py")),
     random_seed = spatial_env_integer("RANDOM_SEED", 42L),
     qc_min_nfeature_default = spatial_env_numeric("SPATIAL_QC_MIN_NFEATURE", 200),
     qc_min_ncount_default = spatial_env_numeric("SPATIAL_QC_MIN_NCOUNT", 500),
@@ -172,11 +202,20 @@ get_spatial_script_config <- function() {
     spatial_marker_min_pct = spatial_env_numeric("SPATIAL_MARKER_MIN_PCT", 0.10),
     spatial_marker_top_n = spatial_env_integer("SPATIAL_MARKER_TOP_N", 20L),
     spatial_de_include_undetermined = spatial_env_or_default("SPATIAL_DE_INCLUDE_UNDETERMINED", "no"),
+    spatial_enrich_top_n = spatial_env_integer("SPATIAL_ENRICH_TOP_N", 200L),
+    spatial_enrich_min_genes = spatial_env_integer("SPATIAL_ENRICH_MIN_GENES", 10L),
+    spatial_enrich_qvalue = spatial_env_numeric("SPATIAL_ENRICH_QVALUE", 0.1),
+    spatial_neighborhood_radius = spatial_env_numeric("SPATIAL_NEIGHBORHOOD_RADIUS", 200),
+    spatial_neighborhood_perms = spatial_env_integer("SPATIAL_NEIGHBORHOOD_PERMS", 1000L),
+    spatial_neighborhood_coord_type = spatial_env_or_default("SPATIAL_NEIGHBORHOOD_COORD_TYPE", "generic"),
+    spatial_niche_k = spatial_env_integer("SPATIAL_NICHE_K", 5L),
+    spatial_niche_k_neighbors = spatial_env_integer("SPATIAL_NICHE_K_NEIGHBORS", 15L),
     module_version = spatial_env_or_default("MODULE_SPATIAL_01_VERSION", "1.0"),
     module_02_version = spatial_env_or_default("MODULE_SPATIAL_02_VERSION", "1.0"),
     module_03_version = spatial_env_or_default("MODULE_SPATIAL_03_VERSION", "1.0"),
     module_04_version = spatial_env_or_default("MODULE_SPATIAL_04_VERSION", "1.1"),
-    module_05_version = spatial_env_or_default("MODULE_SPATIAL_05_VERSION", "1.1")
+    module_05_version = spatial_env_or_default("MODULE_SPATIAL_05_VERSION", "1.1"),
+    module_06_version = spatial_env_or_default("MODULE_SPATIAL_06_VERSION", "1.0")
   )
 }
 
@@ -221,6 +260,16 @@ prepare_dirs_spatial <- function(cfg) {
     cfg$spatial_de_table_dir,
     cfg$spatial_de_figure_dir,
     cfg$spatial_marker_de_report_dir,
+    cfg$spatial_region_go_table_dir,
+    cfg$spatial_region_go_figure_dir,
+    cfg$spatial_region_kegg_table_dir,
+    cfg$spatial_region_kegg_figure_dir,
+    cfg$spatial_region_enrichment_eda_table_dir,
+    cfg$spatial_enrichment_report_dir,
+    cfg$spatial_neighborhood_table_dir,
+    cfg$spatial_neighborhood_figure_dir,
+    cfg$spatial_niche_table_dir,
+    cfg$spatial_niche_figure_dir,
     dirname(cfg$module_01_manifest_path),
     dirname(cfg$module_01a_manifest_path),
     dirname(cfg$module_02_filter_manifest_path),
@@ -237,6 +286,11 @@ prepare_dirs_spatial <- function(cfg) {
     dirname(cfg$module_05a_region_pseudobulk_manifest_path),
     dirname(cfg$module_05b_region_composition_manifest_path),
     dirname(cfg$module_05_spatial_de_manifest_path),
+    dirname(cfg$module_06a_region_go_manifest_path),
+    dirname(cfg$module_06b_region_kegg_manifest_path),
+    dirname(cfg$module_06c_region_enrichment_eda_manifest_path),
+    dirname(cfg$module_06d_neighborhood_manifest_path),
+    dirname(cfg$module_06e_niche_manifest_path),
     dirname(cfg$load_summary_csv),
     dirname(cfg$load_diagnostics_tsv),
     dirname(cfg$pre_qc_report_md),

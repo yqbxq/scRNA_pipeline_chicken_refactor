@@ -11,7 +11,7 @@ RUN_SVG="yes"
 RUN_DECONV="yes"
 RUN_DECONV_EXTRA="no"
 RUN_NEIGHBORHOOD="yes"
-RUN_DECOUPLER="yes"
+RUN_DECOUPLER="no"
 RUN_PYSCENIC="no"
 RUN_ENRICHMENT="yes"
 
@@ -63,16 +63,26 @@ run_future_spatial_r_stage() {
 }
 
 [[ "${RUN_SVG}" == "yes" ]] && run_future_spatial_r_stage "05_svg.R" "spatial_05_svg"
+if [[ "${RUN_ENRICHMENT}" == "yes" ]]; then
+  run_future_spatial_r_stage "06a_region_go_enrichment.R" "spatial_06a_region_go" "${COMPARISON_SHEET}"
+  run_future_spatial_r_stage "06b_region_kegg_enrichment.R" "spatial_06b_region_kegg" "${COMPARISON_SHEET}"
+  run_future_spatial_r_stage "06c_region_enrichment_eda.R" "spatial_06c_region_enrichment_eda"
+  set_eda_gate_status "spatial_enrichment" "pending" "" "Review spatial region GO/KEGG enrichment before neighborhood analysis."
+  hold_for_gate spatial_enrichment
+fi
+if [[ "${RUN_NEIGHBORHOOD}" == "yes" ]]; then
+  run_future_spatial_r_stage "06d_spatial_neighborhood.R" "spatial_06d_neighborhood"
+  set_eda_gate_status "spatial_neighborhood" "pending" "" "Review spatial neighborhood enrichment before niche derivation."
+  hold_for_gate spatial_neighborhood
+fi
 if [[ "${RUN_DECONV}" == "yes" ]]; then
   run_future_spatial_r_stage "07_deconvolution.R" "spatial_07_deconvolution" "${SPATIAL_REFERENCE_INVENTORY_FILE}"
   run_future_spatial_r_stage "07a_deconvolution_validation.R" "spatial_07a_deconvolution_validation"
   set_eda_gate_status "spatial_deconv" "pending" "" "Review deconvolution and scDesign3 validation outputs."
   hold_for_gate spatial_deconv
 fi
-[[ "${RUN_NEIGHBORHOOD}" == "yes" ]] && run_future_spatial_r_stage "06_spatial_neighborhood.R" "spatial_06_neighborhood"
-[[ "${RUN_DECOUPLER}" == "yes" ]] && run_future_spatial_r_stage "06b_spatial_decoupler.R" "spatial_06b_decoupler"
-[[ "${RUN_PYSCENIC}" == "yes" ]] && run_future_spatial_r_stage "06c_spatial_pyscenic.R" "spatial_06c_pyscenic"
-[[ "${RUN_ENRICHMENT}" == "yes" ]] && run_future_spatial_r_stage "08_spatial_enrichment.R" "spatial_08_enrichment"
+[[ "${RUN_DECOUPLER}" == "yes" ]] && run_future_spatial_r_stage "08a_spatial_decoupler.R" "spatial_08a_decoupler"
+[[ "${RUN_PYSCENIC}" == "yes" ]] && run_future_spatial_r_stage "08b_spatial_pyscenic.R" "spatial_08b_pyscenic"
 
 update_workflow_status \
   "spatial_extensions_completed" \
