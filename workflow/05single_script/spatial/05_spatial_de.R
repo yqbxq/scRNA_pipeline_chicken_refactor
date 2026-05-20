@@ -80,7 +80,7 @@ if (nrow(comparisons) == 0) {
 
 manifest_tsv <- file.path(cfg$spatial_de_table_dir, "spatial_de_manifest.tsv")
 spatial_write_tsv(manifest_df, manifest_tsv)
-report_path <- file.path(cfg$spatial_marker_de_report_dir, "report.md")
+report_path <- file.path(cfg$spatial_marker_de_report_dir, "spatial_de_spotlevel.md")
 summarize_spatial_de_manifest(manifest_df, cfg, report_path)
 
 write_manifest_local(

@@ -47,7 +47,16 @@ if (nrow(comparisons) == 0) {
         out_dir <- file.path(cfg$spatial_marker_table_dir, group_by, spatial_safe_id(vars$comparison_id), spatial_safe_id(layer_id))
         fig_dir <- file.path(cfg$spatial_marker_figure_dir, group_by, spatial_safe_id(vars$comparison_id), spatial_safe_id(layer_id))
         if (!identical(subset_res$status, "ok")) {
-          summary <- data.frame(group_value = character(), n_spots = integer(), status = subset_res$status, reason = subset_res$reason, stringsAsFactors = FALSE)
+          summary <- data.frame(
+            group_value = NA_character_,
+            n_spots = NA_integer_,
+            status = subset_res$status,
+            reason = subset_res$reason,
+            comparison_id = vars$comparison_id,
+            layer_id = layer_id,
+            group_by = group_by,
+            stringsAsFactors = FALSE
+          )
           paths <- write_spatial_marker_outputs(out_dir, fig_dir, data.frame(), summary, vars)
           manifest_rows[[length(manifest_rows) + 1L]] <- spatial_manifest_row_05(vars, layer_id, group_by, inference_status = "skipped", status = subset_res$status, reason = subset_res$reason, exploratory_results_tsv = paths$markers, exploratory_summary_tsv = paths$summary, cfg = cfg)
           next

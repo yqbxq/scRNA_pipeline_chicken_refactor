@@ -176,7 +176,7 @@ get_spatial_script_config <- function() {
     module_02_version = spatial_env_or_default("MODULE_SPATIAL_02_VERSION", "1.0"),
     module_03_version = spatial_env_or_default("MODULE_SPATIAL_03_VERSION", "1.0"),
     module_04_version = spatial_env_or_default("MODULE_SPATIAL_04_VERSION", "1.1"),
-    module_05_version = spatial_env_or_default("MODULE_SPATIAL_05_VERSION", "1.0")
+    module_05_version = spatial_env_or_default("MODULE_SPATIAL_05_VERSION", "1.1")
   )
 }
 

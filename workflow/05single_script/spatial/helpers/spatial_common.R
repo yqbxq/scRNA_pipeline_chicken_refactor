@@ -2578,10 +2578,27 @@ run_spatial_pseudobulk_de <- function(panorama, vars, group_by_col, region_value
       stop("no genes retained after edgeR filterByExpr", call. = FALSE)
     }
     y <- edgeR::calcNormFactors(y)
-    design <- stats::model.matrix(~group)
+    use_batch <- nzchar(vars$batch_var) &&
+      vars$batch_var %in% colnames(meta_sub) &&
+      length(unique(as.character(meta_sub[[vars$batch_var]]))) >= 2L
+    if (use_batch) {
+      sample_meta$batch <- vapply(sample_meta$sample_id, function(sample_id) {
+        vals <- as.character(meta_sub[sample_ids == sample_id, vars$batch_var, drop = TRUE])
+        vals <- vals[!is.na(vals) & nzchar(vals)]
+        if (length(vals) > 0) vals[[1]] else ""
+      }, character(1))
+      sample_meta$batch[!nzchar(sample_meta$batch)] <- "default"
+      design_full <- stats::model.matrix(~batch + group, sample_meta)
+      if (qr(design_full)$rank < ncol(design_full)) {
+        use_batch <- FALSE
+      }
+    }
+    # Use ~ batch + group when the retained pseudobulk samples have a non-confounded batch covariate.
+    design <- if (use_batch) stats::model.matrix(~batch + group, sample_meta) else stats::model.matrix(~group, sample_meta)
+    contrast_coef <- if (use_batch) grep("^group", colnames(design))[[1]] else 2L
     y <- edgeR::estimateDisp(y, design)
     fit <- edgeR::glmQLFit(y, design)
-    test <- edgeR::glmQLFTest(fit, coef = 2)
+    test <- edgeR::glmQLFTest(fit, coef = contrast_coef)
     out <- as.data.frame(edgeR::topTags(test, n = Inf), stringsAsFactors = FALSE)
     out$gene <- rownames(out)
     out

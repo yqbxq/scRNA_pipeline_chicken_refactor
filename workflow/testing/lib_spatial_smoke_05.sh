@@ -34,16 +34,40 @@ saveRDS(panorama, cfg$spatial_panorama_annotated_rds)
 RSCRIPT
 }
 
+spatial_smoke05_prepare_passgate_fixture() {
+  local tmp_root="$1"
+  local pipeline_root="$2"
+  spatial_smoke05_prepare_region_fixture "${tmp_root}" "${pipeline_root}"
+  Rscript - <<'RSCRIPT'
+source(file.path(Sys.getenv("PIPELINE_ROOT"), "workflow/02lib/r/r_runtime_bootstrap.R"), encoding = "UTF-8")
+source(file.path(Sys.getenv("PIPELINE_ROOT"), "workflow/05single_script/spatial/helpers/project_paths_spatial.R"), encoding = "UTF-8")
+cfg <- get_spatial_script_config()
+panorama <- readRDS(cfg$spatial_panorama_annotated_rds)
+meta <- panorama@meta.data
+splits <- ave(seq_len(ncol(panorama)), as.character(meta$condition), FUN = seq_along)
+rep_id <- ((splits - 1) %% 3) + 1
+panorama$sample_id <- paste0(as.character(meta$condition), "_rep", rep_id)
+panorama$batch <- ifelse(rep_id == 2, "B2", "B1")
+saveRDS(panorama, cfg$spatial_panorama_annotated_rds)
+RSCRIPT
+  sed -i 's/	3	no	3	0.1/	2	no	3	0.1/' "${COMPARISON_SHEET}"
+}
+
 spatial_smoke05_assert_manifest_status() {
   local manifest_tsv="$1"
   local expected="$2"
-  Rscript - "${manifest_tsv}" "${expected}" <<'RSCRIPT'
+  local strict="${3:-no}"
+  Rscript - "${manifest_tsv}" "${expected}" "${strict}" <<'RSCRIPT'
 args <- commandArgs(trailingOnly = TRUE)
 path <- args[[1]]
 expected <- args[[2]]
+strict <- identical(args[[3]], "yes")
 if (!file.exists(path)) stop(sprintf("missing manifest tsv: %s", path), call. = FALSE)
 df <- read.delim(path, sep = "\t", stringsAsFactors = FALSE, check.names = FALSE)
 if (nrow(df) == 0) stop("manifest has zero rows", call. = FALSE)
-if (!expected %in% df$status) stop(sprintf("expected status %s, got: %s", expected, paste(unique(df$status), collapse = ",")), call. = FALSE)
+if (!expected %in% df$status) stop(sprintf("expected status %s missing; got: %s", expected, paste(unique(df$status), collapse = ",")), call. = FALSE)
+if (strict && !all(df$status == expected)) stop(sprintf("strict mode: not all rows are %s; got: %s", expected, paste(unique(df$status), collapse = ",")), call. = FALSE)
+bad <- grep("^failed_", df$status, value = TRUE)
+if (length(bad) > 0) stop(sprintf("smoke saw failure rows: %s", paste(unique(bad), collapse = ",")), call. = FALSE)
 RSCRIPT
 }
