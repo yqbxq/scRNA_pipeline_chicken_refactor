@@ -17,6 +17,335 @@ is_stale_output() {
   return 1
 }
 
+compute_input_fingerprint() {
+  local python_bin
+  python_bin="$(detect_python)"
+
+  "${python_bin}" - "$@" <<'PY'
+import hashlib
+import json
+import os
+import sys
+from pathlib import Path
+
+LARGE_SUFFIXES = {".bam", ".cram", ".fastq", ".fq", ".gz", ".h5", ".h5ad", ".loom"}
+threshold_mb = int(os.environ.get("CHECKPOINT_LARGE_FILE_THRESHOLD_MB", "100") or "100")
+threshold_bytes = threshold_mb * 1024 * 1024
+max_manifest_depth = 5
+visited_manifests = set()
+
+
+def file_sha(path):
+    stat = path.stat()
+    suffixes = {s.lower() for s in path.suffixes}
+    if stat.st_size > threshold_bytes and suffixes.intersection(LARGE_SUFFIXES):
+        h = hashlib.sha256()
+        with path.open("rb") as handle:
+            h.update(handle.read(1024 * 1024))
+        return f"large:{stat.st_size}:{stat.st_mtime_ns}:{h.hexdigest()}"
+
+    h = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def is_manifest(path):
+    if not path.is_file() or path.suffix.lower() != ".json":
+        return False
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+    return isinstance(data, dict) and isinstance(data.get("outputs"), dict)
+
+
+def manifest_output_paths(path, depth):
+    if depth > max_manifest_depth:
+        raise RuntimeError(f"manifest nesting exceeds {max_manifest_depth}: {path}")
+    resolved = path.resolve()
+    if resolved in visited_manifests:
+        return []
+    visited_manifests.add(resolved)
+
+    data = json.loads(path.read_text(encoding="utf-8"))
+    base_dir = Path(data.get("base_dir") or path.parent)
+    out = []
+    for entry in (data.get("outputs") or {}).values():
+        if not isinstance(entry, dict) or not entry.get("path"):
+            continue
+        candidate = Path(str(entry["path"]))
+        if not candidate.is_absolute():
+            candidate = base_dir / candidate
+        out.extend(expand_path(candidate, depth + 1))
+    return out
+
+
+def expand_path(path, depth=0):
+    if not path.exists():
+        return [path]
+    if path.is_dir():
+        files = []
+        for child in path.rglob("*"):
+            if not child.is_file():
+                continue
+            try:
+                rel_parts = child.relative_to(path).parts
+            except ValueError:
+                rel_parts = child.parts
+            if any(part.startswith(".") for part in rel_parts):
+                continue
+            files.append(child)
+        return files
+    if is_manifest(path):
+        return manifest_output_paths(path, depth)
+    return [path]
+
+
+items = []
+for raw in sys.argv[1:]:
+    if not raw:
+        continue
+    path = Path(raw)
+    for item in expand_path(path):
+        key = str(item)
+        if item.exists() and item.is_file():
+            digest = file_sha(item)
+        elif item.exists() and item.is_dir():
+            digest = "dir"
+        else:
+            digest = "missing"
+        items.append((key, digest))
+
+agg = hashlib.sha256()
+for path, digest in sorted(items):
+    agg.update(f"{path}\t{digest}\n".encode("utf-8"))
+print(agg.hexdigest())
+PY
+}
+
+compute_script_fingerprint() {
+  local script_path="${1:-}"
+  local python_bin
+  python_bin="$(detect_python)"
+
+  "${python_bin}" - "${script_path}" <<'PY'
+import hashlib
+import re
+import sys
+from pathlib import Path
+
+script = Path(sys.argv[1])
+files = [script]
+
+if script.exists():
+    content = script.read_text(encoding="utf-8", errors="ignore")
+    if script.suffix == ".R":
+        patterns = [
+            r'(?:source|source_utf8)\s*\(\s*["\']([^"\']+)["\']\s*\)',
+        ]
+        for pattern in patterns:
+            for match in re.finditer(pattern, content):
+                helper = (script.parent / match.group(1)).resolve()
+                if helper.exists() and helper.is_file():
+                    files.append(helper)
+    elif script.suffix == ".py":
+        for match in re.finditer(r'(?:from\s+helpers\.(\w+)\s+import|import\s+helpers\.(\w+))', content):
+            mod = match.group(1) or match.group(2)
+            helper = (script.parent / "helpers" / f"{mod}.py").resolve()
+            if helper.exists() and helper.is_file():
+                files.append(helper)
+
+agg = hashlib.sha256()
+seen = set()
+for path in sorted(files, key=lambda p: str(p)):
+    key = str(path)
+    if key in seen:
+        continue
+    seen.add(key)
+    h = hashlib.sha256()
+    if path.exists() and path.is_file():
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                h.update(chunk)
+        digest = h.hexdigest()
+    else:
+        digest = "missing"
+    agg.update(f"{key}\t{digest}\n".encode("utf-8"))
+print(agg.hexdigest())
+PY
+}
+
+compute_params_fingerprint() {
+  local param_names_csv="${1:-}"
+  if [[ -z "${param_names_csv}" ]]; then
+    echo ""
+    return 0
+  fi
+
+  local python_bin
+  python_bin="$(detect_python)"
+  "${python_bin}" - "${param_names_csv}" <<'PY'
+import hashlib
+import os
+import sys
+
+names = [item.strip() for item in sys.argv[1].split(",") if item.strip()]
+agg = hashlib.sha256()
+for name in sorted(set(names)):
+    agg.update(f"{name}={os.environ.get(name, '__UNSET__')}\n".encode("utf-8"))
+print(agg.hexdigest())
+PY
+}
+
+manifest_has_fingerprints() {
+  local manifest_path="$1"
+  local python_bin
+  python_bin="$(detect_python)"
+  "${python_bin}" - "${manifest_path}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+if not path.exists():
+    raise SystemExit(1)
+try:
+    data = json.loads(path.read_text(encoding="utf-8"))
+except Exception:
+    raise SystemExit(1)
+fp = data.get("fingerprints")
+if not isinstance(fp, dict) or fp.get("algorithm") != "sha256":
+    raise SystemExit(1)
+for key in ("input_hash", "script_hash", "params_hash"):
+    if key not in fp:
+        raise SystemExit(1)
+raise SystemExit(0)
+PY
+}
+
+read_manifest_fingerprint() {
+  local manifest_path="$1"
+  local fingerprint_key="$2"
+  local python_bin
+  python_bin="$(detect_python)"
+  "${python_bin}" - "${manifest_path}" "${fingerprint_key}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+key = sys.argv[2]
+data = json.loads(path.read_text(encoding="utf-8"))
+fp = data.get("fingerprints") or {}
+value = fp.get(key, "")
+if key == "params_names" and isinstance(value, list):
+    print(",".join(str(item) for item in value if str(item)))
+elif value is None:
+    print("")
+else:
+    print(str(value))
+PY
+}
+
+write_manifest_fingerprints() {
+  local manifest_path="$1"
+  local script_path="$2"
+  local param_names_csv="$3"
+  shift 3 || true
+
+  [[ -s "${manifest_path}" ]] || return 0
+
+  local input_hash script_hash params_hash python_bin
+  if ! input_hash="$(compute_input_fingerprint "$@")"; then
+    return 1
+  fi
+  if ! script_hash="$(compute_script_fingerprint "${script_path}")"; then
+    return 1
+  fi
+  if ! params_hash="$(compute_params_fingerprint "${param_names_csv}")"; then
+    return 1
+  fi
+  python_bin="$(detect_python)"
+
+  "${python_bin}" - "${manifest_path}" "${input_hash}" "${script_hash}" "${params_hash}" "${param_names_csv}" "${CHECKPOINT_MODE:-mtime}" <<'PY'
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+path = Path(sys.argv[1])
+data = json.loads(path.read_text(encoding="utf-8"))
+param_names = [item.strip() for item in sys.argv[5].split(",") if item.strip()]
+data["fingerprints"] = {
+    "algorithm": "sha256",
+    "computed_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    "input_hash": sys.argv[2],
+    "script_hash": sys.argv[3],
+    "params_hash": sys.argv[4],
+    "params_names": param_names,
+    "checkpoint_mode": sys.argv[6],
+}
+path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+PY
+}
+
+is_stage_stale_fingerprint() {
+  local script_path="$1"
+  local manifest_path="$2"
+  local param_names_csv="$3"
+  shift 3 || true
+
+  if ! manifest_has_fingerprints "${manifest_path}"; then
+    [[ "${CHECKPOINT_FINGERPRINT_VERBOSE:-no}" == "yes" ]] && echo "fingerprint: missing saved hashes for ${manifest_path}" >&2
+    return 0
+  fi
+
+  local saved_params_names
+  saved_params_names="$(read_manifest_fingerprint "${manifest_path}" "params_names")"
+  if [[ -n "${saved_params_names}" ]]; then
+    param_names_csv="${saved_params_names}"
+  fi
+
+  local cur_input_hash cur_script_hash cur_params_hash
+  local saved_input_hash saved_script_hash saved_params_hash
+  if ! cur_input_hash="$(compute_input_fingerprint "$@")"; then
+    return 2
+  fi
+  if ! cur_script_hash="$(compute_script_fingerprint "${script_path}")"; then
+    return 2
+  fi
+  if ! cur_params_hash="$(compute_params_fingerprint "${param_names_csv}")"; then
+    return 2
+  fi
+  if ! saved_input_hash="$(read_manifest_fingerprint "${manifest_path}" "input_hash")"; then
+    return 2
+  fi
+  if ! saved_script_hash="$(read_manifest_fingerprint "${manifest_path}" "script_hash")"; then
+    return 2
+  fi
+  if ! saved_params_hash="$(read_manifest_fingerprint "${manifest_path}" "params_hash")"; then
+    return 2
+  fi
+
+  if [[ "${CHECKPOINT_FINGERPRINT_VERBOSE:-no}" == "yes" ]]; then
+    {
+      echo "fingerprint compare: ${manifest_path}"
+      echo "  input:  current=${cur_input_hash} saved=${saved_input_hash}"
+      echo "  script: current=${cur_script_hash} saved=${saved_script_hash}"
+      echo "  params: current=${cur_params_hash} saved=${saved_params_hash}"
+    } >&2
+  fi
+
+  if [[ "${cur_input_hash}" != "${saved_input_hash}" ]] || \
+     [[ "${cur_script_hash}" != "${saved_script_hash}" ]] || \
+     [[ "${cur_params_hash}" != "${saved_params_hash}" ]]; then
+    return 0
+  fi
+  return 1
+}
+
 check_stage_deps() {
   local stage_id="$1"
   case "${stage_id}" in
@@ -324,13 +653,108 @@ run_stage_if_stale_interaction() {
 
 run_stage_if_stale_with_runner() {
   local runner_fn="$1"
-  local script_path="$2"
-  local output_path="$3"
-  shift 3 || true
+  shift || true
 
-  if is_stale_output "${output_path}" "$@"; then
+  local script_path=""
+  local output_path=""
+  local param_names_csv=""
+  local -a inputs=()
+
+  if [[ "${1:-}" == "--script" ]]; then
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --script)
+          script_path="$2"
+          shift 2 || true
+          ;;
+        --manifest|--output)
+          output_path="$2"
+          shift 2 || true
+          ;;
+        --inputs)
+          shift || true
+          while [[ "$#" -gt 0 && "${1:-}" != --* ]]; do
+            inputs+=("$1")
+            shift || true
+          done
+          ;;
+        --params)
+          param_names_csv="$2"
+          shift 2 || true
+          ;;
+        *)
+          inputs+=("$1")
+          shift || true
+          ;;
+      esac
+    done
+  else
+    script_path="${1:-}"
+    output_path="${2:-}"
+    shift 2 || true
+    inputs=("$@")
+  fi
+
+  [[ -n "${script_path}" ]] || die "run_stage_if_stale 缺少 script_path"
+  [[ -n "${output_path}" ]] || die "run_stage_if_stale 缺少 output_path"
+
+  local checkpoint_mode="${CHECKPOINT_MODE:-mtime}"
+  local stale=1
+
+  case "${checkpoint_mode}" in
+    fingerprint)
+      local fingerprint_status=0
+      set +e
+      is_stage_stale_fingerprint "${script_path}" "${output_path}" "${param_names_csv}" "${inputs[@]}"
+      fingerprint_status="$?"
+      set -e
+      case "${fingerprint_status}" in
+        0)
+          stale=0
+          ;;
+        1)
+          stale=1
+          ;;
+        *)
+          case "${CHECKPOINT_FINGERPRINT_FALLBACK_ON_ERROR:-mtime}" in
+            error)
+              die "manifest fingerprint stale check failed: ${output_path}"
+              ;;
+            *)
+              warn "manifest fingerprint stale check failed, falling back to mtime: ${output_path}"
+              if is_stale_output "${output_path}" "${inputs[@]}"; then
+                stale=0
+              fi
+              ;;
+          esac
+          ;;
+      esac
+      ;;
+    off)
+      stale=0
+      ;;
+    mtime|*)
+      if is_stale_output "${output_path}" "${inputs[@]}"; then
+        stale=0
+      fi
+      ;;
+  esac
+
+  if [[ "${stale}" -eq 0 ]]; then
     echo "运行 ${script_path}"
     "${runner_fn}" "${script_path}"
+    if [[ "${checkpoint_mode}" == "fingerprint" ]]; then
+      if ! write_manifest_fingerprints "${output_path}" "${script_path}" "${param_names_csv}" "${inputs[@]}"; then
+        case "${CHECKPOINT_FINGERPRINT_FALLBACK_ON_ERROR:-mtime}" in
+          error)
+            die "写入 manifest fingerprint 失败: ${output_path}"
+            ;;
+          *)
+            warn "写入 manifest fingerprint 失败，保留 mtime checkpoint: ${output_path}"
+            ;;
+        esac
+      fi
+    fi
   else
     echo "已存在且未过期，跳过: ${output_path}"
   fi
