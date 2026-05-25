@@ -53,6 +53,7 @@ bash "${PIPELINE_ROOT}/workflow/03stages/input_summary.sh" >/dev/null
 
 [[ -s "${TMP_ROOT}/project/config/project_config.sh" ]]
 [[ -s "${TMP_ROOT}/project/metadata/samples.canonical.tsv" ]]
+[[ -s "${TMP_ROOT}/project/metadata/h5ad_export_contract.tsv" ]]
 [[ -s "${TMP_ROOT}/project/reports/intake/input_inventory.tsv" ]]
 [[ -s "${TMP_ROOT}/project/reports/intake/branch_readiness.tsv" ]]
 [[ -s "${TMP_ROOT}/project/reports/intake/intake_summary.md" ]]
@@ -63,5 +64,6 @@ grep -q $'^scdesign3_targets\tpending' "${TMP_ROOT}/project/config/eda_gates.tsv
 grep -q $'^panorama\tpanorama\tyes' "${TMP_ROOT}/project/config/object_layers.tsv"
 grep -q '^export SPATIAL_CLUSTERING_OVERRIDE_FILE=' "${TMP_ROOT}/project/config/project_config.sh"
 grep -q '^export SPATIAL_REGION_ANNOTATION_OVERRIDE_FILE=' "${TMP_ROOT}/project/config/project_config.sh"
+grep -q '^export H5AD_CONTRACT_FILE=' "${TMP_ROOT}/project/config/project_config.sh"
 
 echo "smoke_init_project_ok"

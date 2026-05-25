@@ -1,0 +1,26 @@
+field_path	field_type	required	dtype	gate	modality	semantics	notes
+obs.sample_id	scalar	yes	str	primary	both	Sample identifier	Core non-empty sample key.
+obs.condition	scalar	yes	str	primary	both	Experimental condition	Core group or stage column.
+obs.layer	scalar	no	str	exploratory	scrna	Object layer identifier	Optional panorama/subcluster layer label.
+obs.celltype_l1	scalar	yes	str	primary	both	Primary cell type annotation	Core annotation used by downstream communication and deconvolution.
+obs.celltype_l2	scalar	no	str	exploratory	both	Secondary cell type annotation	Optional fine annotation.
+obs.cluster_eligibility	scalar	conditional	str	primary	both	Cluster eligibility tier	Required after P-R01 hookup.
+obs.section_id	scalar	yes	str	primary	spatial	Spatial section identifier	Required for spatial H5AD exports.
+obs.region_label	scalar	no	str	exploratory	spatial	Spatial region label	Optional region/subregion annotation.
+var.gene_id	scalar	yes	str	primary	both	Gene identifier	Chicken or mapped gene ID.
+var.gene_symbol	scalar	yes	str	primary	both	Gene symbol	Gene symbol used for display.
+var.human_ortholog_symbol	scalar	no	str	exploratory	both	Human ortholog symbol	Optional ortholog bridge.
+var.feature_type	scalar	no	str	exploratory	both	Feature type	Optional feature class.
+obsm.X_pca	matrix	yes	float32	primary	both	PCA embedding	Primary low-dimensional embedding.
+obsm.X_umap	matrix	yes	float32	exploratory	both	UMAP embedding	Warn-only visualization embedding.
+obsm.X_harmony	matrix	conditional	float32	exploratory	scrna	Harmony embedding	Required only when exporting harmony-integrated objects.
+obsm.spatial	matrix	yes	float32	primary	spatial	Spatial coordinates	AnnData spatial coordinate matrix.
+layers.counts	matrix	yes	int64	primary	both	Raw counts	Unnormalized count matrix.
+layers.logcounts	matrix	conditional	float32	primary	both	Log-normalized matrix	Required after normalize/export hookup.
+layers.SCT	matrix	conditional	float32	exploratory	both	SCT matrix	Optional SCTransform matrix.
+uns.module	scalar	yes	str	primary	both	Export module name	Module writing the H5AD.
+uns.export_timestamp	scalar	yes	str	primary	both	Export timestamp	ISO 8601 timestamp.
+uns.fingerprints	dict	conditional	-	primary	both	Checkpoint fingerprints	Copied from module manifest when available.
+uns.cluster_eligibility_summary	dict	conditional	-	exploratory	both	Cluster eligibility summary	Added by P-R01/P-R02 hookup.
+spatial.tissue_positions	dataframe	yes	-	primary	spatial	Tissue position table	Spatial image/spot coordinate table.
+spatial.scale_factors	dict	yes	-	primary	spatial	Spatial scale factors	Required for spatial visualization.

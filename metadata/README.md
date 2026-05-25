@@ -14,6 +14,7 @@ analysis intent. Generated module input tables should be derived from it.
 | `samples.tsv` | scRNA + ST sample design table; `modality=scrna` is the backward-compatible default |
 | `sections.tsv` | ST physical section registry keyed by `section_id` |
 | `spatial_reference_inventory.tsv` | scRNA reference selection/freezing contract for ST deconvolution and joint stages |
+| `h5ad_export_contract.tsv` | H5AD mirror export contract for obs/var/obsm/layers/uns/spatial fields |
 | `analysis_questions.tsv` | Tier 1 question schema |
 | `comparisons.tsv` | Generated DEG/composition inputs |
 | `communication_pairs.tsv` | Generated communication inputs |
