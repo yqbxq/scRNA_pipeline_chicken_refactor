@@ -1,6 +1,6 @@
 # Spatial Module 07 Deconvolution Overview
 
-Spatial module 07 runs deconvolution from a frozen single-cell reference into ST spots.
+Spatial module 07 runs deconvolution from a frozen single-cell reference into ST spots. The RCTD, Seurat TransferData, and CARD slots execute real per-section deconvolution when their method packages, a frozen reference, and an annotated ST panorama are available; otherwise they write explicit skip/failure manifests.
 
 | Script | Manifest | Purpose |
 | --- | --- | --- |
@@ -13,4 +13,4 @@ Spatial module 07 runs deconvolution from a frozen single-cell reference into ST
 
 `60_run_spatial_extensions.sh` runs 07a and 07e by default. `--with-deconv-extra` adds 07b/07c/07d, and `--with-deconv-validation` adds 07f. The `spatial_deconv` gate is held after 07e or optional 07f.
 
-All method scripts write manifests even when `deconv_pairs.tsv` is empty or method packages are unavailable. This keeps downstream review and 06e niche wiring deterministic while server environments are prepared.
+All method scripts write manifests even when `deconv_pairs.tsv` is empty or method packages are unavailable. Successful R methods write `spot_celltype_proportions.tsv`, `spot_celltype_proportions_wide.tsv`, `spot_metadata.tsv` with dominant cell type and entropy, `method_summary.tsv`, and the method object RDS for reproducibility. The cell2location slot remains a Python sidecar path and still depends on the future H5AD mirror contract before formal training is enabled.

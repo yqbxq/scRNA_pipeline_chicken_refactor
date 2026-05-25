@@ -14,7 +14,7 @@ source(file.path(.script_dir, "helpers", "spatial_deconv_utils.R"), encoding = "
 
 cfg <- get_spatial_script_config()
 module_name <- "spatial_07a_deconvolution_rctd"
-manifest_df <- run_deconv_method_scaffold_st(cfg, "rctd", "spacexr", cfg$spatial_rctd_table_dir, "failed_rctd_run")
+manifest_df <- run_deconv_entry_st(cfg, "rctd", "spacexr", cfg$spatial_rctd_table_dir, "failed_rctd_run")
 manifest_tsv <- file.path(cfg$spatial_rctd_table_dir, "rctd_manifest.tsv")
 report_path <- file.path(cfg$spatial_rctd_figure_dir, "rctd_report.md")
 

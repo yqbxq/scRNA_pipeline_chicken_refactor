@@ -14,7 +14,7 @@ source(file.path(.script_dir, "helpers", "spatial_deconv_utils.R"), encoding = "
 
 cfg <- get_spatial_script_config()
 module_name <- "spatial_07c_deconvolution_card"
-manifest_df <- run_deconv_method_scaffold_st(cfg, "card", "CARD", cfg$spatial_card_table_dir, "failed_card_deconvolution")
+manifest_df <- run_deconv_entry_st(cfg, "card", "CARD", cfg$spatial_card_table_dir, "failed_card_deconvolution")
 manifest_tsv <- file.path(cfg$spatial_card_table_dir, "card_manifest.tsv")
 report_path <- file.path(cfg$spatial_card_figure_dir, "card_report.md")
 
