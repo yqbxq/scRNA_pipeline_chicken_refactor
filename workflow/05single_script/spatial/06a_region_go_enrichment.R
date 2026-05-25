@@ -39,7 +39,7 @@ report_lines <- c(
 )
 write_markdown_local(report_lines, report_path)
 
-write_manifest_local(
+st06_write_manifest_local(
   manifest_path = cfg$module_06a_region_go_manifest_path,
   new_outputs = list(
     region_go_manifest = build_output_entry(manifest_tsv, "tsv", module_name, "one row per ST05 region gene set and GO ontology", base_dir = cfg$project_root, schema = infer_schema_from_df(manifest_df)),

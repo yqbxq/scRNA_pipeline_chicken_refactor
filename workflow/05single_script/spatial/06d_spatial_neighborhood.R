@@ -21,7 +21,7 @@ prepare_dirs_spatial(cfg)
 
 empty_neighborhood_manifest <- function() {
   st06_empty_df(c(
-    "status", "reason", "input_rds", "spot_tsv", "label_column", "spot_n",
+    "status", "reason", "input_rds", "input_h5ad", "label_column", "spot_n",
     "label_n", "radius", "permutations", "coord_type", "interaction_matrix_tsv",
     "nhood_enrichment_zscore_tsv", "co_occurrence_tsv", "sidecar_summary_tsv"
   ))
@@ -39,17 +39,15 @@ resolve_panorama_input <- function(cfg) {
   if (is.na(hit)) "" else hit
 }
 
-write_skip_manifest <- function(status, reason, input_rds = "") {
-  spot_tsv <- file.path(cfg$spatial_neighborhood_table_dir, "neighborhood_spots.tsv")
-  st06_write_tsv(st06_empty_df(c("spot_id", "x", "y", "label", "section_id")), spot_tsv)
+write_skip_manifest <- function(status, reason, input_rds = "", label_col = "", spot_n = 0L, label_n = 0L) {
   data.frame(
     status = status,
     reason = reason,
     input_rds = input_rds,
-    spot_tsv = spot_tsv,
-    label_column = "",
-    spot_n = 0L,
-    label_n = 0L,
+    input_h5ad = "",
+    label_column = label_col,
+    spot_n = spot_n,
+    label_n = label_n,
     radius = cfg$spatial_neighborhood_radius,
     permutations = cfg$spatial_neighborhood_perms,
     coord_type = cfg$spatial_neighborhood_coord_type,
@@ -61,6 +59,49 @@ write_skip_manifest <- function(status, reason, input_rds = "") {
   )
 }
 
+write_panorama_h5ad_st <- function(obj, cfg) {
+  ensure_dir(cfg$run_tmp_dir)
+  tmp_h5ad <- file.path(cfg$run_tmp_dir, sprintf("panorama_06d_%s.h5ad", Sys.getpid()))
+  assay <- Seurat::DefaultAssay(obj)
+  converted <- FALSE
+  reason <- ""
+
+  if (requireNamespace("sceasy", quietly = TRUE)) {
+    converted <- tryCatch({
+      sceasy::convertFormat(
+        obj = obj,
+        from = "seurat",
+        to = "anndata",
+        outFile = tmp_h5ad,
+        assay = assay,
+        main_layer = "data"
+      )
+      file.exists(tmp_h5ad)
+    }, error = function(e) {
+      reason <<- conditionMessage(e)
+      FALSE
+    })
+  }
+
+  if (!converted && requireNamespace("MuDataSeurat", quietly = TRUE)) {
+    converted <- tryCatch({
+      MuDataSeurat::WriteH5AD(obj, tmp_h5ad, assay = assay)
+      file.exists(tmp_h5ad)
+    }, error = function(e) {
+      reason <<- conditionMessage(e)
+      FALSE
+    })
+  }
+
+  if (!converted) {
+    if (!nzchar(reason)) {
+      reason <- "sceasy and MuDataSeurat are not installed in the R spatial environment"
+    }
+    return(list(path = "", status = "skipped_no_packages", reason = reason))
+  }
+  list(path = tmp_h5ad, status = "ok", reason = "")
+}
+
 panorama_input <- resolve_panorama_input(cfg)
 if (!nzchar(panorama_input)) {
   manifest_df <- write_skip_manifest("skipped_no_upstream_manifest", "no annotated/subannotated spatial panorama RDS was available")
@@ -70,65 +111,60 @@ if (!nzchar(panorama_input)) {
   obj <- readRDS(panorama_input)
   meta <- obj@meta.data
   label_col <- c("sub_region", "region", "seurat_clusters")[c("sub_region", "region", "seurat_clusters") %in% colnames(meta)][1]
-  x_col <- c("x", "X", "imagecol", "pxl_col_in_fullres", "array_col", "col")[c("x", "X", "imagecol", "pxl_col_in_fullres", "array_col", "col") %in% colnames(meta)][1]
-  y_col <- c("y", "Y", "imagerow", "pxl_row_in_fullres", "array_row", "row")[c("y", "Y", "imagerow", "pxl_row_in_fullres", "array_row", "row") %in% colnames(meta)][1]
-  if (is.na(label_col) || is.na(x_col) || is.na(y_col)) {
-    manifest_df <- write_skip_manifest("failed", "metadata must contain label column region/sub_region and x/y coordinate columns", panorama_input)
+  if (is.na(label_col)) {
+    manifest_df <- write_skip_manifest("failed", "metadata must contain label column sub_region, region, or seurat_clusters", panorama_input)
   } else {
-    spots <- data.frame(
-      spot_id = rownames(meta),
-      x = suppressWarnings(as.numeric(meta[[x_col]])),
-      y = suppressWarnings(as.numeric(meta[[y_col]])),
-      label = as.character(meta[[label_col]]),
-      section_id = if ("section_id" %in% colnames(meta)) as.character(meta$section_id) else "",
-      stringsAsFactors = FALSE
-    )
-    spots <- spots[is.finite(spots$x) & is.finite(spots$y) & nzchar(spots$label), , drop = FALSE]
-    spot_tsv <- file.path(cfg$spatial_neighborhood_table_dir, "neighborhood_spots.tsv")
-    st06_write_tsv(spots, spot_tsv)
-    if (nrow(spots) < 3 || length(unique(spots$label)) < 2) {
-      manifest_df <- write_skip_manifest("skipped_too_few_spots", "need at least 3 spots and 2 region labels", panorama_input)
-      manifest_df$spot_tsv <- spot_tsv
-      manifest_df$spot_n <- nrow(spots)
-      manifest_df$label_n <- length(unique(spots$label))
-      manifest_df$label_column <- label_col
+    labels <- as.character(meta[[label_col]])
+    labels <- labels[nzchar(labels) & !is.na(labels)]
+    spot_n <- length(labels)
+    label_n <- length(unique(labels))
+    if (spot_n < 3 || label_n < 2) {
+      manifest_df <- write_skip_manifest("skipped_too_few_spots", "need at least 3 spots and 2 region labels", panorama_input, label_col, spot_n, label_n)
     } else {
-      out_prefix <- file.path(cfg$spatial_neighborhood_table_dir, "neighborhood")
-      cmd <- c(
-        cfg$spatial_neighborhood_py,
-        "--spots", spot_tsv,
-        "--out-prefix", out_prefix,
-        "--radius", as.character(cfg$spatial_neighborhood_radius),
-        "--perms", as.character(cfg$spatial_neighborhood_perms),
-        "--seed", as.character(cfg$random_seed)
-      )
-      run <- tryCatch(
-        system2(cfg$py_spatial_bin, args = cmd, stdout = TRUE, stderr = TRUE),
-        error = function(e) structure(conditionMessage(e), status = 127)
-      )
-      code <- attr(run, "status")
-      if (is.null(code)) {
-        code <- 0L
+      h5ad <- write_panorama_h5ad_st(obj, cfg)
+      if (!identical(h5ad$status, "ok")) {
+        manifest_df <- write_skip_manifest(h5ad$status, h5ad$reason, panorama_input, label_col, spot_n, label_n)
+      } else {
+        on.exit(unlink(h5ad$path, force = TRUE), add = TRUE)
+        out_prefix <- file.path(cfg$spatial_neighborhood_table_dir, "neighborhood")
+        cmd <- c(
+          cfg$spatial_neighborhood_py,
+          "--h5ad", h5ad$path,
+          "--group-by", label_col,
+          "--out-prefix", out_prefix,
+          "--radius", as.character(cfg$spatial_neighborhood_radius),
+          "--perms", as.character(cfg$spatial_neighborhood_perms),
+          "--seed", as.character(cfg$random_seed),
+          "--coord-type", cfg$spatial_neighborhood_coord_type
+        )
+        run <- tryCatch(
+          system2(cfg$py_spatial_bin, args = cmd, stdout = TRUE, stderr = TRUE),
+          error = function(e) structure(conditionMessage(e), status = 127)
+        )
+        code <- attr(run, "status")
+        if (is.null(code)) {
+          code <- 0L
+        }
+        reason <- paste(as.character(run), collapse = " ")
+        status <- if (identical(as.integer(code), 0L)) "ok" else if (grepl("skipped_no_packages", reason)) "skipped_no_packages" else if (grepl("skipped_no_python_env", reason)) "skipped_no_python_env" else if (grepl("skipped_too_few_spots", reason)) "skipped_too_few_spots" else "failed_sidecar"
+        manifest_df <- data.frame(
+          status = status,
+          reason = if (identical(status, "ok")) "" else reason,
+          input_rds = panorama_input,
+          input_h5ad = h5ad$path,
+          label_column = label_col,
+          spot_n = spot_n,
+          label_n = label_n,
+          radius = cfg$spatial_neighborhood_radius,
+          permutations = cfg$spatial_neighborhood_perms,
+          coord_type = cfg$spatial_neighborhood_coord_type,
+          interaction_matrix_tsv = paste0(out_prefix, "_interaction_matrix.tsv"),
+          nhood_enrichment_zscore_tsv = paste0(out_prefix, "_nhood_enrichment_zscore.tsv"),
+          co_occurrence_tsv = paste0(out_prefix, "_co_occurrence.tsv"),
+          sidecar_summary_tsv = paste0(out_prefix, "_summary.tsv"),
+          stringsAsFactors = FALSE
+        )
       }
-      reason <- paste(as.character(run), collapse = " ")
-      status <- if (identical(as.integer(code), 0L)) "ok" else if (grepl("skipped_no_packages", reason)) "skipped_no_packages" else if (grepl("skipped_no_python_env", reason)) "skipped_no_python_env" else if (grepl("skipped_too_few_spots", reason)) "skipped_too_few_spots" else "failed_sidecar"
-      manifest_df <- data.frame(
-        status = status,
-        reason = if (identical(status, "ok")) "" else reason,
-        input_rds = panorama_input,
-        spot_tsv = spot_tsv,
-        label_column = label_col,
-        spot_n = nrow(spots),
-        label_n = length(unique(spots$label)),
-        radius = cfg$spatial_neighborhood_radius,
-        permutations = cfg$spatial_neighborhood_perms,
-        coord_type = cfg$spatial_neighborhood_coord_type,
-        interaction_matrix_tsv = paste0(out_prefix, "_interaction_matrix.tsv"),
-        nhood_enrichment_zscore_tsv = paste0(out_prefix, "_nhood_enrichment_zscore.tsv"),
-        co_occurrence_tsv = paste0(out_prefix, "_co_occurrence.tsv"),
-        sidecar_summary_tsv = paste0(out_prefix, "_summary.tsv"),
-        stringsAsFactors = FALSE
-      )
     }
   }
 }
@@ -149,7 +185,7 @@ report_lines <- c(
 )
 write_markdown_local(report_lines, report_path)
 
-write_manifest_local(
+st06_write_manifest_local(
   manifest_path = cfg$module_06d_neighborhood_manifest_path,
   new_outputs = list(
     neighborhood_manifest = build_output_entry(manifest_tsv, "tsv", module_name, "single-row spatial neighborhood status manifest", base_dir = cfg$project_root, schema = infer_schema_from_df(manifest_df)),

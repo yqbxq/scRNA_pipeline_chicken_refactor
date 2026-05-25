@@ -43,8 +43,59 @@ st06_write_tsv <- function(df, path) {
   write.table(df, file = path, sep = "\t", quote = FALSE, row.names = FALSE, na = "")
 }
 
+st06_json_escape <- function(x) {
+  x <- as.character(if (is.null(x) || length(x) == 0) "" else x[[1]])
+  x <- gsub("\\\\", "\\\\\\\\", x)
+  x <- gsub('"', '\\"', x)
+  x <- gsub("\n", "\\\\n", x, fixed = TRUE)
+  x
+}
+
+st06_simple_manifest_value <- function(x, indent = "    ") {
+  if (is.null(x)) {
+    return("null")
+  }
+  if (is.list(x) && !is.data.frame(x)) {
+    names_x <- names(x)
+    if (is.null(names_x)) {
+      names_x <- rep("", length(x))
+    }
+    parts <- character()
+    for (idx in seq_along(x)) {
+      name <- names_x[[idx]]
+      if (!nzchar(name)) {
+        next
+      }
+      parts <- c(parts, sprintf('%s"%s": %s', indent, st06_json_escape(name), st06_simple_manifest_value(x[[idx]], paste0(indent, "  "))))
+    }
+    return(paste0("{\n", paste(parts, collapse = ",\n"), "\n", sub("  $", "", indent), "}"))
+  }
+  if (is.numeric(x) || is.integer(x)) {
+    return(as.character(x[[1]]))
+  }
+  sprintf('"%s"', st06_json_escape(x))
+}
+
+st06_write_manifest_local <- function(manifest_path, new_outputs, module_name, base_dir, inputs = list(), version = "1.0", depends_on = list()) {
+  if (requireNamespace("jsonlite", quietly = TRUE)) {
+    return(write_manifest_local(manifest_path, new_outputs, module_name = module_name, base_dir = base_dir, inputs = inputs, version = version, depends_on = depends_on))
+  }
+  ensure_dir(dirname(manifest_path))
+  manifest <- list(
+    module = module_name,
+    version = version,
+    timestamp = timestamp_now(),
+    base_dir = base_dir,
+    inputs = inputs,
+    outputs = new_outputs,
+    depends_on = depends_on
+  )
+  writeLines(st06_simple_manifest_value(manifest, "  "), manifest_path, useBytes = TRUE)
+  invisible(manifest_path)
+}
+
 st06_manifest_output <- function(manifest_path, keys, cfg) {
-  if (!file.exists(manifest_path)) {
+  if (!file.exists(manifest_path) || !requireNamespace("jsonlite", quietly = TRUE)) {
     return("")
   }
   manifest <- read_manifest_local(manifest_path)
@@ -350,4 +401,14 @@ run_spatial_region_enrichment <- function(cfg, analysis_type = c("go", "kegg")) 
   }
   out <- do.call(rbind, rows)
   out[, st06_enrichment_manifest_cols(), drop = FALSE]
+}
+
+build_spatial_enrichment_manifest_row_st <- st06_enrichment_row
+
+compute_spatial_region_go_st <- function(cfg) {
+  run_spatial_region_enrichment(cfg, "go")
+}
+
+compute_spatial_region_kegg_st <- function(cfg) {
+  run_spatial_region_enrichment(cfg, "kegg")
 }

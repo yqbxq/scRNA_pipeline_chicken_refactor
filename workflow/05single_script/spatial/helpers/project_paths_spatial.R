@@ -19,6 +19,7 @@ get_spatial_script_config <- function() {
   metadata_dir <- spatial_env_or_default("METADATA_DIR", file.path(project_root, "metadata"))
   config_dir <- spatial_env_or_default("PROJECT_CONFIG_DIR", file.path(project_root, "config"))
   results_dir <- spatial_env_or_default("RESULTS_DIR", file.path(project_root, "results"))
+  run_tmp_dir <- spatial_env_or_default("RUN_TMP_DIR", file.path(project_root, "tmp"))
   report_dir <- spatial_env_or_default("REPORT_DIR", file.path(project_root, "reports"))
   ortholog_cache_dir <- spatial_env_or_default("ORTHOLOG_CACHE_DIR", file.path(results_dir, "ortholog_cache"))
   eda_report_dir <- spatial_env_or_default("EDA_REPORT_DIR", file.path(report_dir, "eda"))
@@ -81,6 +82,7 @@ get_spatial_script_config <- function() {
     metadata_dir = metadata_dir,
     config_dir = config_dir,
     results_dir = results_dir,
+    run_tmp_dir = run_tmp_dir,
     report_dir = report_dir,
     ortholog_cache_dir = ortholog_cache_dir,
     eda_report_dir = eda_report_dir,
@@ -243,6 +245,7 @@ get_spatial_script_config <- function() {
     spatial_neighborhood_radius = spatial_env_numeric("SPATIAL_NEIGHBORHOOD_RADIUS", 200),
     spatial_neighborhood_perms = spatial_env_integer("SPATIAL_NEIGHBORHOOD_PERMS", 1000L),
     spatial_neighborhood_coord_type = spatial_env_or_default("SPATIAL_NEIGHBORHOOD_COORD_TYPE", "generic"),
+    spatial_enrich_drift_top_k = spatial_env_integer("SPATIAL_ENRICH_DRIFT_TOP_K", 20L),
     spatial_niche_k = spatial_env_integer("SPATIAL_NICHE_K", 5L),
     spatial_niche_k_neighbors = spatial_env_integer("SPATIAL_NICHE_K_NEIGHBORS", 15L),
     spatial_deconv_min_spots = spatial_env_integer("SPATIAL_DECONV_MIN_SPOTS", 100L),
@@ -275,6 +278,7 @@ get_spatial_script_config <- function() {
 prepare_dirs_spatial <- function(cfg) {
   dirs <- c(
     cfg$spatial_results_dir,
+    cfg$run_tmp_dir,
     cfg$spatial_checkpoint_dir,
     cfg$spatial_table_dir,
     cfg$spatial_figure_dir,

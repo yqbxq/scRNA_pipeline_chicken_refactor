@@ -15,10 +15,11 @@ The main ST workflow currently runs:
 | `05_spatial_de` | `spatial_05_spatial_de` | Exploratory spot-level spatial DE for N=2 rescue. |
 | `06a` / `06b` / `06c` | `spatial_06a_region_go`, `spatial_06b_region_kegg`, `spatial_06c_region_enrichment_eda` | Region GO/KEGG enrichment and review summaries. |
 | `06d` | `spatial_06d_neighborhood` | Squidpy-gated radius neighborhood enrichment and co-occurrence tables. |
+| `06e` | `spatial_06e_niche` | Post-07 spatial niche derivation from neighborhood and deconvolution features. |
 | `07a` / `07e` | `spatial_07a_deconvolution_rctd`, `spatial_07e_deconvolution_compare` | Primary deconvolution slot and method recommendation contract. |
 | `07b` / `07c` / `07d` / `07f` | transfer, CARD, cell2location, validation manifests | Optional extra methods and scDesign3 validation. |
 
-The `spatial_region_annotation` gate is held twice: once after `03a` for region review, then reset and held again after `04c` for sub-region review. ST 05 adds `spatial_marker_de` after marker, DE, and composition outputs are written. ST 06 adds `spatial_enrichment` after `06c` and `spatial_neighborhood` after `06d`. ST 07 holds `spatial_deconv` after method comparison and optional validation.
+The `spatial_region_annotation` gate is held twice: once after `03a` for region review, then reset and held again after `04c` for sub-region review. ST 05 adds `spatial_marker_de` after marker, DE, and composition outputs are written. ST 06 adds `spatial_enrichment` after `06c`, `spatial_neighborhood` after `06d`, and `spatial_niche` after post-07 `06e`. ST 07 holds `spatial_deconv` after method comparison and optional validation. Module 08 regulatory extensions remain pending as an independent follow-up module.
 
 Additional ST06 docs:
 

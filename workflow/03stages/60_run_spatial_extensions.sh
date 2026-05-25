@@ -12,6 +12,7 @@ RUN_DECONV="yes"
 RUN_DECONV_EXTRA="no"
 RUN_DECONV_VALIDATION="no"
 RUN_NEIGHBORHOOD="yes"
+RUN_NICHE="yes"
 RUN_DECOUPLER="no"
 RUN_PYSCENIC="no"
 RUN_ENRICHMENT="yes"
@@ -27,6 +28,8 @@ while [[ $# -gt 0 ]]; do
     --without-deconv-validation) RUN_DECONV_VALIDATION="no"; shift ;;
     --with-neighborhood) RUN_NEIGHBORHOOD="yes"; shift ;;
     --without-neighborhood) RUN_NEIGHBORHOOD="no"; shift ;;
+    --with-niche) RUN_NICHE="yes"; shift ;;
+    --without-niche) RUN_NICHE="no"; shift ;;
     --with-decoupler) RUN_DECOUPLER="yes"; shift ;;
     --without-decoupler) RUN_DECOUPLER="no"; shift ;;
     --with-pyscenic) RUN_PYSCENIC="yes"; shift ;;
@@ -41,6 +44,7 @@ Flags:
   --with-deconv / --without-deconv / --with-deconv-extra
   --with-deconv-validation / --without-deconv-validation
   --with-neighborhood / --without-neighborhood
+  --with-niche / --without-niche
   --with-decoupler / --without-decoupler
   --with-pyscenic
   --with-enrichment / --without-enrichment
@@ -97,6 +101,11 @@ if [[ "${RUN_DECONV}" == "yes" ]]; then
   fi
   set_eda_gate_status "spatial_deconv" "pending" "" "Review deconvolution outputs, multi-method comparison, and optional scDesign3 validation."
   hold_for_gate spatial_deconv
+fi
+if [[ "${RUN_NICHE}" == "yes" ]]; then
+  run_future_spatial_r_stage "06e_niche_derivation.R" "spatial_06e_niche"
+  set_eda_gate_status "spatial_niche" "pending" "" "Review niche derivation before joint analyses."
+  hold_for_gate spatial_niche
 fi
 [[ "${RUN_DECOUPLER}" == "yes" ]] && run_future_spatial_r_stage "08a_spatial_decoupler.R" "spatial_08a_decoupler"
 [[ "${RUN_PYSCENIC}" == "yes" ]] && run_future_spatial_r_stage "08b_spatial_pyscenic.R" "spatial_08b_pyscenic"
