@@ -1,0 +1,5 @@
+chicken_symbol	human_symbol	source	confidence	notes
+WNT5A	WNT5A	manual_example	high	example same-symbol mapping
+WNT5B	WNT5B	manual_example	high	example same-symbol mapping
+FZD3	FZD3	manual_example	high	example same-symbol mapping
+LRP6	LRP6	manual_example	high	example same-symbol mapping

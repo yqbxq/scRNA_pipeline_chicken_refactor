@@ -49,10 +49,14 @@ require_grep "COMMUNICATION_REQUIRE_FULL_PIPELINE" workflow/03stages/07_communic
 require_grep "07e_communication" workflow/02lib/common.sh
 
 python3 -m py_compile workflow/04python/07b_liana_consensus.py
-if python3 workflow/04python/07b_liana_consensus.py >/tmp/smoke_07b.out 2>&1; then
-  fail "07b placeholder should exit non-zero"
-fi
-rg -q "not yet implemented" /tmp/smoke_07b.out || fail "07b placeholder message missing"
+tmp_07b="$(mktemp -d)"
+python3 workflow/04python/07b_liana_consensus.py \
+  --mock-run \
+  --output "${tmp_07b}/liana_consensus_lr.tsv" \
+  --manifest "${tmp_07b}/_manifest.json" \
+  --ortholog-lut metadata/ortholog_chicken_human.tsv >/tmp/smoke_07b.out 2>&1
+rg -q "lr_axis_id" "${tmp_07b}/liana_consensus_lr.tsv" || fail "07b implemented output missing lr_axis_id"
+rm -rf "${tmp_07b}"
 
 Rscript -e 'parse("workflow/05single_script/07d_communication_consensus.R"); parse("workflow/05single_script/helpers/communication_consensus_utils.R")' >/dev/null
 if Rscript workflow/05single_script/07d_communication_consensus.R >/tmp/smoke_07d.out 2>&1; then

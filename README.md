@@ -376,7 +376,7 @@ gate 规则采用 Option B：
 
 - `workflow/03stages/07_communication.sh`
   - `07a_cellchat.R`：按 layer / pair / condition 在 `r_interaction` 中运行 CellChat，并用 00 ortholog cache 将鸡表达矩阵映射到人类符号。
-  - `07b_liana_consensus.py`：LIANA+ 多算法共识占位，完整实现见 P-R03-B。
+  - `07b_liana_consensus.py`：读取 H5AD 镜像并运行 LIANA+ 多算法共识；依赖缺失时写 schema-valid 空输出和 manifest。
   - `07c_nichenet.R`：按 sender→receiver 方向运行 NicheNet；通过 `communication_pairs.tsv` 的显式 `receiver_deg_comparison_id` / `baseline_marker_comparison_id` 到 `gene_program_registry.tsv` 查 gene program。
   - `07d_communication_consensus.R`：通信证据链 consensus 占位，完整 evidence tier 判定见 P-R03-E。
   - `07e_communication_eda.R`：按 `pair_id + layer + condition` 汇总 CellChat / NicheNet 共识，并按 `direction_filter` 决定是否保留全网络。

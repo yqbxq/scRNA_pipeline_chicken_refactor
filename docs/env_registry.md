@@ -37,7 +37,7 @@ This file records project-level environment variables that are exported through 
 | `MODULE_SPATIAL_04C_VERSION` | `1.2` | Version marker for spatial 04c subcluster EDA inventory artifacts. |
 | `MODULE_05D_VERSION` | `1.1` | Version marker for DEG EDA evidence-tier coverage outputs. |
 | `MODULE_07A_CELLCHAT_VERSION` | `1.1` | Version marker for CellChat inventory-gated outputs. |
-| `MODULE_07B_LIANA_VERSION` | `0.1` | Version marker for the 07b LIANA+ consensus placeholder. |
+| `MODULE_07B_LIANA_VERSION` | `1.0` | Version marker for the 07b LIANA+ consensus layer. |
 | `MODULE_07C_NICHENET_VERSION` | `1.1` | Version marker for NicheNet inventory-gated outputs. |
 | `MODULE_07D_CONSENSUS_VERSION` | `0.1` | Version marker for the 07d communication consensus placeholder. |
 | `MODULE_07E_EDA_VERSION` | `0.1` | Version marker for the 07e communication EDA layer. |
@@ -46,7 +46,15 @@ This file records project-level environment variables that are exported through 
 | `INVENTORY_GATE_STRICT_MODE` | `no` | When enabled, a cluster must pass all matching eligibility rows to enter communication analysis. |
 | `COMMUNICATION_FAIL_ON_NO_PRIMARY` | `no` | Reserved strictness flag for failing communication when no cluster passes inventory gate. |
 | `COMMUNICATION_REQUIRE_FULL_PIPELINE` | `no` | When `yes`, 07b/07c/07d/07e failures block the communication stage instead of writing placeholder manifests. |
-| `LIANA_CONSENSUS_ENABLED` | `yes` | Enables the 07b LIANA+ placeholder stage; full implementation lands in P-R03-B. |
+| `LIANA_CONSENSUS_ENABLED` | `yes` | Enables the 07b LIANA+ consensus stage. |
+| `LIANA_METHODS_LIST` | `cellphonedb,connectome,sca,natmi,logfc,rank_aggregate` | LIANA method set requested by 07b. |
+| `LIANA_CONSENSUS_AGGREGATE` | `rank_aggregate` | Consensus score column preference for 07b LIANA outputs. |
+| `LIANA_MIN_METHODS_AGREED_INSIDE` | `3` | Minimum method-hit count for `liana_consensus_hit=1`. |
+| `LIANA_CELLPHONEDB_PVAL_THRESHOLD` | `0.05` | P-value cutoff for LIANA p-value method hits. |
+| `LIANA_RESOURCE_DB` | `consensus` | LIANA ligand-receptor resource name. |
+| `LIANA_MIN_CELLS_PER_GROUP` | `100` | Minimum cells per condition for a real LIANA run. |
+| `LIANA_CONDITION_COL` | `condition` | H5AD `.obs` column used for per-condition LIANA runs. |
+| `ORTHOLOG_CHICKEN_HUMAN_TSV` | `metadata/ortholog_chicken_human.tsv` | Optional chicken-to-human symbol LUT for communication `lr_axis_id` standardization. |
 | `MULTINICHENET_ENABLED` | `auto` | Controls the 07c NicheNet/MultiNicheNet stage. |
 | `COMMOT_ENABLED` | `auto` | Reserved for the future COMMOT spatial communication extension. |
 | `MODULE_03A3_VERSION` | `1.0` | Version marker for the independent panorama UMAP stage. |

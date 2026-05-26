@@ -130,8 +130,20 @@ run_optional_comm_python_stage() {
   local script_path="$2"
   local manifest_path="$3"
   shift 3 || true
+  local -a command_args=()
+  local -a inputs=()
 
-  if ! is_stale_output "${manifest_path}" "$@"; then
+  while [[ "$#" -gt 0 ]]; do
+    if [[ "${1:-}" == "--stage-inputs" ]]; then
+      shift || true
+      inputs=("$@")
+      break
+    fi
+    command_args+=("$1")
+    shift || true
+  done
+
+  if ! is_stale_output "${manifest_path}" "${inputs[@]}"; then
     echo "已存在且未过期，跳过: ${manifest_path}"
     return 0
   fi
@@ -139,7 +151,7 @@ run_optional_comm_python_stage() {
   echo "运行 ${script_path}"
   local python_bin
   python_bin="$(detect_python)"
-  if "${python_bin}" "${script_path}"; then
+  if "${python_bin}" "${script_path}" "${command_args[@]}"; then
     COMMUNICATION_RERAN=1
     return 0
   fi
@@ -172,8 +184,20 @@ else
     "07b_liana_consensus" \
     "${WORKFLOW_ROOT}/04python/07b_liana_consensus.py" \
     "${MODULE_07B_MANIFEST}" \
+    --h5ad-path "${RESULTS_DIR}/90a_export_h5ad/03d_panorama" \
+    --cluster-eligibility "$(require_manifest_output "${MODULE_04C_MANIFEST}" "cluster_eligibility_tsv")" \
+    --cluster-col "${COMMUNICATION_CELL_TYPE_COL}" \
+    --condition-col "${LIANA_CONDITION_COL:-condition}" \
+    --methods "${LIANA_METHODS_LIST}" \
+    --resource "${LIANA_RESOURCE_DB}" \
+    --output "${TABLE_DIR}/communication/liana_consensus/liana_consensus_lr.tsv" \
+    --manifest "${MODULE_07B_MANIFEST}" \
+    --ortholog-lut "${ORTHOLOG_CHICKEN_HUMAN_TSV:-${METADATA_DIR}/ortholog_chicken_human.tsv}" \
+    --stage-inputs \
     "${MODULE_07A_MANIFEST}" \
     "${MODULE_04B_MANIFEST}" \
+    "${MODULE_04C_MANIFEST}" \
+    "${RESULTS_DIR}/90a_export_h5ad/03d_panorama" \
     "${COMMUNICATION_PAIRS_SHEET}"
 fi
 
