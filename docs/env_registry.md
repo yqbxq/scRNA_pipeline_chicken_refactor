@@ -33,6 +33,8 @@ This file records project-level environment variables that are exported through 
 | `CELL_COUNT_INVENTORY_ENABLE_MERGE_TO_PARENT` | `yes` | Allow merge-to-parent evidence tier when parent metadata exists. |
 | `CELL_COUNT_INVENTORY_FAIL_ON_MISSING_PARENT` | `no` | Reserved strictness flag for downstream parent merge consumers. |
 | `MODULE_INVENTORY_VERSION` | `1.0` | Version marker for inventory helper outputs. |
+| `MODULE_04C_VERSION` | `1.2` | Version marker for scRNA 04c subcluster EDA inventory artifacts. |
+| `MODULE_SPATIAL_04C_VERSION` | `1.2` | Version marker for spatial 04c subcluster EDA inventory artifacts. |
 | `MODULE_03A3_VERSION` | `1.0` | Version marker for the independent panorama UMAP stage. |
 | `MODULE_SPATIAL_02A2_VERSION` | `1.0` | Version marker for the independent spatial UMAP stage. |
 | `UMAP_N_NEIGHBORS` | `30` | Shared UMAP neighbor count for 03a3 and spatial 02a2. |

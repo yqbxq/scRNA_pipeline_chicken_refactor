@@ -119,6 +119,8 @@ run_stage_if_stale \
   "${COMPARISON_SHEET}"
 
 require_manifest_output "${MODULE_04C_MANIFEST}" "subcluster_summary_tsv" >/dev/null
+require_manifest_output "${MODULE_04C_MANIFEST}" "cell_count_inventory_tsv" >/dev/null
+require_manifest_output "${MODULE_04C_MANIFEST}" "cluster_eligibility_tsv" >/dev/null
 
 update_workflow_status \
   "04_subcluster_completed" \

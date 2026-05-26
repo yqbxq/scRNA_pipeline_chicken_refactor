@@ -29,6 +29,7 @@ source_utf8(file.path(.script_dir, "helpers", "qc_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "triage_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "layer_config_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "comparison_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "cell_count_inventory_utils.R"))
 
 load_required_packages(c("Seurat", "dplyr", "ggplot2", "tibble", "tidyr", "jsonlite"))
 
@@ -111,6 +112,65 @@ empty_comparison_split_04c <- function() {
   )
 }
 
+empty_cell_count_inventory_04c <- function() {
+  data.frame(
+    cluster_id = character(0),
+    sample_id = character(0),
+    group_id = character(0),
+    layer_id = character(0),
+    group_var = character(0),
+    parent_cluster_id = character(0),
+    n_cells = integer(0),
+    total_umi = numeric(0),
+    median_umi_per_cell = numeric(0),
+    fraction_of_sample = numeric(0),
+    fraction_of_group = numeric(0),
+    fraction_of_cluster = numeric(0),
+    stringsAsFactors = FALSE
+  )
+}
+
+empty_cluster_eligibility_04c <- function() {
+  data.frame(
+    layer_id = character(0),
+    group_var = character(0),
+    comparison_id = character(0),
+    cluster_id = character(0),
+    group_a = character(0),
+    group_b = character(0),
+    evidence_tier = character(0),
+    recommended_action = character(0),
+    failed_rules = character(0),
+    reason = character(0),
+    n_samples_a = integer(0),
+    n_samples_b = integer(0),
+    min_cells_a = integer(0),
+    min_cells_b = integer(0),
+    total_umi_a = numeric(0),
+    total_umi_b = numeric(0),
+    max_single_sample_frac = numeric(0),
+    parent_cluster_id = character(0),
+    min_cells_per_sample = numeric(0),
+    min_samples_per_group = numeric(0),
+    min_total_umi = numeric(0),
+    max_single_sample_frac_threshold = numeric(0),
+    min_cells_soft_floor = numeric(0),
+    inventory_version = character(0),
+    stringsAsFactors = FALSE
+  )
+}
+
+empty_inventory_summary_04c <- function() {
+  data.frame(
+    layer_id = character(0),
+    group_var = character(0),
+    comparison_id = character(0),
+    evidence_tier = character(0),
+    n_cluster_comparisons = integer(0),
+    stringsAsFactors = FALSE
+  )
+}
+
 manifest_output_or_empty <- function(manifest, key) {
   entry <- manifest$outputs[[key]]
   if (is.null(entry) || is.null(entry$path)) {
@@ -131,6 +191,114 @@ layer_id_from_annotated_key_04c <- function(key) {
 first_present_col_04c <- function(meta_df, candidates) {
   hit <- candidates[candidates %in% colnames(meta_df)]
   if (length(hit) == 0) "" else hit[[1]]
+}
+
+count_col_for_inventory_04c <- function(meta_df) {
+  first_present_col_04c(meta_df, c("nCount_RNA", "nCount_SCT", "nCount_Spatial", grep("^nCount_", colnames(meta_df), value = TRUE)))
+}
+
+sample_col_for_inventory_04c <- function(meta_df) {
+  first_present_col_04c(meta_df, c("sample_id", "orig.ident", "sample", "sample_name", "section_id"))
+}
+
+parent_col_for_inventory_04c <- function(meta_df, cell_type_col) {
+  first_present_col_04c(meta_df, unique(c("parent_cell_type", "panorama_cell_type", "cell_type_parent")))
+}
+
+inventory_cluster_col_04c <- function(meta_df, cluster_col, cell_type_col) {
+  first_present_col_04c(meta_df, unique(c(cell_type_col, cluster_col, "cell_subtype", "cell_type", "annotation_label", "seurat_clusters")))
+}
+
+build_layer_inventory_04c <- function(seu, layer_id, comparisons, cluster_col, cell_type_col) {
+  meta <- seu@meta.data
+  cluster_var <- inventory_cluster_col_04c(meta, cluster_col, cell_type_col)
+  sample_var <- sample_col_for_inventory_04c(meta)
+  count_var <- count_col_for_inventory_04c(meta)
+  if (!nzchar(cluster_var) || !nzchar(sample_var)) {
+    return(empty_cell_count_inventory_04c())
+  }
+  if (!nzchar(count_var)) {
+    count_var <- ".inventory_count_value"
+    meta[[count_var]] <- 1
+  }
+  group_vars <- unique(as.character(comparisons$group_var %||% character(0)))
+  group_vars <- group_vars[nzchar(group_vars) & group_vars %in% colnames(meta)]
+  if (length(group_vars) == 0) {
+    fallback_group <- first_present_col_04c(meta, c("condition", "group_id", "stage", "sample_id", "orig.ident"))
+    if (nzchar(fallback_group)) {
+      group_vars <- fallback_group
+    }
+  }
+  if (length(group_vars) == 0) {
+    return(empty_cell_count_inventory_04c())
+  }
+
+  parent_var <- parent_col_for_inventory_04c(meta, cell_type_col)
+  rows <- lapply(group_vars, function(group_var) {
+    inv <- build_cell_count_inventory(
+      meta,
+      cluster_var = cluster_var,
+      sample_var = sample_var,
+      group_var = group_var,
+      layer_var = NULL,
+      parent_var = if (nzchar(parent_var)) parent_var else NULL,
+      count_var = count_var
+    )
+    inv$layer_id <- layer_id
+    inv$group_var <- group_var
+    inv[, c(
+      "cluster_id", "sample_id", "group_id", "layer_id", "group_var", "parent_cluster_id",
+      "n_cells", "total_umi", "median_umi_per_cell",
+      "fraction_of_sample", "fraction_of_group", "fraction_of_cluster"
+    ), drop = FALSE]
+  })
+  if (length(rows) == 0) empty_cell_count_inventory_04c() else dplyr::bind_rows(rows)
+}
+
+build_cluster_eligibility_04c <- function(inventory_df, comparisons) {
+  if (nrow(inventory_df) == 0 || nrow(comparisons) == 0) {
+    return(empty_cluster_eligibility_04c())
+  }
+  comparisons <- comparisons[comparisons$enabled != "no", , drop = FALSE]
+  if (nrow(comparisons) == 0) {
+    return(empty_cluster_eligibility_04c())
+  }
+  rows <- list()
+  layer_ids <- unique(as.character(inventory_df$layer_id))
+  for (layer_id in layer_ids) {
+    layer_comparisons <- comparison_rows_for_layer_04c(comparisons, layer_id)
+    if (nrow(layer_comparisons) == 0) {
+      next
+    }
+    group_vars <- unique(as.character(inventory_df$group_var[inventory_df$layer_id == layer_id]))
+    group_vars <- group_vars[nzchar(group_vars)]
+    for (group_var in group_vars) {
+      comp_subset <- layer_comparisons[layer_comparisons$group_var == group_var, , drop = FALSE]
+      inv_subset <- inventory_df[inventory_df$layer_id == layer_id & inventory_df$group_var == group_var, , drop = FALSE]
+      if (nrow(comp_subset) == 0 || nrow(inv_subset) == 0) {
+        next
+      }
+      eligible <- classify_all_cluster_eligibilities(inv_subset, comp_subset, cfg$cell_count_threshold_file %||% NULL)
+      if (nrow(eligible) == 0) {
+        next
+      }
+      eligible$layer_id <- layer_id
+      eligible$group_var <- group_var
+      rows[[length(rows) + 1]] <- eligible[, c(
+        "layer_id", "group_var", setdiff(colnames(eligible), c("layer_id", "group_var"))
+      ), drop = FALSE]
+    }
+  }
+  if (length(rows) == 0) empty_cluster_eligibility_04c() else dplyr::bind_rows(rows)
+}
+
+summarize_inventory_eligibility_04c <- function(eligibility_df) {
+  if (nrow(eligibility_df) == 0) {
+    return(empty_inventory_summary_04c())
+  }
+  eligibility_df %>%
+    dplyr::count(layer_id, group_var, comparison_id, evidence_tier, name = "n_cluster_comparisons") %>%
+    dplyr::arrange(layer_id, comparison_id, evidence_tier)
 }
 
 format_fraction_04c <- function(x) {
@@ -396,6 +564,7 @@ panorama_rows <- list()
 comparison_summary_rows <- list()
 comparison_split_rows <- list()
 triage_rows <- list()
+inventory_rows <- list()
 output_entries <- list()
 
 for (annotated_key in annotated_keys) {
@@ -434,6 +603,7 @@ for (annotated_key in annotated_keys) {
   panorama_cross <- build_panorama_cross_04c(seu, layer_id, cell_type_col)
   layer_comparisons <- comparison_rows_for_layer_04c(comparisons, layer_id)
   comparison_tables <- build_comparison_tables_04c(seu, layer_id, layer_comparisons, cluster_col, cell_type_col)
+  layer_inventory <- build_layer_inventory_04c(seu, layer_id, layer_comparisons, cluster_col, cell_type_col)
 
   table_dir <- layer_subcluster_table_dir_04(cfg, layer_id)
   report_dir <- layer_subcluster_report_dir_04(cfg, layer_id)
@@ -492,6 +662,7 @@ for (annotated_key in annotated_keys) {
   comparison_summary_rows[[length(comparison_summary_rows) + 1]] <- comparison_tables$summary
   comparison_split_rows[[length(comparison_split_rows) + 1]] <- comparison_tables$split
   triage_rows[[length(triage_rows) + 1]] <- comparison_tables$triage
+  inventory_rows[[length(inventory_rows) + 1]] <- layer_inventory
 
   output_entries[[paste0("report_md_", layer_id)]] <- build_output_entry(report_md, "md", module_name, sprintf("04c subcluster review report for %s", layer_id), base_dir = cfg$project_root)
   output_entries[[paste0("summary_plot_png_", layer_id)]] <- build_output_entry(summary_plot_png, "png", module_name, sprintf("04c summary plot for %s", layer_id), base_dir = cfg$project_root)
@@ -507,6 +678,9 @@ panorama_df <- if (length(panorama_rows) > 0) dplyr::bind_rows(panorama_rows) el
 comparison_summary_df <- if (length(comparison_summary_rows) > 0) dplyr::bind_rows(comparison_summary_rows) else empty_comparison_summary_04c()
 comparison_split_df <- if (length(comparison_split_rows) > 0) dplyr::bind_rows(comparison_split_rows) else empty_comparison_split_04c()
 triage_df <- if (length(triage_rows) > 0) dplyr::bind_rows(triage_rows) else empty_triage_df(include_sample = TRUE)
+inventory_df <- if (length(inventory_rows) > 0) dplyr::bind_rows(inventory_rows) else empty_cell_count_inventory_04c()
+eligibility_df <- build_cluster_eligibility_04c(inventory_df, comparisons)
+inventory_summary_df <- summarize_inventory_eligibility_04c(eligibility_df)
 
 subcluster_summary_tsv <- file.path(cfg$subcluster_table_dir, "subcluster_summary.tsv")
 condition_split_tsv <- file.path(cfg$subcluster_table_dir, "subcluster_condition_split.tsv")
@@ -514,6 +688,9 @@ panorama_cross_tsv <- file.path(cfg$subcluster_table_dir, "subcluster_panorama_c
 comparison_summary_tsv <- file.path(cfg$subcluster_table_dir, "comparison_subset_summary.tsv")
 comparison_split_tsv <- file.path(cfg$subcluster_table_dir, "comparison_condition_split.tsv")
 triage_tsv <- file.path(cfg$subcluster_table_dir, "subcluster_eda_triage.tsv")
+cell_count_inventory_tsv <- file.path(cfg$subcluster_table_dir, "cell_count_inventory.tsv")
+cluster_eligibility_tsv <- file.path(cfg$subcluster_table_dir, "cluster_eligibility.tsv")
+inventory_summary_tsv <- file.path(cfg$subcluster_table_dir, "inventory_summary_per_comparison.tsv")
 
 write_tsv_local(summary_df, subcluster_summary_tsv)
 write_tsv_local(condition_df, condition_split_tsv)
@@ -521,6 +698,9 @@ write_tsv_local(panorama_df, panorama_cross_tsv)
 write_tsv_local(comparison_summary_df, comparison_summary_tsv)
 write_tsv_local(comparison_split_df, comparison_split_tsv)
 write_tsv_local(triage_df, triage_tsv)
+write_tsv_local(inventory_df, cell_count_inventory_tsv)
+write_tsv_local(eligibility_df, cluster_eligibility_tsv)
+write_tsv_local(inventory_summary_df, inventory_summary_tsv)
 
 report_path <- file.path(cfg$subcluster_report_dir, "04c_subcluster_eda.md")
 report_lines <- c(
@@ -539,6 +719,17 @@ report_lines <- c(
   "## Triage",
   render_markdown_table_local(head(triage_df, 100)),
   "",
+  "## Cell-count inventory + evidence tier 建议",
+  sprintf("- cell_count_inventory_tsv: `%s`", cell_count_inventory_tsv),
+  sprintf("- cluster_eligibility_tsv: `%s`", cluster_eligibility_tsv),
+  sprintf("- inventory_summary_per_comparison_tsv: `%s`", inventory_summary_tsv),
+  "",
+  "### Evidence Tier Summary",
+  render_markdown_table_local(inventory_summary_df),
+  "",
+  "### Eligibility Preview",
+  render_markdown_table_local(head(eligibility_df[, intersect(c("layer_id", "group_var", "comparison_id", "cluster_id", "evidence_tier", "recommended_action", "reason"), colnames(eligibility_df)), drop = FALSE], 100)),
+  "",
   "## Per-Layer Reports",
   render_markdown_table_local(summary_df[, c("layer_id", "report_md"), drop = FALSE])
 )
@@ -551,6 +742,9 @@ output_entries$panorama_subcluster_crosstab_tsv <- build_output_entry(panorama_c
 output_entries$comparison_subset_summary_tsv <- build_output_entry(comparison_summary_tsv, "tsv", module_name, "comparison subset summary across subcluster layers", base_dir = cfg$project_root, schema = infer_schema_from_df(comparison_summary_df))
 output_entries$comparison_condition_split_tsv <- build_output_entry(comparison_split_tsv, "tsv", module_name, "comparison condition split across subcluster layers", base_dir = cfg$project_root, schema = infer_schema_from_df(comparison_split_df))
 output_entries$subcluster_eda_triage_tsv <- build_output_entry(triage_tsv, "tsv", module_name, "one row per subcluster EDA triage signal", base_dir = cfg$project_root, schema = infer_schema_from_df(triage_df))
+output_entries$cell_count_inventory_tsv <- build_output_entry(cell_count_inventory_tsv, "tsv", module_name, "cell count inventory by layer, cluster, sample, and group", base_dir = cfg$project_root, schema = infer_schema_from_df(inventory_df))
+output_entries$cluster_eligibility_tsv <- build_output_entry(cluster_eligibility_tsv, "tsv", module_name, "cluster x comparison evidence tiers and recommended actions", base_dir = cfg$project_root, schema = infer_schema_from_df(eligibility_df))
+output_entries$inventory_summary_per_comparison_tsv <- build_output_entry(inventory_summary_tsv, "tsv", module_name, "evidence tier counts per layer and comparison", base_dir = cfg$project_root, schema = infer_schema_from_df(inventory_summary_df))
 output_entries$report <- build_output_entry(report_path, "md", module_name, "subcluster EDA review report", base_dir = cfg$project_root)
 
 if (file.exists(cfg$module_04c_manifest_path)) {
@@ -564,10 +758,11 @@ write_manifest_local(
   inputs = list(
     module_04b_manifest = cfg$module_04b_manifest_path,
     comparison_sheet = cfg$comparison_sheet,
+    cell_count_threshold_file = cfg$cell_count_threshold_file,
     object_layer_config = cfg$object_layer_config_file,
     annotation_summary_tsv = manifest_output_or_empty(manifest_04b, "summary_tsv")
   ),
-  version = cfg$module_version,
+  version = env_or_default_03("MODULE_04C_VERSION", cfg$module_version),
   depends_on = list(module_04b = cfg$module_04b_manifest_path)
 )
 

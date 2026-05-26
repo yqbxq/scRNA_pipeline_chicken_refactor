@@ -160,6 +160,7 @@ get_spatial_script_config <- function() {
     sample_sheet = spatial_env_or_default("SAMPLE_SHEET", file.path(metadata_dir, "samples.tsv")),
     canonical_sample_sheet = spatial_env_or_default("CANONICAL_SAMPLE_SHEET", file.path(metadata_dir, "samples.canonical.tsv")),
     comparison_sheet = spatial_env_or_default("COMPARISON_SHEET", file.path(metadata_dir, "comparisons.tsv")),
+    cell_count_threshold_file = spatial_env_or_default("CELL_COUNT_INVENTORY_THRESHOLD_OVERRIDE_TSV", file.path(metadata_dir, "cell_count_thresholds.tsv")),
     deconv_pairs_sheet = spatial_env_or_default("DECONV_PAIRS_SHEET", file.path(metadata_dir, "deconv_pairs.tsv")),
     section_sheet = spatial_env_or_default("SECTION_SHEET", file.path(metadata_dir, "sections.tsv")),
     spatial_reference_inventory_file = spatial_env_or_default("SPATIAL_REFERENCE_INVENTORY_FILE", file.path(metadata_dir, "spatial_reference_inventory.tsv")),

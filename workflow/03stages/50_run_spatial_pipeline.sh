@@ -69,6 +69,8 @@ export_h5ad_for_gate \
   "spatial" \
   "spatial_04b_subcluster"
 run_future_spatial_r_stage "04c_subcluster_eda.R" "spatial_04c_subcluster_eda"
+require_manifest_output "${MANIFEST_DIR}/spatial_04c_subcluster_eda/_manifest.json" "cell_count_inventory_tsv" >/dev/null
+require_manifest_output "${MANIFEST_DIR}/spatial_04c_subcluster_eda/_manifest.json" "cluster_eligibility_tsv" >/dev/null
 set_eda_gate_status "spatial_region_annotation" "pending" "" "Review sub-cluster annotation before marker/DE/composition."
 hold_for_gate spatial_region_annotation
 

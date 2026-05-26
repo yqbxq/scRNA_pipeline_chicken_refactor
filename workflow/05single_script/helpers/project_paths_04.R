@@ -18,6 +18,10 @@ get_single_script_config_04 <- function() {
     "SUBCLUSTER_REVIEW_SUMMARY_FILE",
     file.path(base$subcluster_table_dir, "subcluster_review_summary.tsv")
   )
+  base$cell_count_threshold_file <- env_or_default_03(
+    "CELL_COUNT_INVENTORY_THRESHOLD_OVERRIDE_TSV",
+    file.path(base$metadata_dir, "cell_count_thresholds.tsv")
+  )
   base$subcluster_candidate_layers_count_file <- env_or_default_03(
     "SUBCLUSTER_CANDIDATE_LAYERS_COUNT_FILE",
     file.path(base$subcluster_table_dir, "candidate_layers_count.txt")
