@@ -113,7 +113,7 @@ usable_reduction_dims <- function(seu, requested_dims, reduction_name) {
   dims
 }
 
-reduce_pca_umap <- function(seu, layer_spec, assay, reduction_key_prefix, umap_name = NULL) {
+reduce_pca <- function(seu, layer_spec, assay, reduction_key_prefix, reduction_name = "pca") {
   DefaultAssay(seu) <- assay
   features <- VariableFeatures(seu)
   if (length(features) == 0) {
@@ -128,23 +128,41 @@ reduce_pca_umap <- function(seu, layer_spec, assay, reduction_key_prefix, umap_n
     seu,
     features = features,
     npcs = npcs,
-    reduction.name = "pca",
+    reduction.name = reduction_name,
     reduction.key = reduction_key_prefix,
     verbose = FALSE
   )
-  dims <- usable_reduction_dims(seu, layer_spec$pca_dims, "pca")
+  seu
+}
+
+run_umap_only <- function(seu, layer_spec, reduction_name, umap_name, seed = NULL) {
+  dims <- usable_reduction_dims(seu, layer_spec$pca_dims, reduction_name)
   if (length(dims) >= 2) {
     if (is.null(umap_name) || !nzchar(umap_name)) {
-      umap_name <- paste0("umap_rna_", tolower(assay))
+      umap_name <- paste0("umap_", reduction_name)
+    }
+    if (!is.null(seed) && is.finite(seed)) {
+      set.seed(as.integer(seed))
     }
     seu <- RunUMAP(
       seu,
-      reduction = "pca",
+      reduction = reduction_name,
       dims = dims,
       reduction.name = umap_name,
       reduction.key = paste0(gsub("[^A-Za-z0-9]", "", toupper(umap_name)), "_"),
+      n.neighbors = as.integer(Sys.getenv("UMAP_N_NEIGHBORS", "30")),
+      min.dist = as.numeric(Sys.getenv("UMAP_MIN_DIST", "0.3")),
+      spread = as.numeric(Sys.getenv("UMAP_SPREAD", "1.0")),
+      metric = Sys.getenv("UMAP_METRIC", "cosine"),
+      local.connectivity = as.numeric(Sys.getenv("UMAP_LOCAL_CONNECTIVITY", "1")),
       verbose = FALSE
     )
   }
   seu
+}
+
+reduce_pca_umap <- function(seu, layer_spec, assay, reduction_key_prefix, umap_name = NULL) {
+  .Deprecated("reduce_pca + run_umap_only")
+  seu <- reduce_pca(seu, layer_spec, assay, reduction_key_prefix, reduction_name = "pca")
+  run_umap_only(seu, layer_spec, "pca", umap_name %||% paste0("umap_rna_", tolower(assay)), seed = as.integer(Sys.getenv("UMAP_SEED", "42")))
 }

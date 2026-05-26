@@ -55,16 +55,16 @@ append_triage <- function(severity, signal_id, evidence) {
 for (norm_method in panorama_spec$normalization_methods) {
   norm_key <- paste0("normalized_", norm_method)
   norm_rds <- resolve_output_local(manifest_03a1, norm_key)
-  message("03a2 PCA/UMAP for normalization: ", norm_method)
+  message("03a2 PCA for normalization: ", norm_method)
   seu <- readRDS(norm_rds)
   seu <- maybe_join_layers(seu)
   assay_name <- if (identical(norm_method, "sct") && "SCT" %in% Assays(seu)) "SCT" else "RNA"
-  seu <- reduce_pca_umap(
+  seu <- reduce_pca(
     seu,
     panorama_spec,
     assay = assay_name,
     reduction_key_prefix = sprintf("PCA%s_", toupper(norm_method)),
-    umap_name = sprintf("umap_rna_%s", norm_method)
+    reduction_name = "pca"
   )
 
   for (integration_mode in panorama_spec$integration_mode) {
@@ -77,22 +77,10 @@ for (norm_method in panorama_spec$normalization_methods) {
       normalization_method = norm_method
     )
     seu_int <- result$object
-    dims <- usable_reduction_dims(seu_int, panorama_spec$pca_dims, result$reduction_name)
-    if (length(dims) >= 2) {
-      seu_int <- RunUMAP(
-        seu_int,
-        reduction = result$reduction_name,
-        dims = dims,
-        reduction.name = result$umap_name,
-        reduction.key = paste0(gsub("[^A-Za-z0-9]", "", toupper(result$umap_name)), "_"),
-        verbose = FALSE
-      )
-    }
     seu_int@misc$panorama_layer_spec <- panorama_spec
     seu_int@misc$normalization_method <- norm_method
     seu_int@misc$integration_mode <- integration_mode
     seu_int@misc$selected_reduction_candidate <- result$reduction_name
-    seu_int@misc$selected_umap_candidate <- result$umap_name
 
     out_rds <- file.path(cfg$panorama_reduction_dir, sprintf("%s__%s__%s.rds", panorama_spec$layer_id, norm_method, integration_mode))
     saveRDS(seu_int, out_rds)

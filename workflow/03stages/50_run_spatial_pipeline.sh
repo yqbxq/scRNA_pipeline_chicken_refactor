@@ -44,6 +44,7 @@ hold_for_gate spatial_post_qc
 
 run_future_spatial_r_stage "02_normalize_spatial.R" "spatial_02_normalize" "${SPATIAL_OBJECT_LAYER_FILE}"
 run_future_spatial_r_stage "02a_spatial_integration_eda.R" "spatial_02a_integration_eda"
+run_future_spatial_r_stage "02a2_compute_umap_spatial.R" "spatial_02a2_compute_umap" "${MANIFEST_DIR}/spatial_02a_integration_eda/_manifest.json"
 set_eda_gate_status "spatial_integration" "pending" "" "Review spatial integration diagnostics before clustering."
 hold_for_gate spatial_integration
 

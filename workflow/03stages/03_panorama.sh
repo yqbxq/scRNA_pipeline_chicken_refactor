@@ -17,6 +17,7 @@ require_manifest_output "${MODULE_02C_MANIFEST}" "report" >/dev/null
 
 MODULE_03A1_MANIFEST="${MANIFEST_DIR}/03a1_normalize_hvg/_manifest.json"
 MODULE_03A2_MANIFEST="${MANIFEST_DIR}/03a2_reduce_integrate/_manifest.json"
+MODULE_03A3_MANIFEST="${MANIFEST_DIR}/03a3_compute_umap/_manifest.json"
 MODULE_03B_MANIFEST="${MANIFEST_DIR}/03b_integration_eda/_manifest.json"
 MODULE_03C_MANIFEST="${MANIFEST_DIR}/03c_cluster/_manifest.json"
 MODULE_03D_MANIFEST="${MANIFEST_DIR}/03d_annotate/_manifest.json"
@@ -41,9 +42,16 @@ run_stage_if_stale \
   "${OBJECT_LAYER_CONFIG_FILE}"
 
 run_stage_if_stale \
+  --script "${WORKFLOW_ROOT}/05single_script/03a3_compute_umap.R" \
+  --manifest "${MODULE_03A3_MANIFEST}" \
+  --inputs "${MODULE_03A2_MANIFEST}" \
+  --params "UMAP_N_NEIGHBORS,UMAP_MIN_DIST,UMAP_SPREAD,UMAP_SEED,UMAP_METRIC,UMAP_LOCAL_CONNECTIVITY"
+
+run_stage_if_stale \
   "${WORKFLOW_ROOT}/05single_script/03b_integration_eda.R" \
   "${MODULE_03B_MANIFEST}" \
-  "${MODULE_03A2_MANIFEST}"
+  "${MODULE_03A2_MANIFEST}" \
+  "${MODULE_03A3_MANIFEST}"
 
 require_manifest_output "${MODULE_03B_MANIFEST}" "selected_integration_txt" >/dev/null
 if ! eda_gate_passed integration; then
@@ -92,6 +100,7 @@ update_workflow_status \
   "review ${EDA_GATE_FILE} and approve annotation before bash ${PIPELINE_ROOT}/workflow/03stages/04_subcluster.sh" \
   "status.03a1_normalize_hvg_completed=true" \
   "status.03a2_reduce_integrate_completed=true" \
+  "status.03a3_compute_umap_completed=true" \
   "status.03b_integration_eda_completed=true" \
   "status.03c_cluster_completed=true" \
   "status.03d_annotate_completed=true" \

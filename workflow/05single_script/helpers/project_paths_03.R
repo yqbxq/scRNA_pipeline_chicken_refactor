@@ -26,6 +26,7 @@ get_single_script_config_03 <- function() {
 
   base$module_03a1_manifest_path <- file.path(base$manifest_dir, "03a1_normalize_hvg", "_manifest.json")
   base$module_03a2_manifest_path <- file.path(base$manifest_dir, "03a2_reduce_integrate", "_manifest.json")
+  base$module_03a3_manifest_path <- file.path(base$manifest_dir, "03a3_compute_umap", "_manifest.json")
   base$module_03b_manifest_path <- file.path(base$manifest_dir, "03b_integration_eda", "_manifest.json")
   base$module_03c_manifest_path <- file.path(base$manifest_dir, "03c_cluster", "_manifest.json")
   base$module_03d_manifest_path <- file.path(base$manifest_dir, "03d_annotate", "_manifest.json")
@@ -34,6 +35,7 @@ get_single_script_config_03 <- function() {
   base$panorama_checkpoint_dir <- file.path(base$checkpoint_dir, "layers", layer_id)
   base$panorama_normalized_dir <- file.path(base$panorama_checkpoint_dir, "normalized")
   base$panorama_reduction_dir <- file.path(base$panorama_checkpoint_dir, "reductions")
+  base$panorama_umap_dir <- file.path(base$panorama_checkpoint_dir, "umap")
   base$panorama_clustered_rds <- file.path(base$panorama_checkpoint_dir, sprintf("%s_after_clustering.rds", layer_id))
   base$panorama_annotated_rds <- file.path(base$panorama_checkpoint_dir, sprintf("%s_after_annotation.rds", layer_id))
 
@@ -58,6 +60,7 @@ get_single_script_config_03 <- function() {
   base$pca_dims_subcluster_raw <- env_or_default_03("PCA_DIMS_SUBCLUSTER", "1:20")
   base$min_biological_replicates <- env_integer_03("MIN_BIOLOGICAL_REPLICATES", 2L)
   base$module_version <- env_or_default_03("MODULE_03_VERSION", "1.0")
+  base$module_03a3_version <- env_or_default_03("MODULE_03A3_VERSION", base$module_version)
   base
 }
 
@@ -66,6 +69,7 @@ prepare_dirs_03 <- function(cfg) {
     cfg$panorama_checkpoint_dir,
     cfg$panorama_normalized_dir,
     cfg$panorama_reduction_dir,
+    cfg$panorama_umap_dir,
     cfg$integration_report_dir_layer,
     cfg$annotation_report_dir_layer,
     cfg$annotation_table_dir_layer,
@@ -74,6 +78,7 @@ prepare_dirs_03 <- function(cfg) {
     dirname(cfg$selected_integration_file),
     dirname(cfg$module_03a1_manifest_path),
     dirname(cfg$module_03a2_manifest_path),
+    dirname(cfg$module_03a3_manifest_path),
     dirname(cfg$module_03b_manifest_path),
     dirname(cfg$module_03c_manifest_path),
     dirname(cfg$module_03d_manifest_path),

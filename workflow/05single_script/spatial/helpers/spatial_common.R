@@ -1244,7 +1244,18 @@ spatial_create_umap_fallback <- function(obj, source_reduction, target_reduction
 
 spatial_run_umap_or_fallback <- function(obj, source_reduction, target_reduction, dims) {
   out <- tryCatch(
-    Seurat::RunUMAP(obj, reduction = source_reduction, dims = dims, reduction.name = target_reduction, verbose = FALSE),
+    Seurat::RunUMAP(
+      obj,
+      reduction = source_reduction,
+      dims = dims,
+      reduction.name = target_reduction,
+      n.neighbors = as.integer(Sys.getenv("UMAP_N_NEIGHBORS", "30")),
+      min.dist = as.numeric(Sys.getenv("UMAP_MIN_DIST", "0.3")),
+      spread = as.numeric(Sys.getenv("UMAP_SPREAD", "1.0")),
+      metric = Sys.getenv("UMAP_METRIC", "cosine"),
+      local.connectivity = as.numeric(Sys.getenv("UMAP_LOCAL_CONNECTIVITY", "1")),
+      verbose = FALSE
+    ),
     error = function(e) e
   )
   if (inherits(out, "error")) {
@@ -1266,8 +1277,6 @@ run_integration_none <- function(panorama, hvg, npcs = 30L) {
   panorama <- tryCatch(Seurat::ScaleData(panorama, assay = assay, features = hvg, verbose = FALSE), error = function(e) panorama)
   pca_n <- min(as.integer(npcs), length(hvg), max(1L, ncol(panorama) - 1L))
   panorama <- Seurat::RunPCA(panorama, assay = assay, features = hvg, npcs = pca_n, reduction.name = "pca_none", verbose = FALSE)
-  dims <- seq_len(max(1L, min(pca_n, 30L)))
-  panorama <- spatial_run_umap_or_fallback(panorama, "pca_none", "umap_none", dims)
   panorama@misc$integration <- modifyList(panorama@misc$integration %||% list(), list(default_mode = "none", selected_mode = "none"))
   panorama
 }
@@ -1289,8 +1298,7 @@ run_integration_harmony <- function(panorama, hvg, npcs = 30L, group_by = "secti
     reduction.save = "harmony",
     verbose = FALSE
   )
-  dims <- seq_len(min(ncol(Seurat::Embeddings(panorama, "harmony")), npcs))
-  spatial_run_umap_or_fallback(panorama, "harmony", "umap_harmony", dims)
+  panorama
 }
 
 run_integration_cca <- function(panorama, hvg, npcs = 30L) {
@@ -1307,8 +1315,7 @@ run_integration_cca <- function(panorama, hvg, npcs = 30L) {
     new.reduction = "cca_integrated",
     verbose = FALSE
   )
-  dims <- seq_len(min(ncol(Seurat::Embeddings(panorama, "cca_integrated")), npcs))
-  spatial_run_umap_or_fallback(panorama, "cca_integrated", "umap_cca", dims)
+  panorama
 }
 
 compute_lisi <- function(panorama, reduction, group_col, perplexity = 30) {

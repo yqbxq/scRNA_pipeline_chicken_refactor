@@ -14,7 +14,7 @@ source(file.path(PIPELINE_ROOT, "workflow/02lib/r/r_runtime_bootstrap.R"), encod
 source(file.path(.script_dir, "helpers", "spatial_common.R"), encoding = "UTF-8")
 source(file.path(.script_dir, "helpers", "project_paths_spatial.R"), encoding = "UTF-8")
 
-load_required_packages(c("Seurat", "Matrix", "ggplot2", "jsonlite"))
+load_required_packages(c("Seurat", "Matrix", "jsonlite"))
 
 cfg <- get_spatial_script_config()
 module_name <- "spatial_02a_integration_eda"
@@ -50,18 +50,6 @@ parse_cli <- function(args) {
   out
 }
 
-plot_reduction <- function(obj, reduction, color_col, path, title) {
-  emb <- Seurat::Embeddings(obj, reduction = reduction)
-  color <- if (color_col %in% colnames(obj@meta.data)) obj@meta.data[rownames(emb), color_col, drop = TRUE] else "all"
-  plot_df <- data.frame(x = emb[, 1], y = emb[, 2], color = color, stringsAsFactors = FALSE)
-  p <- ggplot2::ggplot(plot_df, ggplot2::aes(x = x, y = y, color = color)) +
-    ggplot2::geom_point(size = 0.7, alpha = 0.85) +
-    ggplot2::theme_bw(base_size = 11) +
-    ggplot2::labs(x = paste0(reduction, "_1"), y = paste0(reduction, "_2"), color = color_col, title = title)
-  ggplot2::ggsave(path, p, width = 5.8, height = 4.8, dpi = 180, bg = "white")
-  path
-}
-
 args <- parse_cli(commandArgs(trailingOnly = TRUE))
 layer_settings <- spatial_layer_settings(args$layer_file, "panorama_st")
 hvg_n <- as.integer(spatial_numeric_or(layer_settings$hvg_nfeatures %||% layer_settings$hvg_n, cfg$default_hvg_n))
@@ -83,7 +71,6 @@ hvg <- compute_panorama_hvg(panorama, method = "selected", hvg_n = hvg_n)
 panel <- tryCatch(read_spatial_region_panel(args$marker_panel_dir, layer_id = "panorama_st"), error = function(e) NULL)
 results <- list()
 bio_tables <- list()
-figures <- character()
 
 started <- proc.time()[["elapsed"]]
 none_result <- tryCatch(run_integration_none(panorama, hvg, npcs = npcs), error = function(e) e)
@@ -104,7 +91,6 @@ results[["none"]] <- list(
   message = lisi_none$message,
   timing_sec = round(proc.time()[["elapsed"]] - started, 3)
 )
-figures <- c(figures, plot_reduction(panorama, "umap_none", "section_id", file.path(cfg$spatial_integration_figure_dir, "umap_none_by_section.png"), "UMAP none by section"))
 
 if ("harmony" %in% modes) {
   started <- proc.time()[["elapsed"]]
@@ -117,7 +103,6 @@ if ("harmony" %in% modes) {
     bio_harmony <- tryCatch(compute_biological_consistency(panorama, panel, "harmony"), error = function(e) data.frame())
     bio_tables[["harmony"]] <- bio_harmony
     results[["harmony"]] <- list(status = "ok", reduction = "harmony", umap = "umap_harmony", mean_lisi = lisi_harmony$mean_lisi, lisi_implementation = lisi_harmony$implementation, biological_consistency = if (nrow(bio_harmony) == 0) NA_real_ else mean(bio_harmony$marker_aligned_cluster_frac, na.rm = TRUE), message = lisi_harmony$message, timing_sec = round(proc.time()[["elapsed"]] - started, 3))
-    figures <- c(figures, plot_reduction(panorama, "umap_harmony", "section_id", file.path(cfg$spatial_integration_figure_dir, "umap_harmony_by_section.png"), "UMAP harmony by section"))
   }
 }
 
@@ -132,7 +117,6 @@ if ("cca" %in% modes) {
     bio_cca <- tryCatch(compute_biological_consistency(panorama, panel, "cca_integrated"), error = function(e) data.frame())
     bio_tables[["cca"]] <- bio_cca
     results[["cca"]] <- list(status = "ok", reduction = "cca_integrated", umap = "umap_cca", mean_lisi = lisi_cca$mean_lisi, lisi_implementation = lisi_cca$implementation, biological_consistency = if (nrow(bio_cca) == 0) NA_real_ else mean(bio_cca$marker_aligned_cluster_frac, na.rm = TRUE), message = lisi_cca$message, timing_sec = round(proc.time()[["elapsed"]] - started, 3))
-    figures <- c(figures, plot_reduction(panorama, "umap_cca", "section_id", file.path(cfg$spatial_integration_figure_dir, "umap_cca_by_section.png"), "UMAP CCA by section"))
   }
 }
 
@@ -182,6 +166,8 @@ report_lines <- c(
   sprintf("- Panorama object: `%s`", relative_path_local(cfg$spatial_panorama_integrated_rds, cfg$project_root)),
   sprintf("- Modes requested: `%s`", paste(modes, collapse = ", ")),
   sprintf("- Recommended mode: `%s`", cfg$default_integration_mode),
+  "",
+  "UMAP embeddings are computed by `spatial_02a2_compute_umap` after this reduction/integration EDA stage.",
   "",
   "## Mode Summary",
   render_markdown_table_local(lisi_summary),

@@ -77,10 +77,11 @@ cluster_result <- run_resolution_search(
   seed = cfg$random_seed,
   log_path = resolution_search_tsv
 )
+selected_umap <- if ("umap_name" %in% colnames(candidate_row)) normalize_scalar_value(candidate_row$umap_name[[1]], "") else ""
 seu <- finalize_layer_object(
   cluster_result$seu,
   reduction_name = candidate_row$reduction_name[[1]],
-  umap_name = candidate_row$umap_name[[1]],
+  umap_name = selected_umap,
   cluster_col = cluster_col
 )
 seu$cell_type <- ""
@@ -122,7 +123,7 @@ layer_status_row <- data.frame(
   selected_normalization = selected_norm,
   selected_integration = selected_mode,
   selected_reduction = candidate_row$reduction_name[[1]],
-  selected_umap = candidate_row$umap_name[[1]],
+  selected_umap = selected_umap,
   selected_resolution = as.character(cluster_result$selected_resolution),
   selected_cluster_count = as.character(cluster_result$selected_cluster_count),
   fallback_used = ifelse(cluster_result$fallback_used, "true", "false"),

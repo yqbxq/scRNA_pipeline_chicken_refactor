@@ -21,3 +21,11 @@ This file records project-level environment variables that are exported through 
 | `H5AD_EXPORT_SPATIAL_PER_SECTION` | `yes` | Writes one spatial H5AD per section when enabled. |
 | `H5AD_EXPORT_CONTRACT_FAIL_ON` | inherits `H5AD_CONTRACT_FAIL_ON` | H5AD export-specific contract policy. |
 | `MODULE_90_EXPORT_H5AD_VERSION` | `1.0` | Version marker for the 90 H5AD export stage. |
+| `MODULE_03A3_VERSION` | `1.0` | Version marker for the independent panorama UMAP stage. |
+| `MODULE_SPATIAL_02A2_VERSION` | `1.0` | Version marker for the independent spatial UMAP stage. |
+| `UMAP_N_NEIGHBORS` | `30` | Shared UMAP neighbor count for 03a3 and spatial 02a2. |
+| `UMAP_MIN_DIST` | `0.3` | Shared UMAP minimum distance. |
+| `UMAP_SPREAD` | `1.0` | Shared UMAP spread. |
+| `UMAP_SEED` | inherits `RANDOM_SEED` | Shared UMAP random seed. |
+| `UMAP_METRIC` | `cosine` | Shared UMAP distance metric. |
+| `UMAP_LOCAL_CONNECTIVITY` | `1` | Shared UMAP local connectivity parameter. |

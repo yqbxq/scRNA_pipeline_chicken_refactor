@@ -38,10 +38,17 @@ set.seed(cfg$random_seed)
 
 panorama_spec <- panorama_layer_spec(cfg)
 manifest_03a2 <- read_manifest_local(cfg$module_03a2_manifest_path)
-candidate_index_tsv <- resolve_output_local(manifest_03a2, "candidate_index_tsv")
+manifest_03a3 <- read_manifest_local(cfg$module_03a3_manifest_path)
+source_candidate_index_tsv <- resolve_output_local(manifest_03a2, "candidate_index_tsv")
+candidate_index_tsv <- resolve_output_local(manifest_03a3, "candidate_umap_index_tsv")
 candidate_index <- read_tsv_optional(candidate_index_tsv)
 if (nrow(candidate_index) == 0) {
   stop(sprintf("候选索引为空: %s", candidate_index_tsv), call. = FALSE)
+}
+source_candidate_index <- read_tsv_optional(source_candidate_index_tsv)
+if (nrow(source_candidate_index) > 0 && "source_candidate_key" %in% colnames(candidate_index)) {
+  source_meta <- source_candidate_index[, intersect(c("candidate_key", "runtime_sec", "downgrade_reason"), colnames(source_candidate_index)), drop = FALSE]
+  candidate_index <- dplyr::left_join(candidate_index, source_meta, by = c("source_candidate_key" = "candidate_key"), suffix = c("", "_source"))
 }
 
 r2_by_factor <- function(values, group) {
@@ -135,8 +142,8 @@ for (idx in seq_len(nrow(candidate_index))) {
     max_group_r2 = safe_max(group_r2),
     silhouette_by_orig_ident = mean_silhouette_by_group(metric_emb, seu$orig.ident),
     same_sample_knn_fraction = same_sample_knn_fraction(metric_emb, seu$orig.ident),
-    runtime_sec = suppressWarnings(as.numeric(row$runtime_sec[[1]])),
-    downgrade_reason = normalize_scalar_value(row$downgrade_reason[[1]]),
+    runtime_sec = if ("runtime_sec" %in% colnames(row)) suppressWarnings(as.numeric(row$runtime_sec[[1]])) else NA_real_,
+    downgrade_reason = if ("downgrade_reason" %in% colnames(row)) normalize_scalar_value(row$downgrade_reason[[1]]) else "",
     stringsAsFactors = FALSE
   )
 
@@ -283,9 +290,13 @@ write_manifest_local(
   ),
   module_name = module_name,
   base_dir = cfg$project_root,
-  inputs = list(module_03a2_manifest = cfg$module_03a2_manifest_path, candidate_index_tsv = candidate_index_tsv),
+  inputs = list(
+    module_03a2_manifest = cfg$module_03a2_manifest_path,
+    module_03a3_manifest = cfg$module_03a3_manifest_path,
+    candidate_index_tsv = candidate_index_tsv
+  ),
   version = cfg$module_version,
-  depends_on = list(module_03a2 = cfg$module_03a2_manifest_path)
+  depends_on = list(module_03a2 = cfg$module_03a2_manifest_path, module_03a3 = cfg$module_03a3_manifest_path)
 )
 
 message("03b 完成。推荐: ", recommended_value, "；报告: ", report_path)
