@@ -201,9 +201,9 @@ else
     "${COMMUNICATION_PAIRS_SHEET}"
 fi
 
-if [[ "${MULTINICHENET_ENABLED}" == "no" || "${RUN_NICHENET:-yes}" == "no" ]]; then
-  warn "MULTINICHENET_ENABLED=no 或 RUN_NICHENET=no，写入 07c_nichenet placeholder manifest。"
-  write_placeholder_manifest_07 "${MODULE_07C_MANIFEST}" "07c_nichenet" "disabled by MULTINICHENET_ENABLED/RUN_NICHENET"
+if [[ "${MULTINICHENET_ENABLED}" == "no" || "${RUN_NICHENET:-yes}" == "no" || "${NICHENET_MODE:-auto}" == "skip" ]]; then
+  warn "MULTINICHENET_ENABLED=no、RUN_NICHENET=no 或 NICHENET_MODE=skip，写入 07c_nichenet placeholder manifest。"
+  write_placeholder_manifest_07 "${MODULE_07C_MANIFEST}" "07c_nichenet" "disabled by MULTINICHENET_ENABLED/RUN_NICHENET/NICHENET_MODE"
 else
   run_optional_comm_r_stage \
     "07c_nichenet" \

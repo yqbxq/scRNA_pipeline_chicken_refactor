@@ -81,6 +81,12 @@ get_single_script_config_07 <- function() {
   base$liana_condition_col <- env_or_default_03("LIANA_CONDITION_COL", "condition")
   base$ortholog_chicken_human_tsv <- env_or_default_03("ORTHOLOG_CHICKEN_HUMAN_TSV", file.path(base$metadata_dir, "ortholog_chicken_human.tsv"))
   base$multinichenet_enabled <- env_or_default_03("MULTINICHENET_ENABLED", "auto")
+  base$nichenet_mode <- env_or_default_03("NICHENET_MODE", "auto")
+  base$multinichenet_min_samples_per_group <- env_integer_07("MULTINICHENET_MIN_SAMPLES_PER_GROUP", 2L)
+  base$multinichenet_top_n_lr <- env_integer_07("MULTINICHENET_TOP_N_LR", 250L)
+  base$multinichenet_top_n_targets <- env_integer_07("MULTINICHENET_TOP_N_TARGETS", 20L)
+  base$multinichenet_min_cells <- env_integer_07("MULTINICHENET_MIN_CELLS", 10L)
+  base$communication_receiver_de_p_threshold <- env_numeric_07("COMMUNICATION_RECEIVER_DE_P_THRESHOLD", 0.05)
   base$commot_enabled <- env_or_default_03("COMMOT_ENABLED", "auto")
   base$module_07a_cellchat_version <- env_or_default_03(
     "MODULE_07A_CELLCHAT_VERSION",

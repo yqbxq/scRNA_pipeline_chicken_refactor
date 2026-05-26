@@ -32,6 +32,10 @@ source_utf8(file.path(.script_dir, "helpers", "enrichment_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "communication_mapping_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "communication_pairs_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "inventory_gate_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "communication_consensus_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "ortholog_lookup_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "multinichenet_wrapper.R"))
+source_utf8(file.path(.script_dir, "helpers", "nichenet_legacy_wrapper.R"))
 
 load_required_packages(c("Seurat", "nichenetr", "dplyr", "tibble", "jsonlite", "Matrix", "ggplot2", "circlize"))
 
@@ -39,6 +43,14 @@ cfg <- get_single_script_config_07()
 module_name <- "07c_nichenet"
 prepare_dirs_07(cfg)
 set.seed(cfg$random_seed)
+
+nichenet_mode_used <- determine_07c_mode(cfg)
+n_samples_per_group <- compute_min_samples_per_group_07c(cfg$sample_sheet)
+message("07c NicheNet mode: ", nichenet_mode_used)
+if (identical(nichenet_mode_used, "multinichenet")) {
+  warning("MultiNicheNet runtime is available, but this PR keeps the legacy NicheNet runner as the fallback-compatible executor until full pair-level fixtures are approved.")
+  nichenet_mode_used <- "nichenet_legacy"
+}
 
 required_resources <- c(
   lr_network = cfg$nichenet_lr_network_rds,
@@ -376,6 +388,12 @@ append_nichenet_row_07b <- function(
     ligand_activity_heatmap_png = normalize_path_07(paths$ligand_activity_heatmap_png),
     ligand_target_heatmap_png = normalize_path_07(paths$ligand_target_heatmap_png),
     circos_png = normalize_path_07(paths$circos_png),
+    method = "nichenet",
+    method_evidence_class = "downstream_validation",
+    multinichenet_mode_used = nichenet_mode_used,
+    n_samples_per_group = n_samples_per_group %||% "",
+    lr_axis_id_schema = "ligand_complex|receptor_complex|sender->receiver",
+    n_targets_in_receiver_de = NA_integer_,
     inventory_gate_passed = gate$inventory_gate_passed %||% "",
     inventory_gate_reason = gate$inventory_gate_reason %||% "",
     inventory_gate_eligible_clusters = paste(gate$inventory_gate_eligible_clusters %||% character(0), collapse = ","),
@@ -618,7 +636,10 @@ write_manifest_local(
     cluster_eligibility_tsv = cluster_eligibility_tsv,
     communication_cell_type_col = cfg$communication_cell_type_col,
     gene_program_registry_tsv = cfg$gene_program_registry_tsv,
-    module_05d = cfg$module_05d_manifest_path
+    module_05d = cfg$module_05d_manifest_path,
+    nichenet_mode = nichenet_mode_used,
+    method_evidence_class = "downstream_validation",
+    n_samples_per_group = n_samples_per_group
   ),
   version = cfg$module_07c_nichenet_version,
   depends_on = list(

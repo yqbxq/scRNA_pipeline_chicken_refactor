@@ -38,7 +38,7 @@ This file records project-level environment variables that are exported through 
 | `MODULE_05D_VERSION` | `1.1` | Version marker for DEG EDA evidence-tier coverage outputs. |
 | `MODULE_07A_CELLCHAT_VERSION` | `1.1` | Version marker for CellChat inventory-gated outputs. |
 | `MODULE_07B_LIANA_VERSION` | `1.0` | Version marker for the 07b LIANA+ consensus layer. |
-| `MODULE_07C_NICHENET_VERSION` | `1.1` | Version marker for NicheNet inventory-gated outputs. |
+| `MODULE_07C_NICHENET_VERSION` | `1.0` | Version marker for NicheNet/MultiNicheNet inventory-gated outputs. |
 | `MODULE_07D_CONSENSUS_VERSION` | `0.1` | Version marker for the 07d communication consensus placeholder. |
 | `MODULE_07E_EDA_VERSION` | `0.1` | Version marker for the 07e communication EDA layer. |
 | `INVENTORY_GATE_REQUIRED` | `yes` | Require 04c `cluster_eligibility_tsv` before communication modules run. |
@@ -56,6 +56,12 @@ This file records project-level environment variables that are exported through 
 | `LIANA_CONDITION_COL` | `condition` | H5AD `.obs` column used for per-condition LIANA runs. |
 | `ORTHOLOG_CHICKEN_HUMAN_TSV` | `metadata/ortholog_chicken_human.tsv` | Optional chicken-to-human symbol LUT for communication `lr_axis_id` standardization. |
 | `MULTINICHENET_ENABLED` | `auto` | Controls the 07c NicheNet/MultiNicheNet stage. |
+| `NICHENET_MODE` | `auto` | Selects 07c mode: `auto`, `multinichenet`, `nichenet_legacy`, or `skip`. |
+| `MULTINICHENET_MIN_SAMPLES_PER_GROUP` | `2` | Minimum samples per group before 07c can use MultiNicheNet mode. |
+| `MULTINICHENET_TOP_N_LR` | `250` | Planned top ligand-receptor cap for MultiNicheNet output. |
+| `MULTINICHENET_TOP_N_TARGETS` | `20` | Planned top ligand-target cap for receiver-DE overlap. |
+| `MULTINICHENET_MIN_CELLS` | `10` | Planned minimum per-celltype cell count for MultiNicheNet. |
+| `COMMUNICATION_RECEIVER_DE_P_THRESHOLD` | `0.05` | Receiver DEG adjusted-p cutoff for downstream target-hit evidence. |
 | `COMMOT_ENABLED` | `auto` | Reserved for the future COMMOT spatial communication extension. |
 | `MODULE_03A3_VERSION` | `1.0` | Version marker for the independent panorama UMAP stage. |
 | `MODULE_SPATIAL_02A2_VERSION` | `1.0` | Version marker for the independent spatial UMAP stage. |

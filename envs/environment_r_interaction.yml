@@ -45,6 +45,7 @@ dependencies:
   - r-rcolorbrewer
   - r-nmf
   - bioconductor-singlecellexperiment=1.28.0
+  - bioconductor-multinichenetr
   - bioconductor-biocneighbors
   - bioconductor-clusterprofiler=4.14.0
   - bioconductor-org.gg.eg.db

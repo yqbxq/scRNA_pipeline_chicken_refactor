@@ -248,7 +248,9 @@ empty_nichenet_index_07 <- function() {
     "fallback_ligand_activity_tsv", "fallback_ligand_target_links_tsv",
     "result_copied",
     "ligand_activity_tsv", "ligand_target_links_tsv", "nichenet_rds",
-    "ligand_activity_heatmap_png", "ligand_target_heatmap_png", "circos_png"
+    "ligand_activity_heatmap_png", "ligand_target_heatmap_png", "circos_png",
+    "method", "method_evidence_class", "multinichenet_mode_used",
+    "n_samples_per_group", "lr_axis_id_schema", "n_targets_in_receiver_de"
   ))
 }
 
