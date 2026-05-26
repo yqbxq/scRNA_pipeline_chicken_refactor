@@ -25,9 +25,11 @@ get_single_script_config_07 <- function() {
   base$nichenet_figure_dir <- file.path(base$communication_figure_dir, "nichenet")
 
   base$cellchat_index_tsv <- file.path(base$cellchat_table_dir, "cellchat_index.tsv")
+  base$cellchat_inventory_gate_log_tsv <- file.path(base$cellchat_table_dir, "cellchat_inventory_gate_log.tsv")
   base$cellchat_mapping_summary_tsv <- file.path(base$cellchat_table_dir, "mapping_summary.tsv")
   base$cellchat_triage_tsv <- file.path(base$cellchat_table_dir, "triage.tsv")
   base$nichenet_index_tsv <- file.path(base$nichenet_table_dir, "nichenet_index.tsv")
+  base$nichenet_inventory_gate_log_tsv <- file.path(base$nichenet_table_dir, "nichenet_inventory_gate_log.tsv")
   base$nichenet_roles_resolved_tsv <- file.path(base$nichenet_table_dir, "roles_resolved.tsv")
   base$nichenet_triage_tsv <- file.path(base$nichenet_table_dir, "triage.tsv")
   base$communication_cross_validation_tsv <- file.path(base$communication_table_dir, "cross_validation.tsv")
@@ -53,6 +55,8 @@ get_single_script_config_07 <- function() {
   base$nichenet_expression_pct <- env_numeric_07("NICHENET_EXPRESSION_PCT", 0.10)
   base$nichenet_top_ligand_n <- env_integer_07("NICHENET_TOP_LIGAND_N", 20L)
   base$nichenet_top_target_n <- env_integer_07("NICHENET_TOP_TARGET_N", 200L)
+  base$module_07a_version <- env_or_default_03("MODULE_07A_VERSION", env_or_default_03("MODULE_07_VERSION", "1.0"))
+  base$module_07b_version <- env_or_default_03("MODULE_07B_VERSION", env_or_default_03("MODULE_07_VERSION", "1.0"))
   base$module_version <- env_or_default_03("MODULE_07_VERSION", "1.0")
   base
 }
@@ -70,9 +74,11 @@ prepare_dirs_07 <- function(cfg) {
     dirname(cfg$module_07b_manifest_path),
     dirname(cfg$module_07c_manifest_path),
     dirname(cfg$cellchat_index_tsv),
+    dirname(cfg$cellchat_inventory_gate_log_tsv),
     dirname(cfg$cellchat_mapping_summary_tsv),
     dirname(cfg$cellchat_triage_tsv),
     dirname(cfg$nichenet_index_tsv),
+    dirname(cfg$nichenet_inventory_gate_log_tsv),
     dirname(cfg$nichenet_roles_resolved_tsv),
     dirname(cfg$nichenet_triage_tsv),
     dirname(cfg$communication_cross_validation_tsv),

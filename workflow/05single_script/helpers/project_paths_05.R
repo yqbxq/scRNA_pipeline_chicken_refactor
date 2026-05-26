@@ -34,6 +34,7 @@ get_single_script_config_05 <- function() {
   base$deg_alpha <- env_numeric_05("DEG_ALPHA", 0.05)
   base$gene_program_targets_sheet <- env_or_default_03("GENE_PROGRAM_TARGETS_SHEET", file.path(base$metadata_dir, "gene_program_targets.tsv"))
   base$gene_program_registry_tsv <- env_or_default_03("GENE_PROGRAM_REGISTRY_TSV", file.path(base$deg_table_dir, "gene_program_registry.tsv"))
+  base$module_05d_version <- env_or_default_03("MODULE_05D_VERSION", env_or_default_03("MODULE_05_VERSION", "1.0"))
   base$module_version <- env_or_default_03("MODULE_05_VERSION", "1.0")
   base
 }

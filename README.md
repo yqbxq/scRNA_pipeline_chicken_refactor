@@ -36,6 +36,11 @@
 - `workflow/03stages/10_velocity.sh`
 - `workflow/03stages/08_regulation.sh`
 
+`cell_count_inventory` 是项目级单一事实源：04c 生成
+`cluster_eligibility_tsv`，05b/05a 用它决定 pseudobulk 是否可跑，07a/07b
+用它过滤 CellChat/NicheNet 的输入 cluster。不要在下游模块里重新计算一套
+细胞数阈值。
+
 旧的顶层 wrapper 和旧 `workflow/r` 结构已在 `all-repo` 中移除，避免和新的单目录 workflow 重复。
 
 ## 1. 两种运行模式

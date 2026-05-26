@@ -31,6 +31,7 @@ source_utf8(file.path(.script_dir, "helpers", "deg_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "enrichment_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "communication_mapping_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "communication_pairs_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "inventory_gate_utils.R"))
 
 load_required_packages(c("Seurat", "CellChat", "dplyr", "tibble", "jsonlite", "Matrix", "ggplot2", "patchwork"))
 
@@ -49,6 +50,9 @@ if (!nzchar(ortholog_csv)) {
 lut <- build_chicken_to_human_lut(ortholog_csv)
 layers <- communication_layer_status_07(cfg)
 pairs <- read_communication_pairs(cfg)
+inventory_gate <- read_inventory_gate_eligibility(cfg$module_04c_manifest_path)
+cluster_eligibility_tsv <- inventory_gate$path
+cluster_eligibility <- inventory_gate$eligibility
 
 empty_lr_table_07a <- function() {
   empty_df_07(c("source", "target", "ligand", "receptor", "prob", "pval", "pathway_name"))
@@ -253,6 +257,9 @@ append_cellchat_row_07a <- function(rows, pair_row, layer_id, condition_value, c
     bubble_png = normalize_path_07(paths$bubble_png),
     network_png = normalize_path_07(paths$network_png),
     heatmap_png = normalize_path_07(paths$heatmap_png),
+    inventory_gate_passed = gate$inventory_gate_passed %||% "",
+    inventory_gate_reason = gate$inventory_gate_reason %||% "",
+    inventory_gate_eligible_clusters = paste(gate$inventory_gate_eligible_clusters %||% character(0), collapse = ","),
     stringsAsFactors = FALSE
   )
   rows
@@ -261,6 +268,7 @@ append_cellchat_row_07a <- function(rows, pair_row, layer_id, condition_value, c
 index_rows <- list()
 mapping_rows <- list()
 triage_rows <- list()
+inventory_gate_rows <- list()
 dynamic_outputs <- list()
 
 if (nrow(layers) == 0) {
@@ -336,12 +344,29 @@ for (layer_idx in seq_len(nrow(layers))) {
       n_cells <- ncol(obj)
       n_cell_types <- length(unique(as.character(obj@meta.data[[cell_type_col]])))
       gate <- empty_gate_info_07a(pair_row)
+      inventory_gate_passed <- ""
+      inventory_gate_reason <- ""
+      inventory_gate_eligible_clusters <- character(0)
       status <- "ok"
       reason <- ""
       if (isTRUE(col_result$strict) && !identical(role_check$status, "ok")) {
         status <- role_check$status
         reason <- role_check$reason
       }
+      if (identical(status, "ok")) {
+        inventory_res <- subset_by_inventory_gate(obj, cell_type_col, cluster_eligibility, layer_id, pair_id)
+        inventory_gate_rows[[length(inventory_gate_rows) + 1L]] <- inventory_res$log
+        inventory_gate_passed <- identical(inventory_res$status, "ok")
+        inventory_gate_reason <- inventory_res$reason
+        inventory_gate_eligible_clusters <- inventory_res$eligible_clusters
+        if (!identical(inventory_res$status, "ok")) {
+          status <- inventory_res$status
+          reason <- inventory_res$reason
+        } else {
+          obj <- inventory_res$object
+        }
+      }
+
       if (identical(status, "ok")) {
         gate_counts <- communication_gate_counts_07(obj, cell_type_col, roles)
         gate_eval <- evaluate_communication_min_cell_gate_07(
@@ -351,6 +376,9 @@ for (layer_idx in seq_len(nrow(layers))) {
           gate_counts$condition_pair_cell_n
         )
         gate <- c(gate_counts, gate_eval[c("gate_status", "min_sender_cells", "min_receiver_cells", "min_cells_per_condition")])
+        gate$inventory_gate_passed <- inventory_gate_passed
+        gate$inventory_gate_reason <- inventory_gate_reason
+        gate$inventory_gate_eligible_clusters <- inventory_gate_eligible_clusters
         if (!isTRUE(gate_eval$pass)) {
           status <- "skipped_low_cells"
           reason <- gate_eval$reason
@@ -414,6 +442,9 @@ for (layer_idx in seq_len(nrow(layers))) {
       if (!identical(status, "ok")) {
         write_cellchat_empty_outputs_07a(paths, reason)
       }
+      gate$inventory_gate_passed <- inventory_gate_passed
+      gate$inventory_gate_reason <- inventory_gate_reason
+      gate$inventory_gate_eligible_clusters <- inventory_gate_eligible_clusters
       index_rows <- append_cellchat_row_07a(index_rows, pair_row, layer_id, condition_value, cell_type_col, n_cells, n_cell_types, status, reason, paths, gate = gate)
 
       suffix <- paste(safe_id_07(layer_id), safe_id_07(pair_id), safe_id_07(condition_value), sep = "_")
@@ -432,8 +463,13 @@ for (layer_idx in seq_len(nrow(layers))) {
 index_df <- if (length(index_rows) > 0) dplyr::bind_rows(index_rows) else empty_cellchat_index_07()
 mapping_df <- if (length(mapping_rows) > 0) dplyr::bind_rows(mapping_rows) else empty_mapping_summary_07()
 triage_df <- if (length(triage_rows) > 0) dplyr::bind_rows(triage_rows) else empty_triage_df(include_sample = TRUE)
+inventory_gate_df <- if (length(inventory_gate_rows) > 0) dplyr::bind_rows(inventory_gate_rows) else inventory_gate_log_for_labels(character(), cluster_eligibility)
+if (nrow(inventory_gate_df) > 0 && !any(inventory_gate_df$passed_inventory_gate, na.rm = TRUE) && inventory_gate_flag("COMMUNICATION_FAIL_ON_NO_PRIMARY", "no")) {
+  stop("No clusters passed the communication inventory gate.", call. = FALSE)
+}
 
 write_tsv_local(index_df, cfg$cellchat_index_tsv)
+write_tsv_local(inventory_gate_df, cfg$cellchat_inventory_gate_log_tsv)
 write_tsv_local(mapping_df, cfg$cellchat_mapping_summary_tsv)
 write_tsv_local(triage_df, cfg$cellchat_triage_tsv)
 
@@ -442,6 +478,7 @@ if (file.exists(cfg$module_07a_manifest_path)) {
 }
 fixed_outputs <- list(
   cellchat_index_tsv = build_output_entry(cfg$cellchat_index_tsv, "tsv", module_name, "one row per layer/pair/condition CellChat task", base_dir = cfg$project_root, schema = infer_schema_from_df(index_df)),
+  cellchat_inventory_gate_log_tsv = build_output_entry(cfg$cellchat_inventory_gate_log_tsv, "tsv", module_name, "CellChat inventory gate decisions by cluster", base_dir = cfg$project_root, schema = infer_schema_from_df(inventory_gate_df)),
   mapping_summary_tsv = build_output_entry(cfg$cellchat_mapping_summary_tsv, "tsv", module_name, "one row per layer/pair/condition ortholog mapping summary", base_dir = cfg$project_root, schema = infer_schema_from_df(mapping_df)),
   triage_tsv = build_output_entry(cfg$cellchat_triage_tsv, "tsv", module_name, "CellChat triage signals", base_dir = cfg$project_root, schema = infer_schema_from_df(triage_df))
 )
@@ -454,15 +491,17 @@ write_manifest_local(
     ortholog_csv = ortholog_csv,
     layer_status_tsv = cfg$layer_status_file,
     communication_pairs_sheet = cfg$communication_pairs_sheet,
+    cluster_eligibility_tsv = cluster_eligibility_tsv,
     communication_cell_type_col = cfg$communication_cell_type_col,
     module_03d = cfg$module_03d_manifest_path,
     module_04b = cfg$module_04b_manifest_path
   ),
-  version = cfg$module_version,
+  version = cfg$module_07a_version,
   depends_on = list(
     module_00 = cfg$ortholog_manifest_path,
     module_03d = cfg$module_03d_manifest_path,
-    module_04b = cfg$module_04b_manifest_path
+    module_04b = cfg$module_04b_manifest_path,
+    module_04c = cfg$module_04c_manifest_path
   )
 )
 

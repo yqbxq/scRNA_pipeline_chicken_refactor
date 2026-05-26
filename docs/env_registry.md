@@ -35,6 +35,13 @@ This file records project-level environment variables that are exported through 
 | `MODULE_INVENTORY_VERSION` | `1.0` | Version marker for inventory helper outputs. |
 | `MODULE_04C_VERSION` | `1.2` | Version marker for scRNA 04c subcluster EDA inventory artifacts. |
 | `MODULE_SPATIAL_04C_VERSION` | `1.2` | Version marker for spatial 04c subcluster EDA inventory artifacts. |
+| `MODULE_05D_VERSION` | `1.1` | Version marker for DEG EDA evidence-tier coverage outputs. |
+| `MODULE_07A_VERSION` | `1.1` | Version marker for CellChat inventory-gated outputs. |
+| `MODULE_07B_VERSION` | `1.1` | Version marker for NicheNet inventory-gated outputs. |
+| `INVENTORY_GATE_REQUIRED` | `yes` | Require 04c `cluster_eligibility_tsv` before communication modules run. |
+| `INVENTORY_GATE_ALLOWED_TIERS_COMMUNICATION` | `primary,exploratory,primary_merged` | Evidence tiers allowed to enter CellChat/NicheNet communication analysis. |
+| `INVENTORY_GATE_STRICT_MODE` | `no` | When enabled, a cluster must pass all matching eligibility rows to enter communication analysis. |
+| `COMMUNICATION_FAIL_ON_NO_PRIMARY` | `no` | Reserved strictness flag for failing communication when no cluster passes inventory gate. |
 | `MODULE_03A3_VERSION` | `1.0` | Version marker for the independent panorama UMAP stage. |
 | `MODULE_SPATIAL_02A2_VERSION` | `1.0` | Version marker for the independent spatial UMAP stage. |
 | `UMAP_N_NEIGHBORS` | `30` | Shared UMAP neighbor count for 03a3 and spatial 02a2. |

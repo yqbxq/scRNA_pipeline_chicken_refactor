@@ -31,6 +31,7 @@ source_utf8(file.path(.script_dir, "helpers", "deg_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "enrichment_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "communication_mapping_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "communication_pairs_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "inventory_gate_utils.R"))
 
 load_required_packages(c("Seurat", "nichenetr", "dplyr", "tibble", "jsonlite", "Matrix", "ggplot2", "circlize"))
 
@@ -89,6 +90,9 @@ ligand_target_matrix_chicken <- rename_ligand_target_matrix_human_to_chicken(rea
 
 layers <- communication_layer_status_07(cfg)
 pairs <- read_communication_pairs(cfg)
+inventory_gate <- read_inventory_gate_eligibility(cfg$module_04c_manifest_path)
+cluster_eligibility_tsv <- inventory_gate$path
+cluster_eligibility <- inventory_gate$eligibility
 
 write_nichenet_empty_outputs_07b <- function(paths, reason = "No NicheNet result", write_rds = FALSE) {
   ensure_dir(paths$table_dir)
@@ -372,6 +376,9 @@ append_nichenet_row_07b <- function(
     ligand_activity_heatmap_png = normalize_path_07(paths$ligand_activity_heatmap_png),
     ligand_target_heatmap_png = normalize_path_07(paths$ligand_target_heatmap_png),
     circos_png = normalize_path_07(paths$circos_png),
+    inventory_gate_passed = gate$inventory_gate_passed %||% "",
+    inventory_gate_reason = gate$inventory_gate_reason %||% "",
+    inventory_gate_eligible_clusters = paste(gate$inventory_gate_eligible_clusters %||% character(0), collapse = ","),
     stringsAsFactors = FALSE
   )
   rows
@@ -380,6 +387,7 @@ append_nichenet_row_07b <- function(
 index_rows <- list()
 roles_rows <- list()
 triage_rows <- list()
+inventory_gate_rows <- list()
 dynamic_outputs <- list()
 
 for (layer_idx in seq_len(nrow(layers))) {
@@ -432,6 +440,9 @@ for (layer_idx in seq_len(nrow(layers))) {
       formal_status <- ""
       result_level <- ""
       gate <- empty_gate_info_07b(pair_row)
+      inventory_gate_passed <- ""
+      inventory_gate_reason <- ""
+      inventory_gate_eligible_clusters <- character(0)
 
       if (identical(status, "ok")) {
         obj <- split_item$object
@@ -457,6 +468,20 @@ for (layer_idx in seq_len(nrow(layers))) {
 
       if (identical(status, "ok")) {
         obj <- split_item$object
+        inventory_res <- subset_by_inventory_gate(obj, cell_type_col, cluster_eligibility, layer_id, pair_id)
+        inventory_gate_rows[[length(inventory_gate_rows) + 1L]] <- inventory_res$log
+        inventory_gate_passed <- identical(inventory_res$status, "ok")
+        inventory_gate_reason <- inventory_res$reason
+        inventory_gate_eligible_clusters <- inventory_res$eligible_clusters
+        if (!identical(inventory_res$status, "ok")) {
+          status <- inventory_res$status
+          reason <- inventory_res$reason
+        } else {
+          obj <- inventory_res$object
+        }
+      }
+
+      if (identical(status, "ok")) {
         gate_counts <- communication_gate_counts_07(obj, cell_type_col, roles)
         gate_eval <- evaluate_communication_min_cell_gate_07(
           pair_row,
@@ -465,6 +490,9 @@ for (layer_idx in seq_len(nrow(layers))) {
           gate_counts$condition_pair_cell_n
         )
         gate <- c(gate_counts, gate_eval[c("gate_status", "min_sender_cells", "min_receiver_cells", "min_cells_per_condition")])
+        gate$inventory_gate_passed <- inventory_gate_passed
+        gate$inventory_gate_reason <- inventory_gate_reason
+        gate$inventory_gate_eligible_clusters <- inventory_gate_eligible_clusters
         if (!isTRUE(gate_eval$pass)) {
           status <- "skipped_low_cells"
           reason <- gate_eval$reason
@@ -530,6 +558,9 @@ for (layer_idx in seq_len(nrow(layers))) {
         )
       }
 
+      gate$inventory_gate_passed <- inventory_gate_passed
+      gate$inventory_gate_reason <- inventory_gate_reason
+      gate$inventory_gate_eligible_clusters <- inventory_gate_eligible_clusters
       index_rows <- append_nichenet_row_07b(
         index_rows, pair_row, layer_id, condition_value, roles, deg_source,
         deg_status, status, reason, paths,
@@ -554,8 +585,13 @@ for (layer_idx in seq_len(nrow(layers))) {
 index_df <- if (length(index_rows) > 0) dplyr::bind_rows(index_rows) else empty_nichenet_index_07()
 roles_df <- if (length(roles_rows) > 0) dplyr::bind_rows(roles_rows) else empty_roles_resolved_07()
 triage_df <- if (length(triage_rows) > 0) dplyr::bind_rows(triage_rows) else empty_triage_df(include_sample = TRUE)
+inventory_gate_df <- if (length(inventory_gate_rows) > 0) dplyr::bind_rows(inventory_gate_rows) else inventory_gate_log_for_labels(character(), cluster_eligibility)
+if (nrow(inventory_gate_df) > 0 && !any(inventory_gate_df$passed_inventory_gate, na.rm = TRUE) && inventory_gate_flag("COMMUNICATION_FAIL_ON_NO_PRIMARY", "no")) {
+  stop("No clusters passed the communication inventory gate.", call. = FALSE)
+}
 
 write_tsv_local(index_df, cfg$nichenet_index_tsv)
+write_tsv_local(inventory_gate_df, cfg$nichenet_inventory_gate_log_tsv)
 write_tsv_local(roles_df, cfg$nichenet_roles_resolved_tsv)
 write_tsv_local(triage_df, cfg$nichenet_triage_tsv)
 
@@ -564,6 +600,7 @@ if (file.exists(cfg$module_07b_manifest_path)) {
 }
 fixed_outputs <- list(
   nichenet_index_tsv = build_output_entry(cfg$nichenet_index_tsv, "tsv", module_name, "one row per layer/pair/condition NicheNet task", base_dir = cfg$project_root, schema = infer_schema_from_df(index_df)),
+  nichenet_inventory_gate_log_tsv = build_output_entry(cfg$nichenet_inventory_gate_log_tsv, "tsv", module_name, "NicheNet inventory gate decisions by cluster", base_dir = cfg$project_root, schema = infer_schema_from_df(inventory_gate_df)),
   roles_resolved_tsv = build_output_entry(cfg$nichenet_roles_resolved_tsv, "tsv", module_name, "resolved sender/receiver roles", base_dir = cfg$project_root, schema = infer_schema_from_df(roles_df)),
   triage_tsv = build_output_entry(cfg$nichenet_triage_tsv, "tsv", module_name, "NicheNet triage signals", base_dir = cfg$project_root, schema = infer_schema_from_df(triage_df))
 )
@@ -578,13 +615,15 @@ write_manifest_local(
     ligand_target_matrix_rds = cfg$nichenet_ligand_target_matrix_rds,
     weighted_networks_rds = cfg$nichenet_weighted_networks_rds,
     communication_pairs_sheet = cfg$communication_pairs_sheet,
+    cluster_eligibility_tsv = cluster_eligibility_tsv,
     communication_cell_type_col = cfg$communication_cell_type_col,
     gene_program_registry_tsv = cfg$gene_program_registry_tsv,
     module_05d = cfg$module_05d_manifest_path
   ),
-  version = cfg$module_version,
+  version = cfg$module_07b_version,
   depends_on = list(
     module_00 = cfg$ortholog_manifest_path,
+    module_04c = cfg$module_04c_manifest_path,
     module_05d = cfg$module_05d_manifest_path,
     module_07a = cfg$module_07a_manifest_path
   )

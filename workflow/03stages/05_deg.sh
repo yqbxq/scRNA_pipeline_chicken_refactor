@@ -68,9 +68,11 @@ run_deg_stage_if_stale \
   "${MODULE_05D_MANIFEST}" \
   "${MODULE_05A_MANIFEST}" \
   "${MODULE_05B_MANIFEST}" \
-  "${MODULE_05C_MANIFEST}"
+  "${MODULE_05C_MANIFEST}" \
+  "${MODULE_04C_MANIFEST}"
 DEG_REPORT="$(require_manifest_output "${MODULE_05D_MANIFEST}" "report")"
 require_manifest_output "${MODULE_05D_MANIFEST}" "deg_status_matrix_tsv" >/dev/null
+require_manifest_output "${MODULE_05D_MANIFEST}" "evidence_tier_summary_tsv" >/dev/null
 
 if [[ "${DEG_RERAN}" == "1" ]]; then
   set_eda_gate_status \

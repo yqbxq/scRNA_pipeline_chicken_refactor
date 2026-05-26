@@ -22,6 +22,7 @@ source_utf8(file.path(.script_dir, "helpers", "report_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "metadata_io.R"))
 source_utf8(file.path(.script_dir, "helpers", "layer_config_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "deg_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "inventory_gate_utils.R"))
 
 load_required_packages(c("dplyr", "tibble", "jsonlite"))
 
@@ -37,6 +38,46 @@ marker_df <- read_tsv_optional(marker_manifest_tsv)
 pb_df <- read_tsv_optional(pseudobulk_manifest_tsv)
 comp_df <- read_tsv_optional(composition_manifest_tsv)
 gene_program_targets <- read_tsv_optional(cfg$gene_program_targets_sheet)
+inventory_gate <- read_inventory_gate_eligibility(cfg$module_04c_manifest_path, required = FALSE)
+cluster_eligibility_tsv <- inventory_gate$path
+cluster_eligibility_df <- inventory_gate$eligibility
+
+evidence_tier_summary_05d <- function(eligibility_df) {
+  if (nrow(eligibility_df) == 0 || !"evidence_tier" %in% colnames(eligibility_df)) {
+    return(empty_df_05(c("layer_id", "comparison_id", "evidence_tier", "n_cluster_comparisons")))
+  }
+  for (col in c("layer_id", "comparison_id")) {
+    if (!col %in% colnames(eligibility_df)) eligibility_df[[col]] <- ""
+  }
+  eligibility_df %>%
+    dplyr::count(layer_id, comparison_id, evidence_tier, name = "n_cluster_comparisons") %>%
+    dplyr::arrange(layer_id, comparison_id, evidence_tier)
+}
+
+evidence_downstream_coverage_05d <- function(eligibility_df, pb_df) {
+  if (nrow(eligibility_df) == 0) {
+    return(empty_df_05(c("layer_id", "comparison_id", "cluster_id", "evidence_tier", "pseudobulk_status", "pseudobulk_ran", "communication_eligible")))
+  }
+  for (col in c("layer_id", "comparison_id", "cluster_id", "evidence_tier")) {
+    if (!col %in% colnames(eligibility_df)) eligibility_df[[col]] <- ""
+  }
+  pb_status <- pb_df
+  for (col in c("layer_id", "comparison_id", "inference_status", "ds_results_tsv")) {
+    if (!col %in% colnames(pb_status)) pb_status[[col]] <- character(nrow(pb_status))
+  }
+  pb_status <- unique(pb_status[, c("layer_id", "comparison_id", "inference_status", "ds_results_tsv"), drop = FALSE])
+  out <- dplyr::left_join(
+    eligibility_df[, c("layer_id", "comparison_id", "cluster_id", "evidence_tier"), drop = FALSE],
+    pb_status,
+    by = c("layer_id", "comparison_id")
+  )
+  out$pseudobulk_status <- ifelse(is.na(out$inference_status) | !nzchar(out$inference_status), "missing", out$inference_status)
+  ds_path <- as.character(out$ds_results_tsv)
+  ds_path[is.na(ds_path)] <- ""
+  out$pseudobulk_ran <- nzchar(ds_path) & !out$pseudobulk_status %in% c("missing", "skip", "candidate_only", "module_score_only")
+  out$communication_eligible <- out$evidence_tier %in% inventory_gate_csv("INVENTORY_GATE_ALLOWED_TIERS_COMMUNICATION", "primary,exploratory,primary_merged")
+  out[, c("layer_id", "comparison_id", "cluster_id", "evidence_tier", "pseudobulk_status", "pseudobulk_ran", "communication_eligible"), drop = FALSE]
+}
 
 read_scdesign3_question_gates_05d <- function(cfg) {
   candidates <- c(
@@ -373,6 +414,13 @@ if (nrow(gene_program_targets) == 0) {
 registry_df <- attach_scdesign3_gate_to_registry_05d(registry_df, cfg)
 write_tsv_local(registry_df, paths$gene_program_registry_tsv)
 
+evidence_tier_summary_df <- evidence_tier_summary_05d(cluster_eligibility_df)
+downstream_coverage_df <- evidence_downstream_coverage_05d(cluster_eligibility_df, pb_df)
+evidence_tier_summary_tsv <- file.path(cfg$deg_table_dir, "evidence_tier_summary.tsv")
+downstream_coverage_tsv <- file.path(cfg$deg_table_dir, "evidence_downstream_coverage.tsv")
+write_tsv_local(evidence_tier_summary_df, evidence_tier_summary_tsv)
+write_tsv_local(downstream_coverage_df, downstream_coverage_tsv)
+
 forced_or_exploratory <- status_df[
   status_df$pseudobulk_status %in% c("exploratory_only", "exploratory_forced") |
     status_df$composition_status %in% c("exploratory_only", "exploratory_forced"),
@@ -413,6 +461,15 @@ report_lines <- c(
   "## Inference Status Matrix",
   render_markdown_table_local(status_df),
   "",
+  "## Evidence Tier Distribution",
+  sprintf("- cluster_eligibility_tsv: `%s`", cluster_eligibility_tsv),
+  sprintf("- evidence_tier_summary_tsv: `%s`", evidence_tier_summary_tsv),
+  render_markdown_table_local(evidence_tier_summary_df),
+  "",
+  "## Downstream Coverage",
+  sprintf("- downstream_coverage_tsv: `%s`", downstream_coverage_tsv),
+  render_markdown_table_local(utils::head(downstream_coverage_df, 100)),
+  "",
   "## DEG Summary",
   render_markdown_table_local(summary_df),
   "",
@@ -430,7 +487,9 @@ write_manifest_local(
     report = build_output_entry(paths$report_md, "md", module_name, "DEG EDA report", base_dir = cfg$project_root),
     deg_status_matrix_tsv = build_output_entry(paths$status_matrix_tsv, "tsv", module_name, "one row per layer/comparison DEG status", base_dir = cfg$project_root, schema = infer_schema_from_df(status_df)),
     deg_summary_tsv = build_output_entry(paths$summary_tsv, "tsv", module_name, "one row per layer/comparison DEG summary", base_dir = cfg$project_root, schema = infer_schema_from_df(summary_df)),
-    gene_program_registry_tsv = build_output_entry(paths$gene_program_registry_tsv, "tsv", module_name, "gene program availability for downstream 06/07/08", base_dir = cfg$project_root, schema = infer_schema_from_df(registry_df))
+    gene_program_registry_tsv = build_output_entry(paths$gene_program_registry_tsv, "tsv", module_name, "gene program availability for downstream 06/07/08", base_dir = cfg$project_root, schema = infer_schema_from_df(registry_df)),
+    evidence_tier_summary_tsv = build_output_entry(evidence_tier_summary_tsv, "tsv", module_name, "cluster eligibility evidence tier distribution", base_dir = cfg$project_root, schema = infer_schema_from_df(evidence_tier_summary_df)),
+    downstream_coverage_tsv = build_output_entry(downstream_coverage_tsv, "tsv", module_name, "evidence tier downstream coverage across 05/07", base_dir = cfg$project_root, schema = infer_schema_from_df(downstream_coverage_df))
   ),
   module_name = module_name,
   base_dir = cfg$project_root,
@@ -438,13 +497,15 @@ write_manifest_local(
     marker_manifest_tsv = marker_manifest_tsv,
     pseudobulk_manifest_tsv = pseudobulk_manifest_tsv,
     composition_manifest_tsv = composition_manifest_tsv,
-    gene_program_targets_tsv = cfg$gene_program_targets_sheet
+    gene_program_targets_tsv = cfg$gene_program_targets_sheet,
+    cluster_eligibility_tsv = cluster_eligibility_tsv
   ),
-  version = cfg$module_version,
+  version = cfg$module_05d_version,
   depends_on = list(
     module_05a = cfg$module_05a_manifest_path,
     module_05b = cfg$module_05b_manifest_path,
-    module_05c = cfg$module_05c_manifest_path
+    module_05c = cfg$module_05c_manifest_path,
+    module_04c = cfg$module_04c_manifest_path
   )
 )
 

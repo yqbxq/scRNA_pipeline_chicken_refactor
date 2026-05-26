@@ -14,6 +14,7 @@ hold_for_gate annotation
 MODULE_00_MANIFEST="${ORTHOLOG_MANIFEST}"
 MODULE_03D_MANIFEST="${MANIFEST_DIR}/03d_annotate/_manifest.json"
 MODULE_04B_MANIFEST="${MANIFEST_DIR}/04b_subcluster_annotate/_manifest.json"
+MODULE_04C_MANIFEST="${MANIFEST_DIR}/04c_subcluster_eda/_manifest.json"
 MODULE_05D_MANIFEST="${MANIFEST_DIR}/05d_deg_eda/_manifest.json"
 MODULE_07A_MANIFEST="${MANIFEST_DIR}/07a_cellchat/_manifest.json"
 MODULE_07B_MANIFEST="${MANIFEST_DIR}/07b_nichenet/_manifest.json"
@@ -22,6 +23,7 @@ MODULE_07C_MANIFEST="${MANIFEST_DIR}/07c_communication_eda/_manifest.json"
 ensure_eda_control_files
 require_manifest_output "${MODULE_03D_MANIFEST}" "annotated_object" >/dev/null
 require_manifest_output "${MODULE_00_MANIFEST}" "human_best" >/dev/null
+require_manifest_output "${MODULE_04C_MANIFEST}" "cluster_eligibility_tsv" >/dev/null
 
 COMMUNICATION_RERAN=0
 
@@ -44,20 +46,24 @@ run_comm_stage_if_stale \
   "${MODULE_07A_MANIFEST}" \
   "${MODULE_03D_MANIFEST}" \
   "${MODULE_04B_MANIFEST}" \
+  "${MODULE_04C_MANIFEST}" \
   "${MODULE_00_MANIFEST}" \
   "${COMMUNICATION_PAIRS_SHEET}"
 require_manifest_output "${MODULE_07A_MANIFEST}" "cellchat_index_tsv" >/dev/null
+require_manifest_output "${MODULE_07A_MANIFEST}" "cellchat_inventory_gate_log_tsv" >/dev/null
 
 if [[ "${RUN_NICHENET:-yes}" != "no" ]]; then
   if is_stale_output "${MODULE_07B_MANIFEST}" \
     "${MODULE_07A_MANIFEST}" \
     "${MODULE_05D_MANIFEST}" \
+    "${MODULE_04C_MANIFEST}" \
     "${MODULE_00_MANIFEST}" \
     "${COMMUNICATION_PAIRS_SHEET}" \
     "${NICHENET_RESOURCE_DIR}"; then
     echo "运行 ${WORKFLOW_ROOT}/05single_script/07b_nichenet.R"
     if run_r_interaction "${WORKFLOW_ROOT}/05single_script/07b_nichenet.R"; then
       COMMUNICATION_RERAN=1
+      require_manifest_output "${MODULE_07B_MANIFEST}" "nichenet_inventory_gate_log_tsv" >/dev/null
     else
       warn "07b_nichenet 失败；继续生成 07c cellchat-only 报告。常见原因是 NicheNet 资源未准备。"
     fi

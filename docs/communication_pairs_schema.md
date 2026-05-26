@@ -60,3 +60,16 @@ when all required expanded `F08` split inputs pass.
 When `requires_cell_subtype=yes`, both CellChat and NicheNet must use the
 `cell_subtype` metadata column. Missing `cell_subtype` or unresolved strict
 sender/receiver labels is a hard runtime failure.
+
+07a/07b additionally require the 04c `cluster_eligibility_tsv` inventory gate.
+By default only `primary`, `exploratory`, and `primary_merged` clusters are kept
+for communication. The method index tables expose:
+
+| Column | Meaning |
+|---|---|
+| `inventory_gate_passed` | Whether any cells for the task remained after evidence-tier filtering. |
+| `inventory_gate_reason` | Empty on pass, otherwise the filtered evidence tiers or missing eligibility reason. |
+| `inventory_gate_eligible_clusters` | Comma-separated cluster labels that passed the communication inventory gate. |
+
+The gate audit tables `cellchat_inventory_gate_log_tsv` and
+`nichenet_inventory_gate_log_tsv` record one row per evaluated cluster label.
