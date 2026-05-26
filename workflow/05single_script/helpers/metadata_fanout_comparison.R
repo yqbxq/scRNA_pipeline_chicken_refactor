@@ -6,7 +6,9 @@ m3_comparison_cols <- c(
   "aggregation_group_var", "composition_group_var",
   "batch_var", "enabled", "min_biological_replicates", "force_exploratory",
   "min_cells_per_group", "logfc_threshold",
-  "produces_gene_program", "gene_program_role", "notes"
+  "produces_gene_program", "gene_program_role", "notes",
+  "min_cells_override", "min_samples_override", "total_umi_override",
+  "single_sample_frac_override"
 )
 
 m3_annotation_marker_cols <- c(
@@ -56,7 +58,11 @@ m3_comparison_row <- function(q, suffix, ident_1, ident_2, group_var = "cell_sub
     force_exploratory = "no",
     min_cells_per_group = "3",
     logfc_threshold = "0",
-    notes = notes
+    notes = notes,
+    min_cells_override = "-",
+    min_samples_override = "-",
+    total_umi_override = "-",
+    single_sample_frac_override = "-"
   )
 }
 

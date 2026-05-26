@@ -24,6 +24,15 @@ This file records project-level environment variables that are exported through 
 | `H5AD_EXPORT_GATES` | empty | Empty means recommended hard-coded H5AD gate hooks; otherwise comma-separated explicit gate list. |
 | `H5AD_EXPORT_ON_FAILURE` | `skip` | H5AD hook failure policy: `skip`, `warn`, or `error`. |
 | `H5AD_PYTHON_FALLBACK_TO_RDS` | `yes` | Python H5AD helpers may fall back to legacy RDS/explicit input paths when H5AD is missing. |
+| `CELL_COUNT_INVENTORY_THRESHOLD_OVERRIDE_TSV` | `metadata/cell_count_thresholds.tsv` | Per-celltype threshold override table for inventory eligibility. |
+| `CELL_COUNT_INVENTORY_MIN_CELLS_PER_SAMPLE` | `20` | Default per-sample minimum cell count. |
+| `CELL_COUNT_INVENTORY_MIN_SAMPLES_PER_GROUP` | `2` | Default minimum biological samples per group. |
+| `CELL_COUNT_INVENTORY_MIN_TOTAL_UMI` | `10000` | Default minimum total UMI per group. |
+| `CELL_COUNT_INVENTORY_MAX_SINGLE_SAMPLE_FRAC` | `0.8` | Default single-sample dominance cutoff. |
+| `CELL_COUNT_INVENTORY_MIN_CELLS_SOFT_FLOOR` | `5` | Default soft floor for module-score-only fallback. |
+| `CELL_COUNT_INVENTORY_ENABLE_MERGE_TO_PARENT` | `yes` | Allow merge-to-parent evidence tier when parent metadata exists. |
+| `CELL_COUNT_INVENTORY_FAIL_ON_MISSING_PARENT` | `no` | Reserved strictness flag for downstream parent merge consumers. |
+| `MODULE_INVENTORY_VERSION` | `1.0` | Version marker for inventory helper outputs. |
 | `MODULE_03A3_VERSION` | `1.0` | Version marker for the independent panorama UMAP stage. |
 | `MODULE_SPATIAL_02A2_VERSION` | `1.0` | Version marker for the independent spatial UMAP stage. |
 | `UMAP_N_NEIGHBORS` | `30` | Shared UMAP neighbor count for 03a3 and spatial 02a2. |
