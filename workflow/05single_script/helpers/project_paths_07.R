@@ -12,8 +12,14 @@ get_single_script_config_07 <- function() {
   base <- get_single_script_config_06()
 
   base$module_07a_manifest_path <- file.path(base$manifest_dir, "07a_cellchat", "_manifest.json")
-  base$module_07b_manifest_path <- file.path(base$manifest_dir, "07b_nichenet", "_manifest.json")
-  base$module_07c_manifest_path <- file.path(base$manifest_dir, "07c_communication_eda", "_manifest.json")
+  base$module_07b_manifest_path <- file.path(base$manifest_dir, "07b_liana_consensus", "_manifest.json")
+  base$module_07c_manifest_path <- file.path(base$manifest_dir, "07c_nichenet", "_manifest.json")
+  base$module_07d_manifest_path <- file.path(base$manifest_dir, "07d_communication_consensus", "_manifest.json")
+  base$module_07e_manifest_path <- file.path(base$manifest_dir, "07e_communication_eda", "_manifest.json")
+  base$module_07b_liana_manifest_path <- base$module_07b_manifest_path
+  base$module_07c_nichenet_manifest_path <- base$module_07c_manifest_path
+  base$module_07d_consensus_manifest_path <- base$module_07d_manifest_path
+  base$module_07e_eda_manifest_path <- base$module_07e_manifest_path
 
   base$communication_pairs_sheet <- env_or_default_03("COMMUNICATION_PAIRS_SHEET", file.path(base$metadata_dir, "communication_pairs.tsv"))
   base$communication_report_dir <- env_or_default_03("COMMUNICATION_REPORT_DIR", file.path(base$eda_report_dir, "communication"))
@@ -21,17 +27,26 @@ get_single_script_config_07 <- function() {
   base$communication_figure_dir <- file.path(base$figure_dir, "communication")
   base$cellchat_table_dir <- file.path(base$communication_table_dir, "cellchat")
   base$cellchat_figure_dir <- file.path(base$communication_figure_dir, "cellchat")
+  base$liana_table_dir <- file.path(base$communication_table_dir, "liana_consensus")
+  base$liana_figure_dir <- file.path(base$communication_figure_dir, "liana_consensus")
   base$nichenet_table_dir <- file.path(base$communication_table_dir, "nichenet")
   base$nichenet_figure_dir <- file.path(base$communication_figure_dir, "nichenet")
+  base$communication_consensus_table_dir <- file.path(base$communication_table_dir, "consensus")
+  base$communication_consensus_figure_dir <- file.path(base$communication_figure_dir, "consensus")
 
   base$cellchat_index_tsv <- file.path(base$cellchat_table_dir, "cellchat_index.tsv")
   base$cellchat_inventory_gate_log_tsv <- file.path(base$cellchat_table_dir, "cellchat_inventory_gate_log.tsv")
   base$cellchat_mapping_summary_tsv <- file.path(base$cellchat_table_dir, "mapping_summary.tsv")
   base$cellchat_triage_tsv <- file.path(base$cellchat_table_dir, "triage.tsv")
+  base$liana_index_tsv <- file.path(base$liana_table_dir, "liana_index.tsv")
+  base$liana_consensus_lr_tsv <- file.path(base$liana_table_dir, "liana_consensus_lr.tsv")
+  base$liana_triage_tsv <- file.path(base$liana_table_dir, "triage.tsv")
   base$nichenet_index_tsv <- file.path(base$nichenet_table_dir, "nichenet_index.tsv")
   base$nichenet_inventory_gate_log_tsv <- file.path(base$nichenet_table_dir, "nichenet_inventory_gate_log.tsv")
   base$nichenet_roles_resolved_tsv <- file.path(base$nichenet_table_dir, "roles_resolved.tsv")
   base$nichenet_triage_tsv <- file.path(base$nichenet_table_dir, "triage.tsv")
+  base$communication_method_consensus_tsv <- file.path(base$communication_consensus_table_dir, "method_consensus.tsv")
+  base$communication_evidence_tier_tsv <- file.path(base$communication_consensus_table_dir, "evidence_tiers.tsv")
   base$communication_cross_validation_tsv <- file.path(base$communication_table_dir, "cross_validation.tsv")
   base$communication_consensus_lr_tsv <- file.path(base$communication_table_dir, "consensus_lr.tsv")
   base$communication_triage_tsv <- file.path(base$communication_table_dir, "triage.tsv")
@@ -55,8 +70,24 @@ get_single_script_config_07 <- function() {
   base$nichenet_expression_pct <- env_numeric_07("NICHENET_EXPRESSION_PCT", 0.10)
   base$nichenet_top_ligand_n <- env_integer_07("NICHENET_TOP_LIGAND_N", 20L)
   base$nichenet_top_target_n <- env_integer_07("NICHENET_TOP_TARGET_N", 200L)
-  base$module_07a_version <- env_or_default_03("MODULE_07A_VERSION", env_or_default_03("MODULE_07_VERSION", "1.0"))
-  base$module_07b_version <- env_or_default_03("MODULE_07B_VERSION", env_or_default_03("MODULE_07_VERSION", "1.0"))
+  base$communication_require_full_pipeline <- env_or_default_03("COMMUNICATION_REQUIRE_FULL_PIPELINE", "no")
+  base$liana_consensus_enabled <- env_or_default_03("LIANA_CONSENSUS_ENABLED", "yes")
+  base$multinichenet_enabled <- env_or_default_03("MULTINICHENET_ENABLED", "auto")
+  base$commot_enabled <- env_or_default_03("COMMOT_ENABLED", "auto")
+  base$module_07a_cellchat_version <- env_or_default_03(
+    "MODULE_07A_CELLCHAT_VERSION",
+    env_or_default_03("MODULE_07A_VERSION", env_or_default_03("MODULE_07_VERSION", "1.1"))
+  )
+  base$module_07b_liana_version <- env_or_default_03("MODULE_07B_LIANA_VERSION", env_or_default_03("MODULE_07_VERSION", "0.1"))
+  base$module_07c_nichenet_version <- env_or_default_03(
+    "MODULE_07C_NICHENET_VERSION",
+    env_or_default_03("MODULE_07_VERSION", "1.1")
+  )
+  base$module_07d_consensus_version <- env_or_default_03("MODULE_07D_CONSENSUS_VERSION", env_or_default_03("MODULE_07_VERSION", "0.1"))
+  base$module_07e_eda_version <- env_or_default_03("MODULE_07E_EDA_VERSION", env_or_default_03("MODULE_07_VERSION", "0.1"))
+  base$module_07a_version <- base$module_07a_cellchat_version
+  base$module_07b_version <- base$module_07b_liana_version
+  base$module_07c_version <- base$module_07c_nichenet_version
   base$module_version <- env_or_default_03("MODULE_07_VERSION", "1.0")
   base
 }
@@ -68,19 +99,30 @@ prepare_dirs_07 <- function(cfg) {
     cfg$communication_figure_dir,
     cfg$cellchat_table_dir,
     cfg$cellchat_figure_dir,
+    cfg$liana_table_dir,
+    cfg$liana_figure_dir,
     cfg$nichenet_table_dir,
     cfg$nichenet_figure_dir,
+    cfg$communication_consensus_table_dir,
+    cfg$communication_consensus_figure_dir,
     dirname(cfg$module_07a_manifest_path),
     dirname(cfg$module_07b_manifest_path),
     dirname(cfg$module_07c_manifest_path),
+    dirname(cfg$module_07d_manifest_path),
+    dirname(cfg$module_07e_manifest_path),
     dirname(cfg$cellchat_index_tsv),
     dirname(cfg$cellchat_inventory_gate_log_tsv),
     dirname(cfg$cellchat_mapping_summary_tsv),
     dirname(cfg$cellchat_triage_tsv),
+    dirname(cfg$liana_index_tsv),
+    dirname(cfg$liana_consensus_lr_tsv),
+    dirname(cfg$liana_triage_tsv),
     dirname(cfg$nichenet_index_tsv),
     dirname(cfg$nichenet_inventory_gate_log_tsv),
     dirname(cfg$nichenet_roles_resolved_tsv),
     dirname(cfg$nichenet_triage_tsv),
+    dirname(cfg$communication_method_consensus_tsv),
+    dirname(cfg$communication_evidence_tier_tsv),
     dirname(cfg$communication_cross_validation_tsv),
     dirname(cfg$communication_consensus_lr_tsv),
     dirname(cfg$communication_triage_tsv),

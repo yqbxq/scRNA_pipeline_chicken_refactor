@@ -32,7 +32,7 @@ source_utf8(file.path(.script_dir, "helpers", "communication_pairs_utils.R"))
 load_required_packages(c("dplyr", "tibble", "jsonlite", "ggplot2"))
 
 cfg <- get_single_script_config_07()
-module_name <- "07c_communication_eda"
+module_name <- "07e_communication_eda"
 prepare_dirs_07(cfg)
 
 cellchat_index <- read_tsv_optional(cfg$cellchat_index_tsv)
@@ -656,7 +656,7 @@ if (ncol(status_summary) == 2) {
 }
 
 report_lines <- c(
-  "# 07c Communication EDA",
+  "# 07e Communication EDA",
   "",
   sprintf("- CellChat index: `%s`", cfg$cellchat_index_tsv),
   sprintf("- NicheNet index: `%s`", cfg$nichenet_index_tsv),
@@ -705,8 +705,8 @@ report_lines <- c(
 )
 write_markdown_local(report_lines, cfg$communication_report_md)
 
-if (file.exists(cfg$module_07c_manifest_path)) {
-  unlink(cfg$module_07c_manifest_path)
+if (file.exists(cfg$module_07e_manifest_path)) {
+  unlink(cfg$module_07e_manifest_path)
 }
 fixed_outputs <- list(
   cross_validation_tsv = build_output_entry(cfg$communication_cross_validation_tsv, "tsv", module_name, "one row per layer/pair/condition CellChat-NicheNet overlap", base_dir = cfg$project_root, schema = infer_schema_from_df(cross_df)),
@@ -720,17 +720,23 @@ fixed_outputs <- list(
   triage_tsv = build_output_entry(cfg$communication_triage_tsv, "tsv", module_name, "combined communication triage signals", base_dir = cfg$project_root, schema = infer_schema_from_df(combined_triage))
 )
 write_manifest_local(
-  manifest_path = cfg$module_07c_manifest_path,
+  manifest_path = cfg$module_07e_manifest_path,
   new_outputs = c(fixed_outputs, layer_report_outputs),
   module_name = module_name,
   base_dir = cfg$project_root,
   inputs = list(
     cellchat_index_tsv = cfg$cellchat_index_tsv,
     nichenet_index_tsv = cfg$nichenet_index_tsv,
-    communication_pairs_sheet = cfg$communication_pairs_sheet
+    communication_pairs_sheet = cfg$communication_pairs_sheet,
+    module_07b = cfg$module_07b_manifest_path,
+    module_07d = cfg$module_07d_manifest_path
   ),
-  version = cfg$module_version,
-  depends_on = list(module_07a = cfg$module_07a_manifest_path, module_07b = cfg$module_07b_manifest_path)
+  version = cfg$module_07e_eda_version,
+  depends_on = list(
+    module_07a = cfg$module_07a_manifest_path,
+    module_07c = cfg$module_07c_manifest_path,
+    module_07d = cfg$module_07d_manifest_path
+  )
 )
 
-message("07c completed. report: ", cfg$communication_report_md)
+message("07e completed. report: ", cfg$communication_report_md)

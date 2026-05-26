@@ -37,7 +37,7 @@
 - `workflow/03stages/08_regulation.sh`
 
 `cell_count_inventory` 是项目级单一事实源：04c 生成
-`cluster_eligibility_tsv`，05b/05a 用它决定 pseudobulk 是否可跑，07a/07b
+`cluster_eligibility_tsv`，05b/05a 用它决定 pseudobulk 是否可跑，07a/07c
 用它过滤 CellChat/NicheNet 的输入 cluster。不要在下游模块里重新计算一套
 细胞数阈值。
 
@@ -376,8 +376,10 @@ gate 规则采用 Option B：
 
 - `workflow/03stages/07_communication.sh`
   - `07a_cellchat.R`：按 layer / pair / condition 在 `r_interaction` 中运行 CellChat，并用 00 ortholog cache 将鸡表达矩阵映射到人类符号。
-  - `07b_nichenet.R`：按 sender→receiver 方向运行 NicheNet；通过 `communication_pairs.tsv` 的显式 `receiver_deg_comparison_id` / `baseline_marker_comparison_id` 到 `gene_program_registry.tsv` 查 gene program。
-  - `07c_communication_eda.R`：按 `pair_id + layer + condition` 汇总 CellChat / NicheNet 共识，并按 `direction_filter` 决定是否保留全网络。
+  - `07b_liana_consensus.py`：LIANA+ 多算法共识占位，完整实现见 P-R03-B。
+  - `07c_nichenet.R`：按 sender→receiver 方向运行 NicheNet；通过 `communication_pairs.tsv` 的显式 `receiver_deg_comparison_id` / `baseline_marker_comparison_id` 到 `gene_program_registry.tsv` 查 gene program。
+  - `07d_communication_consensus.R`：通信证据链 consensus 占位，完整 evidence tier 判定见 P-R03-E。
+  - `07e_communication_eda.R`：按 `pair_id + layer + condition` 汇总 CellChat / NicheNet 共识，并按 `direction_filter` 决定是否保留全网络。
 
 `communication_pairs.tsv` 支持 `sender` / `receiver` 精确 cell type、CSV、`*` 和 `prefix_*`。`condition_split_var` / `condition_split_values` 用于把 syf、f5 等阶段拆开分别跑。`requires_cell_subtype=yes` 时必须存在 `cell_subtype` 且 sender/receiver 必须能在该列解析，07 不允许 fallback 到 `cell_type` / `annotation_label` / `cluster_id`。NicheNet 缺失 gene program 会记录失败或跳过，不再临时跑 receiver FindMarkers，也不再用 `pair_id == comparison_id` 猜 DEG。NicheNet 三件套资源可用 `workflow/06tools/download_nichenet_resources.sh` 准备。
 

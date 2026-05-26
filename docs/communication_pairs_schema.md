@@ -26,7 +26,7 @@ Required columns:
 | `direction_filter` | `yes` keeps sender->receiver LR rows; `no` keeps full CellChat network. |
 | `requires_cell_subtype` | `yes` requires runtime `cell_subtype`; no fallback is allowed. |
 
-07b NicheNet resolves gene programs through
+07c NicheNet resolves gene programs through
 `results/tables/deg/gene_program_registry.tsv`:
 
 - `receiver_gene_program_source=condition_deg` uses `receiver_deg_comparison_id`.
@@ -35,14 +35,14 @@ Required columns:
 
 Missing registry rows, invalid roles, missing `top_gene_tsv`, or empty gene
 sets are recorded with top-level `status=missing_gene_program` and the specific
-cause in `deg_status`. 07b does not run inline `FindMarkers`, does not infer
+cause in `deg_status`. 07c does not run inline `FindMarkers`, does not infer
 paths from `pair_id`, and does not fall back across registry path columns.
 
 07 runtime reads only this resolved Tier2 table. Tier1
 `metadata/analysis_questions.tsv` policy values are not reinterpreted by
-`07a_cellchat.R` or `07b_nichenet.R`.
+`07a_cellchat.R` or `07c_nichenet.R`.
 
-For `activation_policy=auto_if_min_cells`, 07a/07b compute
+For `activation_policy=auto_if_min_cells`, 07a/07c compute
 `sender_n`, `receiver_n`, and `condition_pair_cell_n = sender_n + receiver_n`
 after pair-specific subset, condition split, and sender/receiver role
 resolution. The split task runs only when all three thresholds pass.
@@ -53,7 +53,7 @@ fallback fields. Skipped tasks must not write fake method RDS files and must not
 copy baseline paths into primary result fields.
 
 Derived communication rows use `activation_policy=derived_from_split`; they are
-not executable by 07a/07b. 07c evaluates
+not executable by 07a/07c. 07e evaluates
 `derived_communication_eligibility.tsv`; `F25_GC_internal_diff` is eligible only
 when all required expanded `F08` split inputs pass.
 
@@ -61,7 +61,7 @@ When `requires_cell_subtype=yes`, both CellChat and NicheNet must use the
 `cell_subtype` metadata column. Missing `cell_subtype` or unresolved strict
 sender/receiver labels is a hard runtime failure.
 
-07a/07b additionally require the 04c `cluster_eligibility_tsv` inventory gate.
+07a/07c additionally require the 04c `cluster_eligibility_tsv` inventory gate.
 By default only `primary`, `exploratory`, and `primary_merged` clusters are kept
 for communication. The method index tables expose:
 

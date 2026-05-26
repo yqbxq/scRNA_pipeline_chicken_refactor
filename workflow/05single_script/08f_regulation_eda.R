@@ -268,11 +268,11 @@ module_status <- dplyr::bind_rows(
   status_row_08f("08e_decoupler", "manifest", cfg$module_08e_manifest_path, reason = "decoupleR was skipped or failed."),
   status_row_08f("05d_deg_eda", "gene_program_registry", cfg$gene_program_registry_tsv, reason = "05 gene_program_registry.tsv not available; upstream DEG linkage omitted."),
   status_row_08f("06c_enrichment_eda", "enrichment_section_summary", cfg$enrichment_section_summary_tsv, reason = "06 enrichment_section_summary.tsv not available; pathway evidence linkage omitted."),
-  status_row_08f("07c_communication_eda", "communication_gate_summary", cfg$communication_gate_summary_tsv, reason = "07 communication_gate_summary.tsv not available."),
-  status_row_08f("07c_communication_eda", "skipped_low_cells", cfg$communication_skipped_low_cells_tsv, reason = "07 skipped_low_cells.tsv not available."),
-  status_row_08f("07c_communication_eda", "communication_fallback_summary", cfg$communication_fallback_summary_tsv, reason = "07 communication_fallback_summary.tsv not available."),
-  status_row_08f("07c_communication_eda", "derived_communication_eligibility", cfg$derived_communication_eligibility_tsv, reason = "07 derived_communication_eligibility.tsv not available."),
-  status_row_08f("07b_nichenet", "nichenet_index", cfg$nichenet_index_tsv, reason = "07 NicheNet index not available; missing_gene_program linkage omitted.")
+  status_row_08f("07e_communication_eda", "communication_gate_summary", cfg$communication_gate_summary_tsv, reason = "07 communication_gate_summary.tsv not available."),
+  status_row_08f("07e_communication_eda", "skipped_low_cells", cfg$communication_skipped_low_cells_tsv, reason = "07 skipped_low_cells.tsv not available."),
+  status_row_08f("07e_communication_eda", "communication_fallback_summary", cfg$communication_fallback_summary_tsv, reason = "07 communication_fallback_summary.tsv not available."),
+  status_row_08f("07e_communication_eda", "derived_communication_eligibility", cfg$derived_communication_eligibility_tsv, reason = "07 derived_communication_eligibility.tsv not available."),
+  status_row_08f("07c_nichenet", "nichenet_index", cfg$nichenet_index_tsv, reason = "07 NicheNet index not available; missing_gene_program linkage omitted.")
 )
 write_tsv_local(module_status, cfg$regulation_module_status_tsv)
 
@@ -284,7 +284,7 @@ tf_overlap <- build_tf_overlap_08f(cfg)
 plot_tf_overlap_08f(tf_overlap, cfg$regulation_tf_overlap_png)
 
 triage_rows <- list()
-missing_optional <- module_status[module_status$available == "no" & module_status$source_module %in% c("05d_deg_eda", "06c_enrichment_eda", "07c_communication_eda", "07b_nichenet"), , drop = FALSE]
+missing_optional <- module_status[module_status$available == "no" & module_status$source_module %in% c("05d_deg_eda", "06c_enrichment_eda", "07e_communication_eda", "07c_nichenet"), , drop = FALSE]
 if (nrow(missing_optional) > 0) {
   triage_rows[[length(triage_rows) + 1L]] <- make_triage_row(
     sample_id = "__PROJECT__",
@@ -433,7 +433,7 @@ write_manifest_local(
     module_08e = cfg$module_08e_manifest_path,
     module_05d = cfg$module_05d_manifest_path,
     module_06c = cfg$module_06c_manifest_path,
-    module_07c = cfg$module_07c_manifest_path
+    module_07e = cfg$module_07e_manifest_path
   )
 )
 

@@ -29,7 +29,7 @@ for gate in \
   03d_annotation \
   04b_subcluster \
   06d_enrichment \
-  07c_communication \
+  07e_communication \
   spatial_03_region \
   spatial_04b_subcluster \
   spatial_05_marker \

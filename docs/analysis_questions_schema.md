@@ -184,7 +184,7 @@ GC/TC cell composition. It cannot be interpreted as true tissue GC/TC
 proportion change. Tissue abundance must be evaluated by ST region annotation,
 ST deconvolution, or histology/image quantification.
 
-07b NicheNet source rules:
+07c NicheNet source rules:
 
 - Baseline communication uses `baseline_marker_comparison_id`, which must point
   to `subtype_marker + receiver_marker` with `nichenet_usage=baseline_receiver_marker`.
@@ -245,7 +245,7 @@ For 05 and 07, generated schemas are runtime contracts:
 - `requires_cell_subtype=yes` is strict and cannot fall back to broad labels.
 - 07 runtime consumes only resolved Tier2 `communication_pairs.tsv` policy
   fields. Tier1 policy fields are defaults for M3 fan-out and are never
-  interpreted directly by `07a_cellchat.R` or `07b_nichenet.R`.
+  interpreted directly by `07a_cellchat.R` or `07c_nichenet.R`.
 - `auto_if_min_cells` gates use pair-specific cells after subset, condition
   split, and sender/receiver resolution: `condition_pair_cell_n = sender_n +
   receiver_n`.

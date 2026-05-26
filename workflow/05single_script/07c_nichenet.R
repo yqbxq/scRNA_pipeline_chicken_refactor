@@ -36,7 +36,7 @@ source_utf8(file.path(.script_dir, "helpers", "inventory_gate_utils.R"))
 load_required_packages(c("Seurat", "nichenetr", "dplyr", "tibble", "jsonlite", "Matrix", "ggplot2", "circlize"))
 
 cfg <- get_single_script_config_07()
-module_name <- "07b_nichenet"
+module_name <- "07c_nichenet"
 prepare_dirs_07(cfg)
 set.seed(cfg$random_seed)
 
@@ -393,7 +393,7 @@ dynamic_outputs <- list()
 for (layer_idx in seq_len(nrow(layers))) {
   layer_row <- layers[layer_idx, , drop = FALSE]
   layer_id <- layer_row$layer_id[[1]]
-  message("07b NicheNet layer: ", layer_id)
+  message("07c NicheNet layer: ", layer_id)
   seu <- load_comm_layer_object_07(layer_row)
 
   layer_pairs <- communication_pairs_for_layer(pairs, layer_id, "nichenet")
@@ -406,7 +406,7 @@ for (layer_idx in seq_len(nrow(layers))) {
       triage_rows[[length(triage_rows) + 1L]] <- communication_triage_row_07(
         layer_id, pair_id, "error", col_result$status,
         col_result$reason,
-        "Run M5 subtype backfill or fix communication metadata before rerunning 07b."
+        "Run M5 subtype backfill or fix communication metadata before rerunning 07c."
       )
       for (condition_value in condition_values_for_failed_pair_07b(pair_row)) {
         paths <- nichenet_paths_07(cfg, layer_id, pair_id, condition_value)
@@ -595,8 +595,8 @@ write_tsv_local(inventory_gate_df, cfg$nichenet_inventory_gate_log_tsv)
 write_tsv_local(roles_df, cfg$nichenet_roles_resolved_tsv)
 write_tsv_local(triage_df, cfg$nichenet_triage_tsv)
 
-if (file.exists(cfg$module_07b_manifest_path)) {
-  unlink(cfg$module_07b_manifest_path)
+if (file.exists(cfg$module_07c_manifest_path)) {
+  unlink(cfg$module_07c_manifest_path)
 }
 fixed_outputs <- list(
   nichenet_index_tsv = build_output_entry(cfg$nichenet_index_tsv, "tsv", module_name, "one row per layer/pair/condition NicheNet task", base_dir = cfg$project_root, schema = infer_schema_from_df(index_df)),
@@ -605,7 +605,7 @@ fixed_outputs <- list(
   triage_tsv = build_output_entry(cfg$nichenet_triage_tsv, "tsv", module_name, "NicheNet triage signals", base_dir = cfg$project_root, schema = infer_schema_from_df(triage_df))
 )
 write_manifest_local(
-  manifest_path = cfg$module_07b_manifest_path,
+  manifest_path = cfg$module_07c_manifest_path,
   new_outputs = c(fixed_outputs, dynamic_outputs),
   module_name = module_name,
   base_dir = cfg$project_root,
@@ -620,7 +620,7 @@ write_manifest_local(
     gene_program_registry_tsv = cfg$gene_program_registry_tsv,
     module_05d = cfg$module_05d_manifest_path
   ),
-  version = cfg$module_07b_version,
+  version = cfg$module_07c_nichenet_version,
   depends_on = list(
     module_00 = cfg$ortholog_manifest_path,
     module_04c = cfg$module_04c_manifest_path,
@@ -629,4 +629,4 @@ write_manifest_local(
   )
 )
 
-message("07b completed. index: ", cfg$nichenet_index_tsv)
+message("07c completed. index: ", cfg$nichenet_index_tsv)

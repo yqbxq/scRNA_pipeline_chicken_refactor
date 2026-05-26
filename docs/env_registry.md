@@ -36,12 +36,19 @@ This file records project-level environment variables that are exported through 
 | `MODULE_04C_VERSION` | `1.2` | Version marker for scRNA 04c subcluster EDA inventory artifacts. |
 | `MODULE_SPATIAL_04C_VERSION` | `1.2` | Version marker for spatial 04c subcluster EDA inventory artifacts. |
 | `MODULE_05D_VERSION` | `1.1` | Version marker for DEG EDA evidence-tier coverage outputs. |
-| `MODULE_07A_VERSION` | `1.1` | Version marker for CellChat inventory-gated outputs. |
-| `MODULE_07B_VERSION` | `1.1` | Version marker for NicheNet inventory-gated outputs. |
+| `MODULE_07A_CELLCHAT_VERSION` | `1.1` | Version marker for CellChat inventory-gated outputs. |
+| `MODULE_07B_LIANA_VERSION` | `0.1` | Version marker for the 07b LIANA+ consensus placeholder. |
+| `MODULE_07C_NICHENET_VERSION` | `1.1` | Version marker for NicheNet inventory-gated outputs. |
+| `MODULE_07D_CONSENSUS_VERSION` | `0.1` | Version marker for the 07d communication consensus placeholder. |
+| `MODULE_07E_EDA_VERSION` | `0.1` | Version marker for the 07e communication EDA layer. |
 | `INVENTORY_GATE_REQUIRED` | `yes` | Require 04c `cluster_eligibility_tsv` before communication modules run. |
 | `INVENTORY_GATE_ALLOWED_TIERS_COMMUNICATION` | `primary,exploratory,primary_merged` | Evidence tiers allowed to enter CellChat/NicheNet communication analysis. |
 | `INVENTORY_GATE_STRICT_MODE` | `no` | When enabled, a cluster must pass all matching eligibility rows to enter communication analysis. |
 | `COMMUNICATION_FAIL_ON_NO_PRIMARY` | `no` | Reserved strictness flag for failing communication when no cluster passes inventory gate. |
+| `COMMUNICATION_REQUIRE_FULL_PIPELINE` | `no` | When `yes`, 07b/07c/07d/07e failures block the communication stage instead of writing placeholder manifests. |
+| `LIANA_CONSENSUS_ENABLED` | `yes` | Enables the 07b LIANA+ placeholder stage; full implementation lands in P-R03-B. |
+| `MULTINICHENET_ENABLED` | `auto` | Controls the 07c NicheNet/MultiNicheNet stage. |
+| `COMMOT_ENABLED` | `auto` | Reserved for the future COMMOT spatial communication extension. |
 | `MODULE_03A3_VERSION` | `1.0` | Version marker for the independent panorama UMAP stage. |
 | `MODULE_SPATIAL_02A2_VERSION` | `1.0` | Version marker for the independent spatial UMAP stage. |
 | `UMAP_N_NEIGHBORS` | `30` | Shared UMAP neighbor count for 03a3 and spatial 02a2. |

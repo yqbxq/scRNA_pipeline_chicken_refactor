@@ -42,7 +42,7 @@ Default hooks run when `H5AD_EXPORT_GATES` is empty:
 | `03d_annotation` | `03_panorama.sh` | `03d_annotate:annotated_object` | `results/90a_export_h5ad/03d_panorama` |
 | `04b_subcluster` | `04_subcluster.sh` | `04b_subcluster_annotate:panorama_cell_subtype_rds` | `results/90a_export_h5ad/04b_subcluster` |
 | `06d_enrichment` | `06_enrichment.sh` | `03d_annotate:annotated_object` | `results/90a_export_h5ad/06d_enrichment` |
-| `07c_communication` | `07_communication.sh` | `03d_annotate:annotated_object` | `results/90a_export_h5ad/07c_communication` |
+| `07e_communication` | `07_communication.sh` | `03d_annotate:annotated_object` | `results/90a_export_h5ad/07e_communication` |
 | `spatial_03_region` | `50_run_spatial_pipeline.sh` | `spatial_03_region_annotation:panorama_annotated` | `results/90a_export_h5ad/spatial_03_region` |
 | `spatial_04b_subcluster` | `50_run_spatial_pipeline.sh` | `spatial_04b_subcluster_annotate:panorama_subannotated` | `results/90a_export_h5ad/spatial_04b_subcluster` |
 | `spatial_05_marker` | `50_run_spatial_pipeline.sh` | `spatial_03_region_annotation:panorama_annotated` | `results/90a_export_h5ad/spatial_05_marker` |

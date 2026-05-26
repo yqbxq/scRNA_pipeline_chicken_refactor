@@ -279,7 +279,7 @@ if [[ "${RUN_REGULATION_EDA}" == "yes" ]]; then
     "${MODULE_08E_MANIFEST}" \
     "${MANIFEST_DIR}/05d_deg_eda/_manifest.json" \
     "${MANIFEST_DIR}/06c_enrichment_eda/_manifest.json" \
-    "${MANIFEST_DIR}/07c_communication_eda/_manifest.json"; do
+    "${MANIFEST_DIR}/07e_communication_eda/_manifest.json"; do
     if [[ -e "${dep_path}" ]]; then
       REGULATION_EDA_DEPS+=("${dep_path}")
     fi

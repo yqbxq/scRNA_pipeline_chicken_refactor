@@ -29,7 +29,7 @@ stopifnot(!gate_strict$passed_inventory_gate[gate_strict$cluster_id == "B"])
 RS
 
 rg -q "cellchat_inventory_gate_log_tsv" workflow/05single_script/07a_cellchat.R
-rg -q "nichenet_inventory_gate_log_tsv" workflow/05single_script/07b_nichenet.R
+rg -q "nichenet_inventory_gate_log_tsv" workflow/05single_script/07c_nichenet.R
 rg -q "cluster_eligibility_tsv" workflow/03stages/07_communication.sh
 rg -q "INVENTORY_GATE_ALLOWED_TIERS_COMMUNICATION" workflow/02lib/common.sh
 

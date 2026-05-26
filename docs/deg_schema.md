@@ -44,7 +44,7 @@ must use this registry instead of guessing paths from `pair_id` or
 | `recommended_action` | 04c recommended action mirrored into DE manifests. |
 | `warning_banner` | Required report warning when a row is exploratory, candidate-only, skipped, or parent-derived. |
 | `parent_cluster_if_merged` | Parent target for rows classified as `merge_to_parent`. |
-| `nichenet_eligible` / `nichenet_usage` | Whether and how 07b may use the row. |
+| `nichenet_eligible` / `nichenet_usage` | Whether and how 07c may use the row. |
 | `enrichment_eligible` / `enrichment_usage` | Whether and where 06 may enrich the row. |
 | `annotation_only`, `qc_only`, `global_context_only` | Hard separation flags for non-mechanism outputs. |
 | `deg_tsv` | Formal pseudobulk DEG table path when available. |

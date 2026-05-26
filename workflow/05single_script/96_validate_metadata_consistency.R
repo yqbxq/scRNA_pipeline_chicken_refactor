@@ -1499,7 +1499,7 @@ if (!is.null(loaded_generated$communication_pairs)) {
     if (nrow(derived_pairs) > 0) {
       executable_derived <- derived_pairs[tolower(derived_pairs$tool) %in% c("both", "cellchat", "cellchat_only", "nichenet", "nichenet_only"), , drop = FALSE]
       if (nrow(executable_derived) > 0) {
-        fail("tier2.communication.derived_not_executable", sprintf("derived rows cannot be executable by 07a/07b: %s", paste(executable_derived$pair_id, collapse = ", ")))
+        fail("tier2.communication.derived_not_executable", sprintf("derived rows cannot be executable by 07a/07c: %s", paste(executable_derived$pair_id, collapse = ", ")))
         policy_fail_n <- policy_fail_n + nrow(executable_derived)
       }
       for (idx in seq_len(nrow(derived_pairs))) {
