@@ -25,6 +25,7 @@ source_utf8(file.path(.script_dir, "helpers", "ambient_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "layer_config_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "comparison_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "deg_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "evidence_tier_dispatch_utils.R"))
 
 load_required_packages(c("Seurat", "dplyr", "tibble", "jsonlite", "Matrix"))
 
@@ -84,14 +85,36 @@ run_formal_pbds_05 <- function(seu, vars) {
   tidy_res
 }
 
+write_nonformal_evidence_05 <- function(path, layer_id, vars, decision, status, reason) {
+  write_tsv_local(
+    data.frame(
+      comparison_id = vars$comparison_id,
+      layer_id = layer_id,
+      analysis_mode = vars$analysis_mode,
+      aggregation_group_var = vars$aggregation_group_var,
+      inference_status = status,
+      evidence_tier = decision$evidence_tier,
+      recommended_action = decision$recommended_action,
+      reason = reason,
+      warning_banner = decision$warning_banner,
+      parent_cluster_if_merged = decision$parent_cluster_if_merged,
+      stringsAsFactors = FALSE
+    ),
+    path
+  )
+}
+
 layer_status_df <- deg_layer_status(cfg)
 comparison_df <- read_deg_comparison_sheet(cfg)
 marker_manifest <- file.path(cfg$marker_discovery_table_dir, "marker_discovery_manifest.tsv")
+cluster_eligibility_tsv <- manifest_output_optional_05(cfg$module_04c_manifest_path, "cluster_eligibility_tsv")
+cluster_eligibility <- read_cluster_eligibility_05(cfg$module_04c_manifest_path)
 
 report_lines <- c(
   "# 05b Pseudobulk DE",
   "",
   sprintf("- comparison_sheet: `%s`", cfg$comparison_sheet),
+  sprintf("- cluster_eligibility_tsv: `%s`", cluster_eligibility_tsv),
   sprintf("- min_biological_replicates_default: `%s`", cfg$min_biological_replicates),
   ""
 )
@@ -133,6 +156,7 @@ for (idx in seq_len(nrow(layer_status_df))) {
     }
 
     vars <- resolve_comparison_vars_05(obj, comparison_row)
+    evidence_decision <- evidence_decision_05(cluster_eligibility, layer_id, vars$comparison_id, vars$group_var)
     cmp_paths <- pseudobulk_paths_05(cfg, layer_id, vars$comparison_id)
     subset_result <- subset_cells_for_comparison(obj, vars)
     marker_fallback <- if (vars$analysis_mode %in% c("subtype_marker", "subtype_pairwise")) {
@@ -169,6 +193,12 @@ for (idx in seq_len(nrow(layer_status_df))) {
         gate_summary_tsv = normalizePath(cmp_paths$gate_summary_tsv, winslash = "/", mustWork = FALSE),
         status_tsv = normalizePath(cmp_paths$status_tsv, winslash = "/", mustWork = FALSE),
         exploratory_marker_discovery = marker_fallback,
+        evidence_tier = evidence_decision$evidence_tier,
+        recommended_action = evidence_decision$recommended_action,
+        evidence_tier_summary = evidence_decision$evidence_tier_summary,
+        warning_banner = "",
+        parent_cluster_if_merged = evidence_decision$parent_cluster_if_merged,
+        cluster_eligibility_tsv = cluster_eligibility_tsv,
         stringsAsFactors = FALSE
       )
       next
@@ -202,6 +232,12 @@ for (idx in seq_len(nrow(layer_status_df))) {
         gate_summary_tsv = normalizePath(cmp_paths$gate_summary_tsv, winslash = "/", mustWork = FALSE),
         status_tsv = normalizePath(cmp_paths$status_tsv, winslash = "/", mustWork = FALSE),
         exploratory_marker_discovery = marker_fallback,
+        evidence_tier = evidence_decision$evidence_tier,
+        recommended_action = evidence_decision$recommended_action,
+        evidence_tier_summary = evidence_decision$evidence_tier_summary,
+        warning_banner = evidence_decision$warning_banner,
+        parent_cluster_if_merged = evidence_decision$parent_cluster_if_merged,
+        cluster_eligibility_tsv = cluster_eligibility_tsv,
         stringsAsFactors = FALSE
       )
       report_lines <- c(report_lines, sprintf("### `%s`", vars$comparison_id), sprintf("- status: skipped; reason: %s", subset_result$reason))
@@ -237,6 +273,12 @@ for (idx in seq_len(nrow(layer_status_df))) {
         gate_summary_tsv = normalizePath(cmp_paths$gate_summary_tsv, winslash = "/", mustWork = FALSE),
         status_tsv = normalizePath(cmp_paths$status_tsv, winslash = "/", mustWork = FALSE),
         exploratory_marker_discovery = marker_fallback,
+        evidence_tier = evidence_decision$evidence_tier,
+        recommended_action = evidence_decision$recommended_action,
+        evidence_tier_summary = evidence_decision$evidence_tier_summary,
+        warning_banner = evidence_decision$warning_banner,
+        parent_cluster_if_merged = evidence_decision$parent_cluster_if_merged,
+        cluster_eligibility_tsv = cluster_eligibility_tsv,
         stringsAsFactors = FALSE
       )
       report_lines <- c(report_lines, sprintf("### `%s`", vars$comparison_id), sprintf("- status: skipped; reason: %s", aggregation_result$reason))
@@ -251,23 +293,20 @@ for (idx in seq_len(nrow(layer_status_df))) {
     gate <- replicate_gate_summary_05(obj_sub@meta.data, vars)
     write_tsv_local(gate$summary, cmp_paths$gate_summary_tsv)
 
-    if (!gate$pass) {
-      status <- if (vars$force_exploratory) "exploratory_forced" else "exploratory_only"
-      warning_banner <- annotation_warning_banner_05(gate$summary, vars, forced = vars$force_exploratory)
-      exploratory_res <- run_exploratory_findmarkers_05(
-        obj_sub,
-        vars,
-        cluster_id = "",
-        annotation_label = vars$analysis_mode
-      )
-      exploratory_df <- if (!is.null(exploratory_res$result)) exploratory_res$result else empty_marker_result_05()
-      exploratory_df$layer_id <- rep(layer_id, nrow(exploratory_df))
-      exploratory_df$inference_status <- rep(status, nrow(exploratory_df))
-      write_tsv_local(exploratory_df, cmp_paths$ds_results_tsv)
-      exploratory_reason <- normalize_scalar_value(exploratory_res$reason)
-      if (nzchar(exploratory_reason)) {
-        exploratory_reason <- paste("exploratory_findmarkers:", exploratory_reason)
+    if (!evidence_allows_formal_05(evidence_decision) || !gate$pass) {
+      status <- if (!evidence_allows_formal_05(evidence_decision)) {
+        evidence_decision$evidence_tier
+      } else if (vars$force_exploratory) {
+        "exploratory_replicate_gate_forced"
+      } else {
+        "exploratory_replicate_gate_blocked"
       }
+      gate_warning <- if (!gate$pass) annotation_warning_banner_05(gate$summary, vars, forced = vars$force_exploratory) else ""
+      warning_banner <- paste(c(evidence_decision$warning_banner, gate_warning)[nzchar(c(evidence_decision$warning_banner, gate_warning))], collapse = " ")
+      reason <- paste(c(evidence_decision$reason, gate$reason)[nzchar(c(evidence_decision$reason, gate$reason))], collapse = "; ")
+      local_decision <- evidence_decision
+      local_decision$warning_banner <- warning_banner
+      write_nonformal_evidence_05(cmp_paths$ds_results_tsv, layer_id, vars, local_decision, status, reason)
       write_tsv_local(
         data.frame(
           comparison_id = vars$comparison_id,
@@ -275,9 +314,13 @@ for (idx in seq_len(nrow(layer_status_df))) {
           analysis_mode = vars$analysis_mode,
           aggregation_group_var = vars$aggregation_group_var,
           inference_status = status,
-          reason = paste(c(gate$reason, exploratory_reason)[nzchar(c(gate$reason, exploratory_reason))], collapse = "; "),
+          reason = reason,
           warning_banner = warning_banner,
           exploratory_marker_discovery = marker_fallback,
+          evidence_tier = evidence_decision$evidence_tier,
+          recommended_action = evidence_decision$recommended_action,
+          evidence_tier_summary = evidence_decision$evidence_tier_summary,
+          parent_cluster_if_merged = evidence_decision$parent_cluster_if_merged,
           stringsAsFactors = FALSE
         ),
         cmp_paths$status_tsv
@@ -294,6 +337,12 @@ for (idx in seq_len(nrow(layer_status_df))) {
         gate_summary_tsv = normalizePath(cmp_paths$gate_summary_tsv, winslash = "/", mustWork = FALSE),
         status_tsv = normalizePath(cmp_paths$status_tsv, winslash = "/", mustWork = FALSE),
         exploratory_marker_discovery = marker_fallback,
+        evidence_tier = evidence_decision$evidence_tier,
+        recommended_action = evidence_decision$recommended_action,
+        evidence_tier_summary = evidence_decision$evidence_tier_summary,
+        warning_banner = warning_banner,
+        parent_cluster_if_merged = evidence_decision$parent_cluster_if_merged,
+        cluster_eligibility_tsv = cluster_eligibility_tsv,
         stringsAsFactors = FALSE
       )
       report_lines <- c(
@@ -301,13 +350,16 @@ for (idx in seq_len(nrow(layer_status_df))) {
         sprintf("### `%s`", vars$comparison_id),
         warning_banner,
         sprintf("- status: %s", status),
-        sprintf("- reason: %s", gate$reason),
-        sprintf("- exploratory_findmarkers: `%s`", cmp_paths$ds_results_tsv)
+        sprintf("- reason: %s", reason),
+        sprintf("- evidence_tier_summary: `%s`", evidence_decision$evidence_tier_summary),
+        sprintf("- no cell-level FindMarkers fallback was run; status_tsv: `%s`", cmp_paths$status_tsv)
       )
       next
     }
 
     formal_res <- run_formal_pbds_05(obj_sub, vars)
+    formal_res$evidence_tier <- evidence_decision$evidence_tier
+    formal_res$recommended_action <- evidence_decision$recommended_action
     write_tsv_local(formal_res, cmp_paths$ds_results_tsv)
     saveRDS(formal_res, cmp_paths$result_rds)
     write_tsv_local(
@@ -318,8 +370,12 @@ for (idx in seq_len(nrow(layer_status_df))) {
         aggregation_group_var = vars$aggregation_group_var,
         inference_status = "formal",
         reason = gate$reason,
-        warning_banner = "",
+        warning_banner = evidence_decision$warning_banner,
         exploratory_marker_discovery = marker_fallback,
+        evidence_tier = evidence_decision$evidence_tier,
+        recommended_action = evidence_decision$recommended_action,
+        evidence_tier_summary = evidence_decision$evidence_tier_summary,
+        parent_cluster_if_merged = evidence_decision$parent_cluster_if_merged,
         stringsAsFactors = FALSE
       ),
       cmp_paths$status_tsv
@@ -336,17 +392,25 @@ for (idx in seq_len(nrow(layer_status_df))) {
       gate_summary_tsv = normalizePath(cmp_paths$gate_summary_tsv, winslash = "/", mustWork = FALSE),
       status_tsv = normalizePath(cmp_paths$status_tsv, winslash = "/", mustWork = FALSE),
       exploratory_marker_discovery = marker_fallback,
+      evidence_tier = evidence_decision$evidence_tier,
+      recommended_action = evidence_decision$recommended_action,
+      evidence_tier_summary = evidence_decision$evidence_tier_summary,
+      warning_banner = evidence_decision$warning_banner,
+      parent_cluster_if_merged = evidence_decision$parent_cluster_if_merged,
+      cluster_eligibility_tsv = cluster_eligibility_tsv,
       stringsAsFactors = FALSE
     )
-    report_lines <- c(report_lines, sprintf("### `%s`", vars$comparison_id), "- status: formal", sprintf("- formal_results: `%s`", cmp_paths$ds_results_tsv))
+    report_lines <- c(report_lines, sprintf("### `%s`", vars$comparison_id), sprintf("- status: formal; evidence_tier: `%s`", evidence_decision$evidence_tier), sprintf("- formal_results: `%s`", cmp_paths$ds_results_tsv))
   }
 }
 
 manifest_df <- if (length(manifest_rows) > 0) dplyr::bind_rows(manifest_rows) else empty_df_05(c(
   "layer_id", "comparison_id", "analysis_mode", "aggregation_group_var",
-  "inference_status", "aggregation_rds", "aggregation_metadata_tsv",
-  "ds_results_tsv", "gate_summary_tsv", "status_tsv", "exploratory_marker_discovery"
+  "inference_status", "evidence_tier", "recommended_action", "evidence_tier_summary",
+  "warning_banner", "parent_cluster_if_merged", "aggregation_rds", "aggregation_metadata_tsv",
+  "ds_results_tsv", "gate_summary_tsv", "status_tsv", "exploratory_marker_discovery", "cluster_eligibility_tsv"
 ))
+manifest_df <- evidence_manifest_columns_05(manifest_df)
 manifest_tsv <- file.path(cfg$pseudobulk_table_dir, "pseudobulk_manifest.tsv")
 write_tsv_local(manifest_df, manifest_tsv)
 report_lines <- c(report_lines, "", sprintf("- manifest: `%s`", manifest_tsv))
@@ -364,9 +428,9 @@ write_manifest_local(
   ),
   module_name = module_name,
   base_dir = cfg$project_root,
-  inputs = list(layer_status_tsv = cfg$layer_status_file, comparison_sheet = cfg$comparison_sheet, marker_manifest_tsv = marker_manifest),
+  inputs = list(layer_status_tsv = cfg$layer_status_file, comparison_sheet = cfg$comparison_sheet, marker_manifest_tsv = marker_manifest, cluster_eligibility_tsv = cluster_eligibility_tsv),
   version = cfg$module_version,
-  depends_on = list(module_05a = cfg$module_05a_manifest_path)
+  depends_on = list(module_05a = cfg$module_05a_manifest_path, module_04c = cfg$module_04c_manifest_path)
 )
 
 message("05b completed. manifest: ", manifest_tsv)

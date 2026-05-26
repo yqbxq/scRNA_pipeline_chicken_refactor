@@ -11,6 +11,7 @@ ensure_metadata_fresh
 check_stage_deps "05_deg"
 
 MODULE_03D_MANIFEST="${MANIFEST_DIR}/03d_annotate/_manifest.json"
+MODULE_04C_MANIFEST="${MANIFEST_DIR}/04c_subcluster_eda/_manifest.json"
 MODULE_05A_MANIFEST="${MANIFEST_DIR}/05a_marker_discovery/_manifest.json"
 MODULE_05B_MANIFEST="${MANIFEST_DIR}/05b_pseudobulk_de/_manifest.json"
 MODULE_05C_MANIFEST="${MANIFEST_DIR}/05c_composition/_manifest.json"
@@ -20,6 +21,7 @@ ensure_eda_control_files
 ensure_object_layer_config_file
 
 require_manifest_output "${MODULE_03D_MANIFEST}" "annotated_object" >/dev/null
+require_manifest_output "${MODULE_04C_MANIFEST}" "cluster_eligibility_tsv" >/dev/null
 
 DEG_RERAN=0
 run_deg_stage_if_stale() {
@@ -49,7 +51,8 @@ run_deg_stage_if_stale \
   "${MODULE_05B_MANIFEST}" \
   "${MODULE_05A_MANIFEST}" \
   "${LAYER_STATUS_FILE}" \
-  "${COMPARISON_SHEET}"
+  "${COMPARISON_SHEET}" \
+  "${MODULE_04C_MANIFEST}"
 require_manifest_output "${MODULE_05B_MANIFEST}" "pseudobulk_manifest_tsv" >/dev/null
 
 run_deg_stage_if_stale \
