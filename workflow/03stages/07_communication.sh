@@ -76,6 +76,13 @@ run_comm_stage_if_stale \
   "${COMMUNICATION_PAIRS_SHEET}"
 COMMUNICATION_REPORT="$(require_manifest_output "${MODULE_07C_MANIFEST}" "report_md")"
 
+export_h5ad_for_gate \
+  "07c_communication" \
+  "${MODULE_03D_MANIFEST}" \
+  "annotated_object" \
+  "scrna" \
+  "07c_communication"
+
 if [[ "${COMMUNICATION_RERAN}" == "1" ]]; then
   set_eda_gate_status \
     "communication" \

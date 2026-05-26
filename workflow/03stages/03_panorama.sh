@@ -87,6 +87,13 @@ require_manifest_output "${MODULE_03C_MANIFEST}" "clustered_object" >/dev/null
 require_manifest_output "${MODULE_03D_MANIFEST}" "annotated_object" >/dev/null
 require_manifest_output "${MODULE_03E_MANIFEST}" "report" >/dev/null
 
+export_h5ad_for_gate \
+  "03d_annotation" \
+  "${MODULE_03D_MANIFEST}" \
+  "annotated_object" \
+  "scrna" \
+  "03d_panorama"
+
 if ! eda_gate_passed annotation; then
   set_eda_gate_status \
     "annotation" \

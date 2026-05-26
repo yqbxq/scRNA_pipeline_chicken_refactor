@@ -247,9 +247,16 @@ write_markdown_local(report_lines, report_path)
 
 st06_write_manifest_local(
   manifest_path = cfg$module_06e_niche_manifest_path,
-  new_outputs = list(
+  new_outputs = c(
+    if (nzchar(manifest_df$spatial_panorama_niched_rds[[1]]) && file.exists(manifest_df$spatial_panorama_niched_rds[[1]])) {
+      list(panorama_niched = build_output_entry(manifest_df$spatial_panorama_niched_rds[[1]], "rds", module_name, "spatial panorama with niche labels", base_dir = cfg$project_root))
+    } else {
+      list()
+    },
+    list(
     niche_manifest = build_output_entry(manifest_tsv, "tsv", module_name, "single-row spatial niche status manifest", base_dir = cfg$project_root, schema = infer_schema_from_df(manifest_df)),
     report = build_output_entry(report_path, "md", module_name, "spatial niche derivation report", base_dir = cfg$project_root)
+    )
   ),
   module_name = module_name,
   base_dir = cfg$project_root,

@@ -4,6 +4,9 @@ from __future__ import annotations
 import argparse
 import sys
 
+from helpers.scrna_io import resolve_scrna_h5ad_path
+from helpers.spatial_io import resolve_spatial_h5ad_path
+
 
 def check_environment(use_gpu: bool) -> tuple[str, str]:
     try:
@@ -24,6 +27,9 @@ def main() -> int:
     parser.add_argument("--use-gpu", action="store_true")
     parser.add_argument("--ref-h5ad")
     parser.add_argument("--st-h5ad")
+    parser.add_argument("--ref-module", default="03d_panorama")
+    parser.add_argument("--st-module", default="spatial_03_region")
+    parser.add_argument("--section-id", default="")
     parser.add_argument("--annotation-col")
     parser.add_argument("--out-dir")
     parser.add_argument("--ref-epochs", type=int, default=250)
@@ -41,6 +47,13 @@ def main() -> int:
     if status != "ok":
         sys.stderr.write(f"{status}\t{reason}\n")
         return 20 if status == "skipped_no_python_env" else 21
+
+    try:
+        args.ref_h5ad = str(resolve_scrna_h5ad_path(module=args.ref_module, fallback_path=args.ref_h5ad))
+        args.st_h5ad = str(resolve_spatial_h5ad_path(module=args.st_module, section_id=args.section_id or None, fallback_path=args.st_h5ad))
+    except Exception as exc:
+        sys.stderr.write(f"failed_sidecar\tH5AD input resolution failed: {exc}\n")
+        return 30
 
     missing = [name for name in ("ref_h5ad", "st_h5ad", "annotation_col", "out_dir") if not getattr(args, name)]
     if missing:

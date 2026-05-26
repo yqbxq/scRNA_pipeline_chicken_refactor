@@ -10,6 +10,8 @@ import scvelo as scv
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.lines import Line2D
 
+from helpers.scrna_io import find_scrna_h5ad
+
 
 VELOCITY_INPUT_DIR = os.environ["VELOCITY_INPUT_DIR"]
 VELOCITY_LOOM_DIR = os.environ["VELOCITY_LOOM_DIR"]
@@ -19,6 +21,7 @@ SCVELO_THREADS = int(os.environ.get("SCVELO_THREADS", "16"))
 UMAP_CSV = os.path.join(VELOCITY_INPUT_DIR, "velocity_umap.csv")
 META_CSV = os.path.join(VELOCITY_INPUT_DIR, "velocity_metadata.csv")
 FIGURE_DIR = os.path.join(VELOCITY_OUTPUT_DIR, "figures")
+SCRNA_H5AD = find_scrna_h5ad(module=os.environ.get("VELOCITY_H5AD_MODULE", "03d_panorama"))
 
 CELLTYPE_COLOR_POOL = [
     "#79BB7D",

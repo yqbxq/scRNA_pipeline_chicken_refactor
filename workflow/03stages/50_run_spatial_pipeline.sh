@@ -50,17 +50,35 @@ hold_for_gate spatial_integration
 
 run_future_spatial_r_stage "02b_finalize_spatial_clustering.R" "spatial_02b_finalize_clustering" "${SPATIAL_OBJECT_LAYER_FILE}"
 run_future_spatial_r_stage "03_region_annotation.R" "spatial_03_region_annotation" "${MARKER_PANEL_DIR}"
+export_h5ad_for_gate \
+  "spatial_03_region" \
+  "${MANIFEST_DIR}/spatial_03_region_annotation/_manifest.json" \
+  "panorama_annotated" \
+  "spatial" \
+  "spatial_03_region"
 run_future_spatial_r_stage "03a_region_annotation_eda.R" "spatial_03a_region_annotation_eda"
 set_eda_gate_status "spatial_region_annotation" "pending" "" "Review spatial region annotation before sub-clustering."
 hold_for_gate spatial_region_annotation
 
 run_future_spatial_r_stage "04a_subcluster_build.R" "spatial_04a_subcluster_build" "${SPATIAL_OBJECT_LAYER_FILE}"
 run_future_spatial_r_stage "04b_subcluster_annotate.R" "spatial_04b_subcluster_annotate" "${MARKER_PANEL_DIR}"
+export_h5ad_for_gate \
+  "spatial_04b_subcluster" \
+  "${MANIFEST_DIR}/spatial_04b_subcluster_annotate/_manifest.json" \
+  "panorama_subannotated" \
+  "spatial" \
+  "spatial_04b_subcluster"
 run_future_spatial_r_stage "04c_subcluster_eda.R" "spatial_04c_subcluster_eda"
 set_eda_gate_status "spatial_region_annotation" "pending" "" "Review sub-cluster annotation before marker/DE/composition."
 hold_for_gate spatial_region_annotation
 
 run_future_spatial_r_stage "05_region_marker_discovery.R" "spatial_05_region_marker"
+export_h5ad_for_gate \
+  "spatial_05_marker" \
+  "${MANIFEST_DIR}/spatial_03_region_annotation/_manifest.json" \
+  "panorama_annotated" \
+  "spatial" \
+  "spatial_05_marker"
 run_future_spatial_r_stage "05a_region_pseudobulk.R" "spatial_05a_region_pseudobulk"
 run_future_spatial_r_stage "05b_region_composition.R" "spatial_05b_region_composition"
 run_future_spatial_r_stage "05_spatial_de.R" "spatial_05_spatial_de"

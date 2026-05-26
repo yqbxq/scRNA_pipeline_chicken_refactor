@@ -105,6 +105,13 @@ run_stage_if_stale \
 
 require_manifest_output "${MODULE_04B_MANIFEST}" "summary_tsv" >/dev/null
 
+export_h5ad_for_gate \
+  "04b_subcluster" \
+  "${MODULE_04B_MANIFEST}" \
+  "panorama_cell_subtype_rds" \
+  "scrna" \
+  "04b_subcluster"
+
 run_stage_if_stale \
   "${WORKFLOW_ROOT}/05single_script/04c_subcluster_eda.R" \
   "${MODULE_04C_MANIFEST}" \

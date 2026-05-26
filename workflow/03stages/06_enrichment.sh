@@ -12,6 +12,7 @@ check_stage_deps "06_enrichment"
 hold_for_gate deg
 
 MODULE_05D_MANIFEST="${MANIFEST_DIR}/05d_deg_eda/_manifest.json"
+MODULE_03D_MANIFEST="${MANIFEST_DIR}/03d_annotate/_manifest.json"
 MODULE_06A_MANIFEST="${MANIFEST_DIR}/06a_go_enrichment/_manifest.json"
 MODULE_06B_MANIFEST="${MANIFEST_DIR}/06b_kegg_enrichment/_manifest.json"
 MODULE_06C_MANIFEST="${MANIFEST_DIR}/06c_enrichment_eda/_manifest.json"
@@ -41,6 +42,13 @@ run_stage_if_stale \
   "${MODULE_06A_MANIFEST}" \
   "${MODULE_06B_MANIFEST}"
 ENRICHMENT_REPORT="$(require_manifest_output "${MODULE_06C_MANIFEST}" "report")"
+
+export_h5ad_for_gate \
+  "06d_enrichment" \
+  "${MODULE_03D_MANIFEST}" \
+  "annotated_object" \
+  "scrna" \
+  "06d_enrichment"
 
 update_workflow_status \
   "06_enrichment_completed" \

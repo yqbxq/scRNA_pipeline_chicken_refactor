@@ -2,6 +2,7 @@
 import argparse
 import sys
 
+from helpers.spatial_io import resolve_spatial_h5ad_path
 
 def fail(code, status, reason):
     sys.stderr.write(f"{status}\t{reason}\n")
@@ -116,6 +117,8 @@ def main():
     input_group = parser.add_mutually_exclusive_group(required=True)
     input_group.add_argument("--h5ad", help='AnnData input with obsm["spatial"] and obs group labels')
     input_group.add_argument("--spots", help="Legacy TSV with spot_id, x, y, label columns")
+    parser.add_argument("--h5ad-module", default="spatial_03_region")
+    parser.add_argument("--section-id", default="")
     parser.add_argument("--group-by", default="label", help="AnnData obs column used as Squidpy cluster_key")
     parser.add_argument("--out-prefix", required=True)
     parser.add_argument("--radius", type=float, default=200.0)
@@ -132,7 +135,8 @@ def main():
 
     try:
         if args.h5ad:
-            adata = read_spots_h5ad(args.h5ad, args.group_by, adata_mod, np_mod, pd_mod)
+            h5ad_path = resolve_spatial_h5ad_path(module=args.h5ad_module, section_id=args.section_id or None, fallback_path=args.h5ad)
+            adata = read_spots_h5ad(h5ad_path, args.group_by, adata_mod, np_mod, pd_mod)
             group_by = args.group_by
         else:
             adata = read_spots_tsv(args.spots, adata_mod, np_mod, pd_mod)

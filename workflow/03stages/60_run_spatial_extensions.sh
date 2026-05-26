@@ -104,6 +104,12 @@ if [[ "${RUN_DECONV}" == "yes" ]]; then
 fi
 if [[ "${RUN_NICHE}" == "yes" ]]; then
   run_future_spatial_r_stage "06e_niche_derivation.R" "spatial_06e_niche"
+  export_h5ad_for_gate \
+    "spatial_06_extensions" \
+    "${MANIFEST_DIR}/spatial_06e_niche/_manifest.json" \
+    "panorama_niched" \
+    "spatial" \
+    "spatial_06_extensions"
   set_eda_gate_status "spatial_niche" "pending" "" "Review niche derivation before joint analyses."
   hold_for_gate spatial_niche
 fi

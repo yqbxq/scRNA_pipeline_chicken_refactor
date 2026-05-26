@@ -57,6 +57,9 @@ export H5AD_EXPORT_COMPRESSION="${H5AD_EXPORT_COMPRESSION:-gzip}"
 export H5AD_EXPORT_SPATIAL_PER_SECTION="${H5AD_EXPORT_SPATIAL_PER_SECTION:-yes}"
 export H5AD_EXPORT_CONTRACT_FAIL_ON="${H5AD_EXPORT_CONTRACT_FAIL_ON:-${H5AD_CONTRACT_FAIL_ON}}"
 export MODULE_90_EXPORT_H5AD_VERSION="${MODULE_90_EXPORT_H5AD_VERSION:-1.0}"
+export H5AD_EXPORT_GATES="${H5AD_EXPORT_GATES:-}"
+export H5AD_EXPORT_ON_FAILURE="${H5AD_EXPORT_ON_FAILURE:-skip}"
+export H5AD_PYTHON_FALLBACK_TO_RDS="${H5AD_PYTHON_FALLBACK_TO_RDS:-yes}"
 export FIGURE_DIR="${FIGURE_DIR:-${RESULTS_DIR}/figures}"
 export TABLE_DIR="${TABLE_DIR:-${RESULTS_DIR}/tables}"
 export ST_ENABLED="${ST_ENABLED:-yes}"
@@ -420,6 +423,69 @@ die() {
 
 warn() {
   echo "[WARN] $*" >&2
+}
+
+info() {
+  echo "[INFO] $*" >&2
+}
+
+should_export_h5ad() {
+  local gate_name="$1"
+  local gates_csv="${H5AD_EXPORT_GATES:-}"
+
+  if [[ -n "${gates_csv}" ]]; then
+    [[ ",${gates_csv}," == *",${gate_name},"* ]]
+    return
+  fi
+
+  case "${gate_name}" in
+    03d_annotation|04b_subcluster|06d_enrichment|07c_communication|\
+spatial_03_region|spatial_04b_subcluster|spatial_05_marker|spatial_06_extensions)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+handle_h5ad_export_failure() {
+  local gate_name="$1"
+  local mode="${H5AD_EXPORT_ON_FAILURE:-skip}"
+  case "${mode}" in
+    error)
+      die "H5AD export failed for gate=${gate_name}"
+      ;;
+    warn)
+      warn "H5AD export failed but workflow continues: gate=${gate_name}"
+      ;;
+    skip|"")
+      info "H5AD export failed and was skipped: gate=${gate_name}"
+      ;;
+    *)
+      warn "Unknown H5AD_EXPORT_ON_FAILURE=${mode}; treating as skip for gate=${gate_name}"
+      ;;
+  esac
+}
+
+export_h5ad_for_gate() {
+  local gate_name="$1"
+  local upstream_manifest="$2"
+  local output_key="$3"
+  local modality="$4"
+  local target_slug="${5:-${gate_name}}"
+
+  should_export_h5ad "${gate_name}" || return 0
+
+  local target_dir="${RESULTS_DIR}/90a_export_h5ad/${target_slug}"
+  info "H5AD export requested for gate=${gate_name}; target=${target_dir}"
+  if ! bash "${PIPELINE_ROOT}/workflow/03stages/90_export_h5ad.sh" \
+    --upstream-manifest "${upstream_manifest}" \
+    --output-key "${output_key}" \
+    --modality "${modality}" \
+    --target-dir "${target_dir}"; then
+    handle_h5ad_export_failure "${gate_name}"
+  fi
 }
 
 ensure_dir() {
