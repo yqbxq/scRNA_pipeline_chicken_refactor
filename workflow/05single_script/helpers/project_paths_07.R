@@ -71,6 +71,8 @@ get_single_script_config_07 <- function() {
   base$nichenet_top_ligand_n <- env_integer_07("NICHENET_TOP_LIGAND_N", 20L)
   base$nichenet_top_target_n <- env_integer_07("NICHENET_TOP_TARGET_N", 200L)
   base$communication_require_full_pipeline <- env_or_default_03("COMMUNICATION_REQUIRE_FULL_PIPELINE", "no")
+  base$consensus_min_methods_for_primary <- env_integer_07("CONSENSUS_MIN_METHODS_FOR_PRIMARY", 2L)
+  base$consensus_require_nichenet_for_primary <- env_or_default_03("CONSENSUS_REQUIRE_NICHENET_FOR_PRIMARY", "yes")
   base$liana_consensus_enabled <- env_or_default_03("LIANA_CONSENSUS_ENABLED", "yes")
   base$liana_methods_list <- env_or_default_03("LIANA_METHODS_LIST", "cellphonedb,connectome,sca,natmi,logfc,rank_aggregate")
   base$liana_consensus_aggregate <- env_or_default_03("LIANA_CONSENSUS_AGGREGATE", "rank_aggregate")
@@ -97,7 +99,7 @@ get_single_script_config_07 <- function() {
     "MODULE_07C_NICHENET_VERSION",
     env_or_default_03("MODULE_07_VERSION", "1.1")
   )
-  base$module_07d_consensus_version <- env_or_default_03("MODULE_07D_CONSENSUS_VERSION", env_or_default_03("MODULE_07_VERSION", "0.1"))
+  base$module_07d_consensus_version <- env_or_default_03("MODULE_07D_CONSENSUS_VERSION", env_or_default_03("MODULE_07_VERSION", "1.0"))
   base$module_07e_eda_version <- env_or_default_03("MODULE_07E_EDA_VERSION", env_or_default_03("MODULE_07_VERSION", "0.1"))
   base$module_07a_version <- base$module_07a_cellchat_version
   base$module_07b_version <- base$module_07b_liana_version

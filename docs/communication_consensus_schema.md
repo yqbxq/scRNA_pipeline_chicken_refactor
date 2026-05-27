@@ -33,3 +33,23 @@ Required columns:
 | `status` / `reason` | Execution status and short diagnostic text. |
 
 07d consumes `lr_axis_id` as the join key. 07b does not assign final communication evidence tiers.
+
+## 07d Consensus Output
+
+`workflow/05single_script/07d_communication_consensus.R` writes:
+
+| File | Row semantics |
+|---|---|
+| `results/tables/communication/consensus/method_consensus.tsv` | Full outer join of available CellChat, LIANA, and NicheNet evidence by `lr_axis_id` and `condition_value`. |
+| `results/tables/communication/consensus/evidence_tiers.tsv` | Compact four-tier decision table for reporting and downstream gates. |
+
+The 07d tier matrix is:
+
+| Tier | Rule |
+|---|---|
+| `primary` | LIANA consensus plus the configured minimum method count, and NicheNet support when `CONSENSUS_REQUIRE_NICHENET_FOR_PRIMARY=yes`. |
+| `exploratory` | At least one non-CellChat evidence layer supports the axis, or CellChat has another supporting layer. |
+| `candidate` | CellChat-only hypothesis-level evidence. |
+| `blocked` | No supporting communication evidence. |
+
+CellChat-only axes are always capped at `candidate`; they cannot set `can_be_primary=yes`.

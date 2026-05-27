@@ -39,13 +39,15 @@ This file records project-level environment variables that are exported through 
 | `MODULE_07A_CELLCHAT_VERSION` | `1.2` | Version marker for CellChat inventory-gated hypothesis-only outputs. |
 | `MODULE_07B_LIANA_VERSION` | `1.0` | Version marker for the 07b LIANA+ consensus layer. |
 | `MODULE_07C_NICHENET_VERSION` | `1.0` | Version marker for NicheNet/MultiNicheNet inventory-gated outputs. |
-| `MODULE_07D_CONSENSUS_VERSION` | `0.1` | Version marker for the 07d communication consensus placeholder. |
+| `MODULE_07D_CONSENSUS_VERSION` | `1.0` | Version marker for the 07d communication consensus and evidence tier layer. |
 | `MODULE_07E_EDA_VERSION` | `0.1` | Version marker for the 07e communication EDA layer. |
 | `INVENTORY_GATE_REQUIRED` | `yes` | Require 04c `cluster_eligibility_tsv` before communication modules run. |
 | `INVENTORY_GATE_ALLOWED_TIERS_COMMUNICATION` | `primary,exploratory,primary_merged` | Evidence tiers allowed to enter CellChat/NicheNet communication analysis. |
 | `INVENTORY_GATE_STRICT_MODE` | `no` | When enabled, a cluster must pass all matching eligibility rows to enter communication analysis. |
 | `COMMUNICATION_FAIL_ON_NO_PRIMARY` | `no` | Reserved strictness flag for failing communication when no cluster passes inventory gate. |
 | `COMMUNICATION_REQUIRE_FULL_PIPELINE` | `no` | When `yes`, 07b/07c/07d/07e failures block the communication stage instead of writing placeholder manifests. |
+| `CONSENSUS_MIN_METHODS_FOR_PRIMARY` | `2` | Minimum supporting method layers required for a primary 07d communication axis. |
+| `CONSENSUS_REQUIRE_NICHENET_FOR_PRIMARY` | `yes` | Require downstream NicheNet/MultiNicheNet support before a 07d axis can be primary. |
 | `LIANA_CONSENSUS_ENABLED` | `yes` | Enables the 07b LIANA+ consensus stage. |
 | `LIANA_METHODS_LIST` | `cellphonedb,connectome,sca,natmi,logfc,rank_aggregate` | LIANA method set requested by 07b. |
 | `LIANA_CONSENSUS_AGGREGATE` | `rank_aggregate` | Consensus score column preference for 07b LIANA outputs. |
