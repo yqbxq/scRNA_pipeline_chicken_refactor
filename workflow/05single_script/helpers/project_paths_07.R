@@ -60,6 +60,7 @@ get_single_script_config_07 <- function() {
   base$communication_eda_panels_tsv <- file.path(base$communication_consensus_table_dir, "communication_eda_panels.tsv")
   base$communication_eda_filtered_tsv <- file.path(base$communication_consensus_table_dir, "communication_eda_filtered_axes.tsv")
   base$communication_eda_panel_dir <- file.path(base$communication_consensus_figure_dir, "07e_panels")
+  base$commot_spatial_summary_tsv <- env_or_default_03("COMMOT_SPATIAL_SUMMARY_TSV", file.path(base$table_dir, "spatial", "08_commot", "commot_spatial_summary.tsv"))
 
   base$communication_cell_type_col <- env_or_default_03("COMMUNICATION_CELL_TYPE_COL", "cell_subtype")
   base$nichenet_resource_dir <- env_or_default_03("NICHENET_RESOURCE_DIR", file.path(base$project_root, "resources", "nichenet"))

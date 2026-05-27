@@ -23,6 +23,7 @@ source_utf8(file.path(.script_dir, "helpers", "manifest_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "metadata_io.R"))
 source_utf8(file.path(.script_dir, "helpers", "communication_mapping_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "communication_consensus_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "commot_signal_utils.R"))
 
 load_required_packages(c("jsonlite"))
 
@@ -178,6 +179,8 @@ nichenet_axis <- if ("lr_axis_id" %in% colnames(nichenet_tasks)) ensure_lr_axis_
 
 consensus_df <- full_outer_join_lr_tables(cellchat_lr, liana_lr, nichenet_axis)
 consensus_df <- apply_nichenet_task_support_07d(consensus_df, nichenet_tasks)
+commot_summary <- read_tsv_if_exists_07d(cfg$commot_spatial_summary_tsv)
+consensus_df <- attach_commot_spatial(consensus_df, commot_summary)
 consensus_df <- assign_evidence_tier_07d(consensus_df)
 
 consensus_keep <- unique(c(
@@ -232,6 +235,7 @@ write_manifest_local(
     cellchat_index_tsv = cfg$cellchat_index_tsv,
     liana_consensus_lr_tsv = cfg$liana_consensus_lr_tsv,
     nichenet_index_tsv = cfg$nichenet_index_tsv,
+    commot_spatial_summary_tsv = cfg$commot_spatial_summary_tsv,
     consensus_min_methods_for_primary = Sys.getenv("CONSENSUS_MIN_METHODS_FOR_PRIMARY", "2"),
     consensus_require_nichenet_for_primary = Sys.getenv("CONSENSUS_REQUIRE_NICHENET_FOR_PRIMARY", "yes")
   ),

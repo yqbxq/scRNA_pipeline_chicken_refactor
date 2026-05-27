@@ -6,6 +6,7 @@ dependencies:
   - python=3.11
   - scanpy=1.11
   - squidpy
+  - commot
   - anndata
   - spatialdata
   - numpy

@@ -14,7 +14,7 @@ Module 07 now reserves one numbered slot per communication evidence layer:
 
 07b reads the scRNA H5AD mirror, filters communication labels through the 04c cluster eligibility table, and writes `liana_consensus_lr.tsv` with a canonical `lr_axis_id`. If LIANA/anndata are unavailable and `COMMUNICATION_REQUIRE_FULL_PIPELINE=no`, 07b writes an empty schema-valid table and manifest so later consensus stages can distinguish runtime absence from biological absence.
 
-The current 07 chain still keeps `COMMUNICATION_REQUIRE_FULL_PIPELINE=no` until MultiNicheNet, CellChat downgrading, consensus, EDA, and COMMOT are all landed.
+The current 07 chain defaults `COMMUNICATION_REQUIRE_FULL_PIPELINE=yes` now that the CellChat downgrade, LIANA, MultiNicheNet/NicheNet contract, consensus, EDA report, and COMMOT spatial-support hook are all present.
 
 07c defaults to `NICHENET_MODE=auto`. When `multinichenetr` and `SingleCellExperiment` are unavailable, it records `multinichenet_mode_used=nichenet_legacy` and keeps the existing NicheNet executor. When the full MultiNicheNet runtime and fixtures are approved, the same mode field lets 07e/07d report whether evidence came from multi-sample MultiNicheNet or the single-condition fallback.
 

@@ -252,5 +252,13 @@ attach_commot_spatial <- function(consensus_df, commot_df) {
     consensus_df$commot_spatial_hit <- FALSE
     return(consensus_df)
   }
-  stop("attach_commot_spatial: COMMOT integration is reserved for P-R03-G", call. = FALSE)
+  for (col in c("lr_axis_id", "spatial_support", "signal_score", "status")) {
+    if (!col %in% colnames(commot_df)) commot_df[[col]] <- ""
+  }
+  commot_df$signal_score <- suppressWarnings(as.numeric(commot_df$signal_score))
+  supported <- commot_df$spatial_support %in% c("yes", "true", "1") |
+    (!is.na(commot_df$signal_score) & commot_df$signal_score > 0 & commot_df$status %in% c("ok", "ok_commot_run"))
+  supported_axes <- unique(as.character(commot_df$lr_axis_id[supported]))
+  consensus_df$commot_spatial_hit <- as.character(consensus_df$lr_axis_id) %in% supported_axes
+  consensus_df
 }

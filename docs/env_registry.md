@@ -45,7 +45,7 @@ This file records project-level environment variables that are exported through 
 | `INVENTORY_GATE_ALLOWED_TIERS_COMMUNICATION` | `primary,exploratory,primary_merged` | Evidence tiers allowed to enter CellChat/NicheNet communication analysis. |
 | `INVENTORY_GATE_STRICT_MODE` | `no` | When enabled, a cluster must pass all matching eligibility rows to enter communication analysis. |
 | `COMMUNICATION_FAIL_ON_NO_PRIMARY` | `no` | Reserved strictness flag for failing communication when no cluster passes inventory gate. |
-| `COMMUNICATION_REQUIRE_FULL_PIPELINE` | `no` | When `yes`, 07b/07c/07d/07e failures block the communication stage instead of writing placeholder manifests. |
+| `COMMUNICATION_REQUIRE_FULL_PIPELINE` | `yes` | When `yes`, 07b/07c/07d/07e failures block the communication stage instead of writing placeholder manifests. |
 | `COMMUNICATION_REPORT_FILTER_TIER` | `auto` | Default 07e evidence-tier report filter. `auto` uses `communication_pairs.tsv:evidence_tier_required` when available. |
 | `COMMUNICATION_REPORT_TOP_N_PRIMARY` | `30` | Maximum number of filtered axes displayed in the 07e primary-axis preview. |
 | `COMMUNICATION_REPORT_HTML` | `yes` | When `yes`, 07e writes a simple HTML companion report next to `report.md`. |
@@ -67,7 +67,13 @@ This file records project-level environment variables that are exported through 
 | `MULTINICHENET_TOP_N_TARGETS` | `20` | Planned top ligand-target cap for receiver-DE overlap. |
 | `MULTINICHENET_MIN_CELLS` | `10` | Planned minimum per-celltype cell count for MultiNicheNet. |
 | `COMMUNICATION_RECEIVER_DE_P_THRESHOLD` | `0.05` | Receiver DEG adjusted-p cutoff for downstream target-hit evidence. |
-| `COMMOT_ENABLED` | `auto` | Reserved for the future COMMOT spatial communication extension. |
+| `COMMOT_ENABLED` | `auto` | Enables the ST 08 COMMOT spatial communication extension. |
+| `COMMOT_DISTANCE_THRESHOLD` | `500` | Spatial distance cutoff passed to COMMOT. |
+| `COMMOT_SIGNAL_THRESHOLD` | `0` | Minimum COMMOT signal score for `spatial_support=yes` in the 08b summary. |
+| `COMMOT_PERMUTATIONS` | `100` | Number of spatial permutations requested for COMMOT cluster-level scoring. |
+| `COMMOT_REQUIRE_RUNTIME` | `no` | When `yes`, missing Python COMMOT/anndata runtime is a hard failure instead of a schema-valid skip. |
+| `COMMOT_LR_CANDIDATES_TSV` | `${TABLE_DIR}/communication/consensus/method_consensus.tsv` | Source LR axis table used by 08a to prepare COMMOT candidates. |
+| `COMMOT_SPATIAL_SUMMARY_TSV` | `${RESULTS_DIR}/spatial/tables/08_commot/commot_spatial_summary.tsv` | 08b spatial support table consumed by 07d consensus. |
 | `MODULE_03A3_VERSION` | `1.0` | Version marker for the independent panorama UMAP stage. |
 | `MODULE_SPATIAL_02A2_VERSION` | `1.0` | Version marker for the independent spatial UMAP stage. |
 | `UMAP_N_NEIGHBORS` | `30` | Shared UMAP neighbor count for 03a3 and spatial 02a2. |

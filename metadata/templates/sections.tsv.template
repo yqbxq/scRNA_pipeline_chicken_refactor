@@ -1,3 +1,3 @@
-section_id	chip_id	tissue_block	condition	platform	bundle_root	image_lowres	image_hires	tissue_positions	scalefactors	enabled	notes
-syf_1	syf_chip_1	ovary_block_syf	syf	visium	data/st_syf_1/outs	data/st_syf_1/outs/spatial/tissue_lowres_image.png	data/st_syf_1/outs/spatial/tissue_hires_image.png	data/st_syf_1/outs/spatial/tissue_positions_list.csv	data/st_syf_1/outs/spatial/scalefactors_json.json	yes
-f5_1	f5_chip_1	ovary_block_f5	f5	visium	data/st_f5_1/outs	data/st_f5_1/outs/spatial/tissue_lowres_image.png	data/st_f5_1/outs/spatial/tissue_hires_image.png	data/st_f5_1/outs/spatial/tissue_positions_list.csv	data/st_f5_1/outs/spatial/scalefactors_json.json	yes
+section_id	chip_id	tissue_block	condition	platform	bundle_root	image_lowres	image_hires	tissue_positions	scalefactors	enabled	commot_enabled	notes
+syf_1	syf_chip_1	ovary_block_syf	syf	visium	data/st_syf_1/outs	data/st_syf_1/outs/spatial/tissue_lowres_image.png	data/st_syf_1/outs/spatial/tissue_hires_image.png	data/st_syf_1/outs/spatial/tissue_positions_list.csv	data/st_syf_1/outs/spatial/scalefactors_json.json	yes	auto	template
+f5_1	f5_chip_1	ovary_block_f5	f5	visium	data/st_f5_1/outs	data/st_f5_1/outs/spatial/tissue_lowres_image.png	data/st_f5_1/outs/spatial/tissue_hires_image.png	data/st_f5_1/outs/spatial/tissue_positions_list.csv	data/st_f5_1/outs/spatial/scalefactors_json.json	yes	auto	template

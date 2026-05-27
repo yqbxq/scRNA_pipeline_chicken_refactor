@@ -228,7 +228,8 @@ run_optional_comm_r_stage \
   "" \
   "${MODULE_07A_MANIFEST}" \
   "${MODULE_07B_MANIFEST}" \
-  "${MODULE_07C_MANIFEST}"
+  "${MODULE_07C_MANIFEST}" \
+  "${COMMOT_SPATIAL_SUMMARY_TSV:-}"
 
 run_optional_comm_r_stage \
   "07e_communication_eda" \

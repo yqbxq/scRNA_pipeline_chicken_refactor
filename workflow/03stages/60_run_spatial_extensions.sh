@@ -13,6 +13,7 @@ RUN_DECONV_EXTRA="no"
 RUN_DECONV_VALIDATION="no"
 RUN_NEIGHBORHOOD="yes"
 RUN_NICHE="yes"
+RUN_COMMOT="yes"
 RUN_DECOUPLER="no"
 RUN_PYSCENIC="no"
 RUN_ENRICHMENT="yes"
@@ -30,6 +31,8 @@ while [[ $# -gt 0 ]]; do
     --without-neighborhood) RUN_NEIGHBORHOOD="no"; shift ;;
     --with-niche) RUN_NICHE="yes"; shift ;;
     --without-niche) RUN_NICHE="no"; shift ;;
+    --with-commot) RUN_COMMOT="yes"; shift ;;
+    --without-commot) RUN_COMMOT="no"; shift ;;
     --with-decoupler) RUN_DECOUPLER="yes"; shift ;;
     --without-decoupler) RUN_DECOUPLER="no"; shift ;;
     --with-pyscenic) RUN_PYSCENIC="yes"; shift ;;
@@ -45,6 +48,7 @@ Flags:
   --with-deconv-validation / --without-deconv-validation
   --with-neighborhood / --without-neighborhood
   --with-niche / --without-niche
+  --with-commot / --without-commot
   --with-decoupler / --without-decoupler
   --with-pyscenic
   --with-enrichment / --without-enrichment
@@ -68,6 +72,13 @@ run_future_spatial_r_stage() {
   local manifest_path="${MANIFEST_DIR}/${manifest_name}/_manifest.json"
   [[ -f "${script_path}" ]] || die "R stage 尚未实现: ${script_path}。本轮只完成非 R 脚手架。"
   run_stage_if_stale_with_runner run_r_spatial "${script_path}" "${manifest_path}" "$@"
+}
+
+run_spatial_python_script() {
+  local script_path="$1"
+  local python_bin="${PY_SPATIAL_BIN:-$(detect_python)}"
+  [[ -x "${python_bin}" || "$(command -v "${python_bin}" 2>/dev/null || true)" ]] || python_bin="$(detect_python)"
+  "${python_bin}" "${script_path}"
 }
 
 [[ "${RUN_SVG}" == "yes" ]] && run_future_spatial_r_stage "05_svg.R" "spatial_05_svg"
@@ -101,6 +112,23 @@ if [[ "${RUN_DECONV}" == "yes" ]]; then
   fi
   set_eda_gate_status "spatial_deconv" "pending" "" "Review deconvolution outputs, multi-method comparison, and optional scDesign3 validation."
   hold_for_gate spatial_deconv
+fi
+if [[ "${RUN_COMMOT}" == "yes" && "${COMMOT_ENABLED:-auto}" != "no" ]]; then
+  run_future_spatial_r_stage "08a_spatial_communication_io.R" "spatial_08a_spatial_communication_io" \
+    "${MANIFEST_DIR}/spatial_07e_deconvolution_compare/_manifest.json"
+  export COMMOT_INPUT_MANIFEST="${SPATIAL_TABLE_DIR}/08_commot/commot_input_manifest.tsv"
+  export COMMOT_LR_CANDIDATES_PREPARED_TSV="${SPATIAL_TABLE_DIR}/08_commot/commot_lr_candidates.tsv"
+  export COMMOT_OUTPUT_TSV="${SPATIAL_TABLE_DIR}/08_commot/commot_lr.tsv"
+  export COMMOT_MANIFEST="${MANIFEST_DIR}/spatial_08f_commot_spatial/_manifest.json"
+  run_stage_if_stale_with_runner \
+    run_spatial_python_script \
+    --script "${WORKFLOW_ROOT}/04python/07f_commot_spatial.py" \
+    --manifest "${COMMOT_MANIFEST}" \
+    --inputs "${COMMOT_INPUT_MANIFEST}" "${COMMOT_LR_CANDIDATES_PREPARED_TSV}" \
+    --params COMMOT_DISTANCE_THRESHOLD,COMMOT_PERMUTATIONS,COMMOT_REQUIRE_RUNTIME,RANDOM_SEED
+  run_future_spatial_r_stage "08b_spatial_communication_eda.R" "spatial_08b_spatial_communication_eda" \
+    "${COMMOT_MANIFEST}"
+  export COMMOT_SPATIAL_SUMMARY_TSV="${SPATIAL_TABLE_DIR}/08_commot/commot_spatial_summary.tsv"
 fi
 if [[ "${RUN_NICHE}" == "yes" ]]; then
   run_future_spatial_r_stage "06e_niche_derivation.R" "spatial_06e_niche"
