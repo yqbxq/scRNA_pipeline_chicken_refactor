@@ -16,15 +16,152 @@ cfg <- get_spatial_script_config()
 module_name <- "spatial_07e_deconvolution_compare"
 prepare_dirs_spatial(cfg)
 
+read_deconv_proportions_07e <- function(row, cfg) {
+  path <- st07_abs_path(row$proportion_tsv[[1]] %||% "", cfg)
+  df <- st07_read_tsv(path)
+  required <- c("spot_id", "cell_type", "proportion")
+  if (nrow(df) == 0 || !all(required %in% colnames(df))) {
+    return(st07_empty_df(c("method", "deconv_id", "section", required)))
+  }
+  df$proportion <- suppressWarnings(as.numeric(df$proportion))
+  df <- df[is.finite(df$proportion), required, drop = FALSE]
+  df$method <- row$method[[1]]
+  df$deconv_id <- row$deconv_id[[1]] %||% "default_deconv"
+  df$section <- row$section[[1]] %||% "all"
+  df[, c("method", "deconv_id", "section", required), drop = FALSE]
+}
+
+safe_pearson_07e <- function(a, b) {
+  if (length(a) < 2 || stats::sd(a) == 0 || stats::sd(b) == 0) {
+    return(NA_real_)
+  }
+  suppressWarnings(as.numeric(stats::cor(a, b, method = "pearson", use = "pairwise.complete.obs")))
+}
+
+safe_jsd_07e <- function(a, b) {
+  a[!is.finite(a) | a < 0] <- 0
+  b[!is.finite(b) | b < 0] <- 0
+  if (sum(a) <= 0 || sum(b) <= 0) {
+    return(NA_real_)
+  }
+  p <- a / sum(a)
+  q <- b / sum(b)
+  m <- 0.5 * (p + q)
+  kl <- function(x, y) sum(ifelse(x > 0 & y > 0, x * log(x / y), 0))
+  sqrt(0.5 * kl(p, m) + 0.5 * kl(q, m))
+}
+
+compare_method_pair_07e <- function(props, method_a, method_b, deconv_id, section) {
+  a <- props[props$method == method_a & props$deconv_id == deconv_id & props$section == section, , drop = FALSE]
+  b <- props[props$method == method_b & props$deconv_id == deconv_id & props$section == section, , drop = FALSE]
+  merged <- merge(a, b, by = c("spot_id", "cell_type"), suffixes = c("_a", "_b"))
+  if (nrow(merged) == 0) {
+    return(st07_empty_df(c("deconv_id", "section", "method_a", "method_b", "celltype", "n_common_spots", "pearson", "rmse", "jsd")))
+  }
+  celltypes <- sort(unique(merged$cell_type))
+  rows <- lapply(celltypes, function(ct) {
+    hit <- merged[merged$cell_type == ct, , drop = FALSE]
+    data.frame(
+      deconv_id = deconv_id,
+      section = section,
+      method_a = method_a,
+      method_b = method_b,
+      celltype = ct,
+      n_common_spots = length(unique(hit$spot_id)),
+      pearson = safe_pearson_07e(hit$proportion_a, hit$proportion_b),
+      rmse = sqrt(mean((hit$proportion_a - hit$proportion_b)^2)),
+      jsd = safe_jsd_07e(hit$proportion_a, hit$proportion_b),
+      stringsAsFactors = FALSE
+    )
+  })
+  all_row <- data.frame(
+    deconv_id = deconv_id,
+    section = section,
+    method_a = method_a,
+    method_b = method_b,
+    celltype = "all",
+    n_common_spots = length(unique(merged$spot_id)),
+    pearson = safe_pearson_07e(merged$proportion_a, merged$proportion_b),
+    rmse = sqrt(mean((merged$proportion_a - merged$proportion_b)^2)),
+    jsd = safe_jsd_07e(merged$proportion_a, merged$proportion_b),
+    stringsAsFactors = FALSE
+  )
+  do.call(rbind, c(list(all_row), rows))
+}
+
+build_comparison_matrix_07e <- function(methods, cfg) {
+  ok_rows <- methods[methods$status == "ok" & nzchar(methods$method), , drop = FALSE]
+  if (nrow(ok_rows) == 0) {
+    return(st07_empty_df(c("deconv_id", "section", "method_a", "method_b", "celltype", "n_common_spots", "pearson", "rmse", "jsd")))
+  }
+  prop_rows <- lapply(seq_len(nrow(ok_rows)), function(i) read_deconv_proportions_07e(ok_rows[i, , drop = FALSE], cfg))
+  props <- do.call(rbind, prop_rows)
+  if (nrow(props) == 0) {
+    return(st07_empty_df(c("deconv_id", "section", "method_a", "method_b", "celltype", "n_common_spots", "pearson", "rmse", "jsd")))
+  }
+  groups <- unique(props[, c("deconv_id", "section"), drop = FALSE])
+  rows <- list()
+  for (idx in seq_len(nrow(groups))) {
+    group <- groups[idx, , drop = FALSE]
+    hit <- props[props$deconv_id == group$deconv_id[[1]] & props$section == group$section[[1]], , drop = FALSE]
+    methods_here <- sort(unique(hit$method))
+    if (length(methods_here) < 2) {
+      next
+    }
+    for (pair in utils::combn(methods_here, 2, simplify = FALSE)) {
+      rows[[length(rows) + 1L]] <- compare_method_pair_07e(props, pair[[1]], pair[[2]], group$deconv_id[[1]], group$section[[1]])
+    }
+  }
+  if (length(rows) == 0) {
+    return(st07_empty_df(c("deconv_id", "section", "method_a", "method_b", "celltype", "n_common_spots", "pearson", "rmse", "jsd")))
+  }
+  do.call(rbind, rows)
+}
+
+build_method_ranking_07e <- function(methods, comparison_matrix, cfg) {
+  if (nrow(methods) == 0) {
+    return(st07_empty_df(c("method", "ok_rows", "all_rows", "completion_score", "consensus_pearson", "mean_rmse", "mean_jsd", "primary_bonus", "recommendation_score", "recommendation_rank")))
+  }
+  all_method_names <- sort(unique(methods$method[nzchar(methods$method)]))
+  rows <- lapply(all_method_names, function(method) {
+    all_rows <- sum(methods$method == method)
+    ok_rows <- sum(methods$method == method & methods$status == "ok")
+    hit <- comparison_matrix[comparison_matrix$celltype == "all" & (comparison_matrix$method_a == method | comparison_matrix$method_b == method), , drop = FALSE]
+    consensus_pearson <- if (nrow(hit) == 0 || all(is.na(hit$pearson))) NA_real_ else mean(hit$pearson, na.rm = TRUE)
+    mean_rmse <- if (nrow(hit) == 0 || all(is.na(hit$rmse))) NA_real_ else mean(hit$rmse, na.rm = TRUE)
+    mean_jsd <- if (nrow(hit) == 0 || all(is.na(hit$jsd))) NA_real_ else mean(hit$jsd, na.rm = TRUE)
+    completion_score <- if (all_rows == 0) 0 else ok_rows / all_rows
+    primary_bonus <- if (identical(method, cfg$spatial_deconv_primary)) 1 else 0
+    consensus_score <- if (is.na(consensus_pearson)) 0 else max(0, min(1, (consensus_pearson + 1) / 2))
+    data.frame(
+      method = method,
+      ok_rows = ok_rows,
+      all_rows = all_rows,
+      completion_score = completion_score,
+      consensus_pearson = consensus_pearson,
+      mean_rmse = mean_rmse,
+      mean_jsd = mean_jsd,
+      primary_bonus = primary_bonus,
+      recommendation_score = 0.6 * consensus_score + 0.3 * completion_score + 0.1 * primary_bonus,
+      stringsAsFactors = FALSE
+    )
+  })
+  out <- do.call(rbind, rows)
+  out <- out[order(-out$recommendation_score, -out$completion_score, match(out$method, c(cfg$spatial_deconv_primary, "rctd", "cell2location", "card", "transfer")), out$method), , drop = FALSE]
+  out$recommendation_rank <- seq_len(nrow(out))
+  out
+}
+
 methods <- collect_deconv_method_manifests_st(cfg)
 ok_methods <- unique(methods$method[methods$status == "ok" & nzchar(methods$method)])
 method_counts <- as.data.frame(table(method = methods$method, status = methods$status), stringsAsFactors = FALSE)
 method_counts <- method_counts[method_counts$Freq > 0, , drop = FALSE]
+comparison_matrix <- build_comparison_matrix_07e(methods, cfg)
 
 if (nrow(methods) == 0) {
   status <- "skipped_no_method_outputs"
   reason <- "no 07a/07b/07c/07d method manifests were available"
-} else if (length(ok_methods) < 2) {
+} else if (length(unique(ok_methods)) < 2 || nrow(comparison_matrix) == 0) {
   status <- "skipped_too_few_methods"
   reason <- sprintf("%s completed methods available; at least 2 required for pairwise comparison", length(ok_methods))
 } else {
@@ -33,35 +170,15 @@ if (nrow(methods) == 0) {
 }
 
 preferred <- cfg$spatial_deconv_primary
-if (length(ok_methods) > 0) {
-  preferred <- if (cfg$spatial_deconv_primary %in% ok_methods) cfg$spatial_deconv_primary else ok_methods[[1]]
+ranking <- build_method_ranking_07e(methods, comparison_matrix, cfg)
+if (nrow(ranking) > 0) {
+  ok_ranking <- ranking[ranking$ok_rows > 0, , drop = FALSE]
+  if (nrow(ok_ranking) > 0) {
+    preferred <- ok_ranking$method[[1]]
+  }
 }
 ensure_dir(dirname(cfg$spatial_recommended_deconv_method_file))
 writeLines(preferred, cfg$spatial_recommended_deconv_method_file, useBytes = TRUE)
-
-ranking <- if (nrow(methods) == 0) {
-  st07_empty_df(c("method", "ok_rows", "all_rows", "completion_score", "recommendation_rank"))
-} else {
-  all_method_names <- sort(unique(methods$method[nzchar(methods$method)]))
-  rows <- lapply(all_method_names, function(method) {
-    all_rows <- sum(methods$method == method)
-    ok_rows <- sum(methods$method == method & methods$status == "ok")
-    data.frame(method = method, ok_rows = ok_rows, all_rows = all_rows, completion_score = if (all_rows == 0) 0 else ok_rows / all_rows, stringsAsFactors = FALSE)
-  })
-  out <- do.call(rbind, rows)
-  out <- out[order(-out$completion_score, match(out$method, c(cfg$spatial_deconv_primary, "transfer", "card", "cell2location")), out$method), , drop = FALSE]
-  out$recommendation_rank <- seq_len(nrow(out))
-  out
-}
-
-comparison_matrix <- if (length(ok_methods) < 2) {
-  st07_empty_df(c("method_a", "method_b", "celltype", "pearson", "rmse", "jsd"))
-} else {
-  pairs <- utils::combn(sort(ok_methods), 2, simplify = FALSE)
-  do.call(rbind, lapply(pairs, function(pair) {
-    data.frame(method_a = pair[[1]], method_b = pair[[2]], celltype = "all", pearson = NA_real_, rmse = NA_real_, jsd = NA_real_, stringsAsFactors = FALSE)
-  }))
-}
 
 summary_tsv <- file.path(cfg$spatial_deconv_compare_table_dir, "method_ranking.tsv")
 matrix_tsv <- file.path(cfg$spatial_deconv_compare_table_dir, "method_comparison_matrix.tsv")
