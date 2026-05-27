@@ -36,7 +36,7 @@ This file records project-level environment variables that are exported through 
 | `MODULE_04C_VERSION` | `1.2` | Version marker for scRNA 04c subcluster EDA inventory artifacts. |
 | `MODULE_SPATIAL_04C_VERSION` | `1.2` | Version marker for spatial 04c subcluster EDA inventory artifacts. |
 | `MODULE_05D_VERSION` | `1.1` | Version marker for DEG EDA evidence-tier coverage outputs. |
-| `MODULE_07A_CELLCHAT_VERSION` | `1.1` | Version marker for CellChat inventory-gated outputs. |
+| `MODULE_07A_CELLCHAT_VERSION` | `1.2` | Version marker for CellChat inventory-gated hypothesis-only outputs. |
 | `MODULE_07B_LIANA_VERSION` | `1.0` | Version marker for the 07b LIANA+ consensus layer. |
 | `MODULE_07C_NICHENET_VERSION` | `1.0` | Version marker for NicheNet/MultiNicheNet inventory-gated outputs. |
 | `MODULE_07D_CONSENSUS_VERSION` | `0.1` | Version marker for the 07d communication consensus placeholder. |

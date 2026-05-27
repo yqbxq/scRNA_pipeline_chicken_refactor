@@ -219,11 +219,13 @@ empty_cellchat_index_07 <- function() {
     "direction_filter", "requires_cell_subtype", "activation_policy",
     "min_sender_cells", "min_receiver_cells", "min_cells_per_condition",
     "sender_n", "receiver_n", "condition_pair_cell_n", "gate_status",
-    "n_cells", "n_cell_types", "success", "status", "reason",
+    "n_cells", "n_cell_types", "method", "method_evidence_class",
+    "can_be_primary", "cellchat_primary_disclaimer", "success", "status", "reason",
     "fallback_pair_id", "fallback_used_in_report", "fallback_cellchat_rds_path",
     "fallback_lr_table_path", "fallback_pathway_table_path", "result_copied",
     "cellchat_rds_path", "lr_table_path", "pathway_table_path",
-    "bubble_png", "network_png", "heatmap_png"
+    "bubble_png", "network_png", "heatmap_png",
+    "inventory_gate_passed", "inventory_gate_reason", "inventory_gate_eligible_clusters"
   ))
 }
 

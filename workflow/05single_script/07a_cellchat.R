@@ -32,6 +32,7 @@ source_utf8(file.path(.script_dir, "helpers", "enrichment_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "communication_mapping_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "communication_pairs_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "inventory_gate_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "communication_consensus_utils.R"))
 
 load_required_packages(c("Seurat", "CellChat", "dplyr", "tibble", "jsonlite", "Matrix", "ggplot2", "patchwork"))
 
@@ -55,7 +56,11 @@ cluster_eligibility_tsv <- inventory_gate$path
 cluster_eligibility <- inventory_gate$eligibility
 
 empty_lr_table_07a <- function() {
-  empty_df_07(c("source", "target", "ligand", "receptor", "prob", "pval", "pathway_name"))
+  empty_df_07(c(
+    "lr_axis_id", "source", "target", "ligand", "receptor",
+    "ligand_human", "receptor_human", "prob", "pval", "pathway_name",
+    "method", "method_evidence_class", "can_be_primary"
+  ))
 }
 
 empty_pathway_table_07a <- function() {
@@ -86,6 +91,20 @@ format_lr_table_07a <- function(cc) {
     }
   }
   lr[, c("source", "target", "ligand", "receptor", "prob", "pval", "pathway_name"), drop = FALSE]
+  lr$ligand_human <- lr$ligand
+  lr$receptor_human <- lr$receptor
+  lr <- standardize_lr_axis_id_in_df(
+    lr,
+    ligand_col = "ligand_human",
+    receptor_col = "receptor_human",
+    source_col = "source",
+    target_col = "target",
+    out_col = "lr_axis_id"
+  )
+  lr$method <- "cellchat"
+  lr$method_evidence_class <- "hypothesis_only"
+  lr$can_be_primary <- "no"
+  lr[, colnames(empty_lr_table_07a()), drop = FALSE]
 }
 
 format_pathway_table_07a <- function(cc) {
@@ -242,6 +261,10 @@ append_cellchat_row_07a <- function(rows, pair_row, layer_id, condition_value, c
     gate_status = gate$gate_status,
     n_cells = n_cells,
     n_cell_types = n_cell_types,
+    method = "cellchat",
+    method_evidence_class = "hypothesis_only",
+    can_be_primary = "no",
+    cellchat_primary_disclaimer = "CellChat is hypothesis_only in this pipeline and cannot be primary evidence without LIANA/NicheNet/COMMOT support.",
     success = ifelse(identical(status, "ok"), "true", "false"),
     status = status,
     reason = reason,
@@ -477,7 +500,7 @@ if (file.exists(cfg$module_07a_manifest_path)) {
   unlink(cfg$module_07a_manifest_path)
 }
 fixed_outputs <- list(
-  cellchat_index_tsv = build_output_entry(cfg$cellchat_index_tsv, "tsv", module_name, "one row per layer/pair/condition CellChat task", base_dir = cfg$project_root, schema = infer_schema_from_df(index_df)),
+  cellchat_index_tsv = build_output_entry(cfg$cellchat_index_tsv, "tsv", module_name, "one row per layer/pair/condition hypothesis-only CellChat task", base_dir = cfg$project_root, schema = infer_schema_from_df(index_df)),
   cellchat_inventory_gate_log_tsv = build_output_entry(cfg$cellchat_inventory_gate_log_tsv, "tsv", module_name, "CellChat inventory gate decisions by cluster", base_dir = cfg$project_root, schema = infer_schema_from_df(inventory_gate_df)),
   mapping_summary_tsv = build_output_entry(cfg$cellchat_mapping_summary_tsv, "tsv", module_name, "one row per layer/pair/condition ortholog mapping summary", base_dir = cfg$project_root, schema = infer_schema_from_df(mapping_df)),
   triage_tsv = build_output_entry(cfg$cellchat_triage_tsv, "tsv", module_name, "CellChat triage signals", base_dir = cfg$project_root, schema = infer_schema_from_df(triage_df))
@@ -493,6 +516,9 @@ write_manifest_local(
     communication_pairs_sheet = cfg$communication_pairs_sheet,
     cluster_eligibility_tsv = cluster_eligibility_tsv,
     communication_cell_type_col = cfg$communication_cell_type_col,
+    method_evidence_class = "hypothesis_only",
+    can_be_primary = "no",
+    cellchat_primary_disclaimer = "CellChat is hypothesis_only in this pipeline and cannot be primary evidence without LIANA/NicheNet/COMMOT support.",
     module_03d = cfg$module_03d_manifest_path,
     module_04b = cfg$module_04b_manifest_path
   ),

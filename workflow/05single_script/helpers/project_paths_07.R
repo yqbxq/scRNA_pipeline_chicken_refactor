@@ -90,7 +90,7 @@ get_single_script_config_07 <- function() {
   base$commot_enabled <- env_or_default_03("COMMOT_ENABLED", "auto")
   base$module_07a_cellchat_version <- env_or_default_03(
     "MODULE_07A_CELLCHAT_VERSION",
-    env_or_default_03("MODULE_07A_VERSION", env_or_default_03("MODULE_07_VERSION", "1.1"))
+    env_or_default_03("MODULE_07A_VERSION", env_or_default_03("MODULE_07_VERSION", "1.2"))
   )
   base$module_07b_liana_version <- env_or_default_03("MODULE_07B_LIANA_VERSION", env_or_default_03("MODULE_07_VERSION", "0.1"))
   base$module_07c_nichenet_version <- env_or_default_03(

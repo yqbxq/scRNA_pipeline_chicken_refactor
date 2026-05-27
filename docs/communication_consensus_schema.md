@@ -1,5 +1,19 @@
 # Communication Consensus Schema
 
+## 07a CellChat Output
+
+`workflow/05single_script/07a_cellchat.R` writes one `lr_pairs.tsv` per layer, pair, and condition, plus `results/tables/communication/cellchat/cellchat_index.tsv`.
+
+Required CellChat evidence columns:
+
+| Column | Meaning |
+|---|---|
+| `lr_axis_id` | Canonical axis ID: `ligand_complex|receptor_complex|sender->receiver`. |
+| `method` | Always `cellchat`. |
+| `method_evidence_class` | Always `hypothesis_only`. |
+| `can_be_primary` | Always `no`; CellChat cannot independently produce a primary communication claim. |
+| `cellchat_primary_disclaimer` | Human-readable reason carried in the task index. |
+
 ## 07b LIANA Output
 
 `workflow/04python/07b_liana_consensus.py` writes `results/tables/communication/liana_consensus/liana_consensus_lr.tsv`.
