@@ -40,12 +40,15 @@ This file records project-level environment variables that are exported through 
 | `MODULE_07B_LIANA_VERSION` | `1.0` | Version marker for the 07b LIANA+ consensus layer. |
 | `MODULE_07C_NICHENET_VERSION` | `1.0` | Version marker for NicheNet/MultiNicheNet inventory-gated outputs. |
 | `MODULE_07D_CONSENSUS_VERSION` | `1.0` | Version marker for the 07d communication consensus and evidence tier layer. |
-| `MODULE_07E_EDA_VERSION` | `0.1` | Version marker for the 07e communication EDA layer. |
+| `MODULE_07E_EDA_VERSION` | `2.0` | Version marker for the 07e communication EDA layer. |
 | `INVENTORY_GATE_REQUIRED` | `yes` | Require 04c `cluster_eligibility_tsv` before communication modules run. |
 | `INVENTORY_GATE_ALLOWED_TIERS_COMMUNICATION` | `primary,exploratory,primary_merged` | Evidence tiers allowed to enter CellChat/NicheNet communication analysis. |
 | `INVENTORY_GATE_STRICT_MODE` | `no` | When enabled, a cluster must pass all matching eligibility rows to enter communication analysis. |
 | `COMMUNICATION_FAIL_ON_NO_PRIMARY` | `no` | Reserved strictness flag for failing communication when no cluster passes inventory gate. |
 | `COMMUNICATION_REQUIRE_FULL_PIPELINE` | `no` | When `yes`, 07b/07c/07d/07e failures block the communication stage instead of writing placeholder manifests. |
+| `COMMUNICATION_REPORT_FILTER_TIER` | `auto` | Default 07e evidence-tier report filter. `auto` uses `communication_pairs.tsv:evidence_tier_required` when available. |
+| `COMMUNICATION_REPORT_TOP_N_PRIMARY` | `30` | Maximum number of filtered axes displayed in the 07e primary-axis preview. |
+| `COMMUNICATION_REPORT_HTML` | `yes` | When `yes`, 07e writes a simple HTML companion report next to `report.md`. |
 | `CONSENSUS_MIN_METHODS_FOR_PRIMARY` | `2` | Minimum supporting method layers required for a primary 07d communication axis. |
 | `CONSENSUS_REQUIRE_NICHENET_FOR_PRIMARY` | `yes` | Require downstream NicheNet/MultiNicheNet support before a 07d axis can be primary. |
 | `LIANA_CONSENSUS_ENABLED` | `yes` | Enables the 07b LIANA+ consensus stage. |

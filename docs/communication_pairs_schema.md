@@ -25,6 +25,12 @@ Required columns:
 | `receiver_deg_comparison_id` | D01/D02/D03 condition DEG comparison ID for split receiver programs; must not point to D05 or any `global_context` row. |
 | `direction_filter` | `yes` keeps sender->receiver LR rows; `no` keeps full CellChat network. |
 | `requires_cell_subtype` | `yes` requires runtime `cell_subtype`; no fallback is allowed. |
+| `cellchat_min_samples_consistent` | Minimum sample count for treating CellChat signal as sample-consistent; reported by 07e and never upgrades CellChat beyond hypothesis-only evidence. |
+| `methods_required` | Comma-separated expected evidence methods for the pair, such as `cellchat,liana,nichenet`; 07e compares this with actual hits. |
+| `min_methods_agreed` | Minimum number of supporting method layers expected for the pair-level agreement summary. |
+| `require_downstream_de` | `yes`, `no`, or `auto`; 07e reports downstream DEG/NicheNet support coverage against this requirement. |
+| `require_spatial_support` | `yes`, `no`, or `auto`; 07e reports COMMOT/spatial support coverage against this requirement. |
+| `evidence_tier_required` | Minimum tier shown by default in 07e when `COMMUNICATION_REPORT_FILTER_TIER=auto`. |
 
 07c NicheNet resolves gene programs through
 `results/tables/deg/gene_program_registry.tsv`:
@@ -41,6 +47,11 @@ paths from `pair_id`, and does not fall back across registry path columns.
 07 runtime reads only this resolved Tier2 table. Tier1
 `metadata/analysis_questions.tsv` policy values are not reinterpreted by
 `07a_cellchat.R` or `07c_nichenet.R`.
+
+R03-D/E/F pair-level defaults are applied when legacy sheets do not yet contain
+the six evidence-reporting columns: `methods_required` follows `tool`,
+`min_methods_agreed=2`, `require_downstream_de=auto`,
+`require_spatial_support=auto`, and `evidence_tier_required=exploratory`.
 
 For `activation_policy=auto_if_min_cells`, 07a/07c compute
 `sender_n`, `receiver_n`, and `condition_pair_cell_n = sender_n + receiver_n`

@@ -7,7 +7,9 @@ empty_communication_pairs_07 <- function() {
     "min_cells_per_condition", "fallback_pair_id", "derived_from_pair_id",
     "run_baseline_if_split_fails", "requires_all_derived_inputs_pass",
     "baseline_marker_comparison_id", "receiver_deg_comparison_id",
-    "direction_filter", "requires_cell_subtype", "notes", "enabled"
+    "direction_filter", "requires_cell_subtype", "cellchat_min_samples_consistent",
+    "methods_required", "min_methods_agreed", "require_downstream_de",
+    "require_spatial_support", "evidence_tier_required", "notes", "enabled"
   ))
 }
 
@@ -41,6 +43,19 @@ read_communication_pairs <- function(cfg) {
   df$direction_filter <- tolower(df$direction_filter)
   df$requires_cell_subtype[!nzchar(df$requires_cell_subtype)] <- "no"
   df$requires_cell_subtype <- tolower(df$requires_cell_subtype)
+  df$methods_required[!nzchar(df$methods_required)] <- ifelse(
+    df$tool %in% c("cellchat", "cellchat_only"),
+    "cellchat",
+    ifelse(df$tool %in% c("nichenet", "nichenet_only"), "nichenet", "cellchat,liana,nichenet")
+  )
+  df$methods_required <- tolower(df$methods_required)
+  df$min_methods_agreed[!nzchar(df$min_methods_agreed)] <- "2"
+  df$require_downstream_de[!nzchar(df$require_downstream_de)] <- "auto"
+  df$require_downstream_de <- tolower(df$require_downstream_de)
+  df$require_spatial_support[!nzchar(df$require_spatial_support)] <- "auto"
+  df$require_spatial_support <- tolower(df$require_spatial_support)
+  df$evidence_tier_required[!nzchar(df$evidence_tier_required)] <- "exploratory"
+  df$evidence_tier_required <- tolower(df$evidence_tier_required)
   df$enabled[!nzchar(df$enabled)] <- "yes"
   df$enabled <- tolower(df$enabled)
   df <- df[nzchar(df$pair_id), , drop = FALSE]

@@ -10,13 +10,16 @@ The 07 module is organized as a five-stage evidence chain:
 | Evidence tier | 07d consensus | A single per-axis tier from cross-method support. |
 | Review | 07e EDA | Tables, plots, and gate-facing summary. |
 
-The planned evidence tiers are reserved but not fully assigned in P-R03-A:
+The assigned evidence tiers are:
 
-| Tier | Intended meaning |
+| Tier | Meaning |
 |---|---|
-| `primary` | Supported by consensus LR evidence and receiver program evidence. |
-| `exploratory` | Supported by one major method family or limited cell-count evidence. |
-| `candidate_only` | Hypothesis-level communication requiring validation. |
-| `skip` | Insufficient inventory, DEG, or method support for interpretation. |
+| `primary` | LIANA consensus plus the configured method count and downstream NicheNet/MultiNicheNet support when required. |
+| `exploratory` | At least one non-CellChat evidence layer supports the axis, or CellChat has an independent supporting layer. |
+| `candidate` | CellChat-only or other hypothesis-level evidence that needs independent validation. |
+| `blocked` | No supporting communication evidence is available. |
 
-P-R03-A only creates the stable stage names and placeholder manifests. The scoring and tier decision matrix are implemented in later P-R03 PRs.
+07e consumes 07d `method_consensus.tsv` as the single authority for reporting.
+CellChat-only axes remain `candidate` and cannot set `can_be_primary=yes`.
+COMMOT spatial support is reserved for the ST-side R03-G integration and is
+reported as absent until a real `commot_spatial_hit` column is populated.

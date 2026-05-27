@@ -1450,6 +1450,8 @@ if (!is.null(loaded_generated$communication_pairs)) {
     "run_baseline_if_split_fails", "requires_all_derived_inputs_pass",
     "receiver_gene_program_source", "baseline_marker_comparison_id",
     "receiver_deg_comparison_id", "direction_filter", "requires_cell_subtype",
+    "cellchat_min_samples_consistent", "methods_required", "min_methods_agreed",
+    "require_downstream_de", "require_spatial_support", "evidence_tier_required",
     "notes", "enabled"
   )
   if (require_generated_cols("communication_pairs.tsv", communication_pairs, communication_schema) && nrow(communication_pairs) > 0) {

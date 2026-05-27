@@ -6,6 +6,8 @@ m3_communication_cols <- c(
   "run_baseline_if_split_fails", "requires_all_derived_inputs_pass",
   "receiver_gene_program_source", "baseline_marker_comparison_id",
   "receiver_deg_comparison_id", "direction_filter", "requires_cell_subtype",
+  "cellchat_min_samples_consistent", "methods_required", "min_methods_agreed",
+  "require_downstream_de", "require_spatial_support", "evidence_tier_required",
   "notes", "enabled"
 )
 
@@ -188,6 +190,16 @@ m3_comm_row <- function(q, pair_id, sender, receiver, tool, notes = "",
     receiver_deg_comparison_id = deg,
     direction_filter = direction_filter %||% m3_comm_direction_filter(q, tool, pair_id),
     requires_cell_subtype = requires_cell_subtype %||% m3_comm_requires_cell_subtype(q, sender, receiver),
+    cellchat_min_samples_consistent = m3_comm_question_field(q, "cellchat_min_samples_consistent"),
+    methods_required = ifelse(
+      tool %in% c("cellchat", "cellchat_only"),
+      "cellchat",
+      ifelse(tool %in% c("nichenet", "nichenet_only"), "nichenet", "cellchat,liana,nichenet")
+    ),
+    min_methods_agreed = m3_comm_question_field(q, "min_methods_agreed", "2"),
+    require_downstream_de = ifelse(source %in% c("condition_deg", "receiver_marker"), "auto", "no"),
+    require_spatial_support = m3_comm_question_field(q, "require_spatial_support", "auto"),
+    evidence_tier_required = m3_comm_question_field(q, "evidence_tier_required", "exploratory"),
     enabled = m3_comm_enabled(q),
     notes = notes
   )

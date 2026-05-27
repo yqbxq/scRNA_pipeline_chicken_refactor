@@ -56,6 +56,10 @@ get_single_script_config_07 <- function() {
   base$derived_communication_eligibility_tsv <- file.path(base$communication_table_dir, "derived_communication_eligibility.tsv")
   base$communication_summary_plot_png <- file.path(base$communication_figure_dir, "summary_jaccard.png")
   base$communication_report_md <- file.path(base$communication_report_dir, "report.md")
+  base$communication_report_html <- file.path(base$communication_report_dir, "report.html")
+  base$communication_eda_panels_tsv <- file.path(base$communication_consensus_table_dir, "communication_eda_panels.tsv")
+  base$communication_eda_filtered_tsv <- file.path(base$communication_consensus_table_dir, "communication_eda_filtered_axes.tsv")
+  base$communication_eda_panel_dir <- file.path(base$communication_consensus_figure_dir, "07e_panels")
 
   base$communication_cell_type_col <- env_or_default_03("COMMUNICATION_CELL_TYPE_COL", "cell_subtype")
   base$nichenet_resource_dir <- env_or_default_03("NICHENET_RESOURCE_DIR", file.path(base$project_root, "resources", "nichenet"))
@@ -71,6 +75,9 @@ get_single_script_config_07 <- function() {
   base$nichenet_top_ligand_n <- env_integer_07("NICHENET_TOP_LIGAND_N", 20L)
   base$nichenet_top_target_n <- env_integer_07("NICHENET_TOP_TARGET_N", 200L)
   base$communication_require_full_pipeline <- env_or_default_03("COMMUNICATION_REQUIRE_FULL_PIPELINE", "no")
+  base$communication_report_filter_tier <- env_or_default_03("COMMUNICATION_REPORT_FILTER_TIER", "auto")
+  base$communication_report_top_n_primary <- env_integer_07("COMMUNICATION_REPORT_TOP_N_PRIMARY", 30L)
+  base$communication_report_html_enabled <- env_or_default_03("COMMUNICATION_REPORT_HTML", "yes")
   base$consensus_min_methods_for_primary <- env_integer_07("CONSENSUS_MIN_METHODS_FOR_PRIMARY", 2L)
   base$consensus_require_nichenet_for_primary <- env_or_default_03("CONSENSUS_REQUIRE_NICHENET_FOR_PRIMARY", "yes")
   base$liana_consensus_enabled <- env_or_default_03("LIANA_CONSENSUS_ENABLED", "yes")
@@ -100,7 +107,7 @@ get_single_script_config_07 <- function() {
     env_or_default_03("MODULE_07_VERSION", "1.1")
   )
   base$module_07d_consensus_version <- env_or_default_03("MODULE_07D_CONSENSUS_VERSION", env_or_default_03("MODULE_07_VERSION", "1.0"))
-  base$module_07e_eda_version <- env_or_default_03("MODULE_07E_EDA_VERSION", env_or_default_03("MODULE_07_VERSION", "0.1"))
+  base$module_07e_eda_version <- env_or_default_03("MODULE_07E_EDA_VERSION", env_or_default_03("MODULE_07_VERSION", "2.0"))
   base$module_07a_version <- base$module_07a_cellchat_version
   base$module_07b_version <- base$module_07b_liana_version
   base$module_07c_version <- base$module_07c_nichenet_version
@@ -147,7 +154,11 @@ prepare_dirs_07 <- function(cfg) {
     dirname(cfg$communication_fallback_summary_tsv),
     dirname(cfg$derived_communication_eligibility_tsv),
     dirname(cfg$communication_summary_plot_png),
-    dirname(cfg$communication_report_md)
+    dirname(cfg$communication_report_md),
+    dirname(cfg$communication_report_html),
+    dirname(cfg$communication_eda_panels_tsv),
+    dirname(cfg$communication_eda_filtered_tsv),
+    cfg$communication_eda_panel_dir
   )
   invisible(lapply(ensure_dirs[nzchar(ensure_dirs)], ensure_dir))
 }
