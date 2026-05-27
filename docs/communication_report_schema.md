@@ -15,7 +15,7 @@ outputs and writes the review-facing communication report.
 
 | Output key | Path | Row semantics |
 |---|---|---|
-| `report_md` | `reports/eda/communication/report.md` | Markdown report with evidence disclaimer, four new panels, legacy sections, pair requirements, and filtered-axis preview. |
+| `report_md` | `reports/eda/communication/report.md` | Markdown report with evidence disclaimer, three new panels, legacy sections, pair requirements, and filtered-axis preview. |
 | `report_html` | `reports/eda/communication/report.html` | Simple HTML companion when `COMMUNICATION_REPORT_HTML=yes`. |
 | `communication_eda_panels_tsv` | `results/tables/communication/consensus/communication_eda_panels.tsv` | One row per rendered report panel. |
 | `communication_eda_filtered_tsv` | `results/tables/communication/consensus/communication_eda_filtered_axes.tsv` | Consensus axes after the configured report-tier filter. |
@@ -27,7 +27,6 @@ outputs and writes the review-facing communication report.
 | Panel 1: Evidence Tier Distribution | Counts and plots `primary`, `exploratory`, `candidate`, and `blocked` axes. |
 | Panel 2: Method Agreement | Summarizes CellChat, LIANA+, NicheNet/MultiNicheNet, and COMMOT hit patterns. |
 | Panel 3: Downstream Target Chain | Reports NicheNet/MultiNicheNet downstream target support when available. |
-| Panel 4: scTenifoldKnk Hook | Confirms the optional hook is disabled; fails loudly if hook results are present without method review. |
 
 The report keeps legacy sections for scDesign3 gate status, fallback summaries,
 and missing gene-program diagnostics. These sections are summaries only and do

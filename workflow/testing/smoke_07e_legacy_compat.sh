@@ -14,7 +14,6 @@ source(file.path(repo, "workflow/05single_script/helpers/runtime_utils.R"), enco
 source(file.path(repo, "workflow/05single_script/helpers/metadata_io.R"), encoding = "UTF-8")
 source(file.path(repo, "workflow/05single_script/helpers/communication_report_utils.R"), encoding = "UTF-8")
 source(file.path(repo, "workflow/05single_script/helpers/communication_report_panels.R"), encoding = "UTF-8")
-source(file.path(repo, "workflow/05single_script/helpers/scTenifoldKnk_hook.R"), encoding = "UTF-8")
 
 cfg <- list(
   project_root = tmp,
@@ -51,14 +50,7 @@ fallback <- render_panel_legacy_fallback(cfg)
 missing_gp <- render_panel_legacy_missing_gene_program(cfg)
 stopifnot(identical(fallback$status, "available"))
 stopifnot(identical(missing_gp$status, "available"))
-
-hook <- render_panel_scTenifoldKnk_hook(consensus, cfg)
-stopifnot(identical(hook$status, "not_enabled"))
-hook_path <- scTenifoldKnk_hook_path(cfg)
-write_tsv_local(data.frame(axis = "x", stringsAsFactors = FALSE), hook_path)
-err <- tryCatch(render_panel_scTenifoldKnk_hook(consensus, cfg), error = function(e) conditionMessage(e))
-stopifnot(is.character(err), grepl("not in scope", err, fixed = TRUE))
 cat("smoke_07e_legacy_compat: ok\n")
 RS
 
-Rscript -e "parse('${REPO_ROOT}/workflow/05single_script/07e_communication_eda.R'); parse('${REPO_ROOT}/workflow/05single_script/helpers/communication_report_utils.R'); parse('${REPO_ROOT}/workflow/05single_script/helpers/communication_report_panels.R'); parse('${REPO_ROOT}/workflow/05single_script/helpers/scTenifoldKnk_hook.R')" >/dev/null
+Rscript -e "parse('${REPO_ROOT}/workflow/05single_script/07e_communication_eda.R'); parse('${REPO_ROOT}/workflow/05single_script/helpers/communication_report_utils.R'); parse('${REPO_ROOT}/workflow/05single_script/helpers/communication_report_panels.R')" >/dev/null

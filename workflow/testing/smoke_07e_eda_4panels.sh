@@ -14,7 +14,6 @@ source(file.path(repo, "workflow/05single_script/helpers/runtime_utils.R"), enco
 source(file.path(repo, "workflow/05single_script/helpers/metadata_io.R"), encoding = "UTF-8")
 source(file.path(repo, "workflow/05single_script/helpers/communication_report_utils.R"), encoding = "UTF-8")
 source(file.path(repo, "workflow/05single_script/helpers/communication_report_panels.R"), encoding = "UTF-8")
-source(file.path(repo, "workflow/05single_script/helpers/scTenifoldKnk_hook.R"), encoding = "UTF-8")
 
 cfg <- list(
   project_root = tmp,
@@ -63,11 +62,10 @@ stopifnot(nrow(filtered) == 5)
 panels <- list(
   panel_01_tier_distribution = render_panel_tier_distribution(consensus, cfg),
   panel_02_method_agreement = render_panel_method_venn(consensus, cfg),
-  panel_03_downstream_chain = render_panel_downstream_chain(consensus, cfg),
-  panel_04_scTenifoldKnk_hook = render_panel_scTenifoldKnk_hook(consensus, cfg)
+  panel_03_downstream_chain = render_panel_downstream_chain(consensus, cfg)
 )
 panel_tsv <- communication_report_panels_to_tsv(panels)
-stopifnot(nrow(panel_tsv) == 4)
+stopifnot(nrow(panel_tsv) == 3)
 for (panel in panels) {
   for (path in unlist(panel$plots, use.names = FALSE)) {
     stopifnot(file.exists(path), file.info(path)$size > 0)
@@ -77,6 +75,6 @@ report <- communication_report_assemble(panels, consensus, filtered, pairs, cfg)
 stopifnot(any(grepl("Panel 1", report, fixed = TRUE)))
 stopifnot(any(grepl("Panel 2", report, fixed = TRUE)))
 stopifnot(any(grepl("Panel 3", report, fixed = TRUE)))
-stopifnot(any(grepl("Panel 4", report, fixed = TRUE)))
-cat("smoke_07e_eda_4panels: ok\n")
+stopifnot(!any(grepl("panel_04", names(panels), fixed = TRUE)))
+cat("smoke_07e_eda_panels: ok\n")
 RS

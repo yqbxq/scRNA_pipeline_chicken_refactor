@@ -27,4 +27,4 @@ an optional HTML companion. Pair-specific report requirements come from
 `min_methods_agreed`, `require_downstream_de`, `require_spatial_support`, and
 `evidence_tier_required`.
 
-Out-of-scope methods for this branch include CellNEST, DeepTalk, Tensor-cell2cell, and scTenifoldKnk. They can be added later only if they improve the evidence chain beyond the CellChat, LIANA+, MultiNicheNet, consensus, and COMMOT stack.
+Out-of-scope methods for this branch include CellNEST, DeepTalk, and Tensor-cell2cell. They can be added later only if they improve the evidence chain beyond the CellChat, LIANA+, MultiNicheNet, consensus, and COMMOT stack.

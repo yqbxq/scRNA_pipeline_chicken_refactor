@@ -25,7 +25,6 @@ source_utf8(file.path(.script_dir, "helpers", "communication_mapping_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "communication_pairs_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "communication_report_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "communication_report_panels.R"))
-source_utf8(file.path(.script_dir, "helpers", "scTenifoldKnk_hook.R"))
 
 cfg <- get_single_script_config_07()
 module_name <- "07e_communication_eda"
@@ -51,7 +50,6 @@ panels <- list(
   panel_01_tier_distribution = render_panel_tier_distribution(consensus_df, cfg),
   panel_02_method_agreement = render_panel_method_venn(consensus_df, cfg),
   panel_03_downstream_chain = render_panel_downstream_chain(consensus_df, cfg),
-  panel_04_scTenifoldKnk_hook = render_panel_scTenifoldKnk_hook(consensus_df, cfg),
   panel_legacy_scdesign3 = render_panel_legacy_scdesign3(cfg),
   panel_legacy_fallback = render_panel_legacy_fallback(cfg),
   panel_legacy_missing_gene_program = render_panel_legacy_missing_gene_program(cfg)
