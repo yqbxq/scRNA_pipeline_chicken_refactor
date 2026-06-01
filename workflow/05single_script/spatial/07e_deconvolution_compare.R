@@ -51,6 +51,31 @@ safe_jsd_07e <- function(a, b) {
   sqrt(0.5 * kl(p, m) + 0.5 * kl(q, m))
 }
 
+safe_entropy_07e <- function(x) {
+  x[!is.finite(x) | x < 0] <- 0
+  total <- sum(x)
+  if (total <= 0) return(NA_real_)
+  p <- x / total
+  -sum(ifelse(p > 0, p * log(p), 0))
+}
+
+safe_cosine_07e <- function(a, b) {
+  a[!is.finite(a)] <- 0
+  b[!is.finite(b)] <- 0
+  denom <- sqrt(sum(a * a)) * sqrt(sum(b * b))
+  if (denom <= 0) return(NA_real_)
+  sum(a * b) / denom
+}
+
+collect_ok_props_07e <- function(methods, cfg) {
+  ok_rows <- methods[methods$status == "ok" & nzchar(methods$method), , drop = FALSE]
+  if (nrow(ok_rows) == 0) {
+    return(st07_empty_df(c("method", "deconv_id", "section", "spot_id", "cell_type", "proportion")))
+  }
+  prop_rows <- lapply(seq_len(nrow(ok_rows)), function(i) read_deconv_proportions_07e(ok_rows[i, , drop = FALSE], cfg))
+  do.call(rbind, prop_rows)
+}
+
 compare_method_pair_07e <- function(props, method_a, method_b, deconv_id, section) {
   a <- props[props$method == method_a & props$deconv_id == deconv_id & props$section == section, , drop = FALSE]
   b <- props[props$method == method_b & props$deconv_id == deconv_id & props$section == section, , drop = FALSE]
@@ -90,12 +115,7 @@ compare_method_pair_07e <- function(props, method_a, method_b, deconv_id, sectio
 }
 
 build_comparison_matrix_07e <- function(methods, cfg) {
-  ok_rows <- methods[methods$status == "ok" & nzchar(methods$method), , drop = FALSE]
-  if (nrow(ok_rows) == 0) {
-    return(st07_empty_df(c("deconv_id", "section", "method_a", "method_b", "celltype", "n_common_spots", "pearson", "rmse", "jsd")))
-  }
-  prop_rows <- lapply(seq_len(nrow(ok_rows)), function(i) read_deconv_proportions_07e(ok_rows[i, , drop = FALSE], cfg))
-  props <- do.call(rbind, prop_rows)
+  props <- collect_ok_props_07e(methods, cfg)
   if (nrow(props) == 0) {
     return(st07_empty_df(c("deconv_id", "section", "method_a", "method_b", "celltype", "n_common_spots", "pearson", "rmse", "jsd")))
   }
@@ -114,6 +134,66 @@ build_comparison_matrix_07e <- function(methods, cfg) {
   }
   if (length(rows) == 0) {
     return(st07_empty_df(c("deconv_id", "section", "method_a", "method_b", "celltype", "n_common_spots", "pearson", "rmse", "jsd")))
+  }
+  do.call(rbind, rows)
+}
+
+build_spot_consistency_07e <- function(methods, cfg) {
+  props <- collect_ok_props_07e(methods, cfg)
+  if (nrow(props) == 0) {
+    return(st07_empty_df(c("deconv_id", "section", "spot_id", "n_methods", "consensus_dominant_celltype", "n_unique_dominant_celltypes", "dominant_agreement_fraction", "mean_entropy", "entropy_sd", "mean_pairwise_cosine", "status", "reason")))
+  }
+  rows <- list()
+  groups <- unique(props[, c("deconv_id", "section", "spot_id"), drop = FALSE])
+  for (idx in seq_len(nrow(groups))) {
+    group <- groups[idx, , drop = FALSE]
+    hit <- props[props$deconv_id == group$deconv_id[[1]] & props$section == group$section[[1]] & props$spot_id == group$spot_id[[1]], , drop = FALSE]
+    methods_here <- sort(unique(hit$method))
+    if (length(methods_here) == 0) next
+    method_stats <- lapply(methods_here, function(method) {
+      mh <- hit[hit$method == method, , drop = FALSE]
+      mh <- mh[order(-mh$proportion, mh$cell_type), , drop = FALSE]
+      data.frame(
+        method = method,
+        dominant_celltype = mh$cell_type[[1]],
+        entropy = safe_entropy_07e(mh$proportion),
+        stringsAsFactors = FALSE
+      )
+    })
+    method_stats <- do.call(rbind, method_stats)
+    dom_counts <- sort(table(method_stats$dominant_celltype), decreasing = TRUE)
+    consensus_dom <- names(dom_counts)[[1]]
+    pair_cos <- numeric()
+    if (length(methods_here) >= 2) {
+      celltypes <- sort(unique(hit$cell_type))
+      for (pair in utils::combn(methods_here, 2, simplify = FALSE)) {
+        a <- hit[hit$method == pair[[1]], , drop = FALSE]
+        b <- hit[hit$method == pair[[2]], , drop = FALSE]
+        avec <- setNames(rep(0, length(celltypes)), celltypes)
+        bvec <- avec
+        avec[a$cell_type] <- a$proportion
+        bvec[b$cell_type] <- b$proportion
+        pair_cos <- c(pair_cos, safe_cosine_07e(avec, bvec))
+      }
+    }
+    rows[[length(rows) + 1L]] <- data.frame(
+      deconv_id = group$deconv_id[[1]],
+      section = group$section[[1]],
+      spot_id = group$spot_id[[1]],
+      n_methods = length(methods_here),
+      consensus_dominant_celltype = consensus_dom,
+      n_unique_dominant_celltypes = length(unique(method_stats$dominant_celltype)),
+      dominant_agreement_fraction = as.numeric(dom_counts[[1]]) / length(methods_here),
+      mean_entropy = mean(method_stats$entropy, na.rm = TRUE),
+      entropy_sd = if (length(method_stats$entropy) > 1) stats::sd(method_stats$entropy, na.rm = TRUE) else 0,
+      mean_pairwise_cosine = if (length(pair_cos) == 0 || all(is.na(pair_cos))) NA_real_ else mean(pair_cos, na.rm = TRUE),
+      status = if (length(methods_here) >= 2) "ok" else "skipped_single_method",
+      reason = if (length(methods_here) >= 2) "" else "spot has fewer than two completed methods",
+      stringsAsFactors = FALSE
+    )
+  }
+  if (length(rows) == 0) {
+    return(st07_empty_df(c("deconv_id", "section", "spot_id", "n_methods", "consensus_dominant_celltype", "n_unique_dominant_celltypes", "dominant_agreement_fraction", "mean_entropy", "entropy_sd", "mean_pairwise_cosine", "status", "reason")))
   }
   do.call(rbind, rows)
 }
@@ -195,7 +275,7 @@ st07_write_tsv(ranking, method_summary_tsv)
 st07_write_tsv(comparison_matrix, matrix_tsv)
 st07_write_tsv(comparison_matrix, method_pairwise_metrics_tsv)
 celltype_consistency <- comparison_matrix[comparison_matrix$celltype != "all", , drop = FALSE]
-spot_consistency <- st07_empty_df(c("spot_id", "method_a", "method_b", "dominant_celltype_agreement", "entropy_delta", "status", "reason"))
+spot_consistency <- build_spot_consistency_07e(methods, cfg)
 recommended_by_celltype <- if (nrow(celltype_consistency) == 0) {
   st07_empty_df(c("celltype", "recommended_method", "mean_pearson", "mean_rmse", "status"))
 } else {
@@ -266,7 +346,7 @@ st07_write_manifest_local(
     method_comparison_matrix = build_output_entry(matrix_tsv, "tsv", module_name, "pairwise method comparison matrix", base_dir = cfg$project_root, schema = infer_schema_from_df(comparison_matrix)),
     method_pairwise_metrics = build_output_entry(method_pairwise_metrics_tsv, "tsv", module_name, "pairwise method Pearson/RMSE/JSD metrics", base_dir = cfg$project_root, schema = infer_schema_from_df(comparison_matrix)),
     celltype_method_consistency = build_output_entry(celltype_consistency_tsv, "tsv", module_name, "celltype-specific method consistency metrics", base_dir = cfg$project_root, schema = infer_schema_from_df(celltype_consistency)),
-    spot_method_consistency = build_output_entry(spot_consistency_tsv, "tsv", module_name, "spot-level method consistency placeholder until dominant agreement is materialized", base_dir = cfg$project_root, schema = infer_schema_from_df(spot_consistency)),
+    spot_method_consistency = build_output_entry(spot_consistency_tsv, "tsv", module_name, "spot-level dominant agreement, entropy, and pairwise cosine consistency metrics", base_dir = cfg$project_root, schema = infer_schema_from_df(spot_consistency)),
     recommended_method_by_celltype = build_output_entry(recommended_by_celltype_tsv, "tsv", module_name, "celltype-level recommended deconvolution method", base_dir = cfg$project_root, schema = infer_schema_from_df(recommended_by_celltype)),
     deconv_evidence_tier = build_output_entry(deconv_evidence_tier_tsv, "tsv", module_name, "deconvolution method evidence tier derived from completion and consensus", base_dir = cfg$project_root, schema = infer_schema_from_df(deconv_evidence_tier)),
     recommended_method = build_output_entry(cfg$spatial_recommended_deconv_method_file, "txt", module_name, "recommended deconvolution method for 06e niche derivation", base_dir = cfg$project_root),

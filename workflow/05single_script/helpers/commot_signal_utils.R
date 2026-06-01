@@ -12,7 +12,7 @@ commot_scalar <- function(x, default = "") {
 }
 
 commot_truthy <- function(x) {
-  tolower(commot_scalar(x, "false")) %in% c("1", "true", "yes", "y", "ok")
+  vapply(x, function(value) tolower(commot_scalar(value, "false")) %in% c("1", "true", "yes", "y", "ok"), logical(1))
 }
 
 empty_commot_lr_candidates <- function() {

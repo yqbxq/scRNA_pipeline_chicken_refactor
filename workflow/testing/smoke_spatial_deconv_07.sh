@@ -35,6 +35,8 @@ test -s "${TMP_DIR}/results/spatial/tables/spatial_07d_deconvolution_cell2locati
 test -s "${TMP_DIR}/results/spatial/tables/spatial_07e_deconvolution_compare/deconv_compare_manifest.tsv"
 test -s "${TMP_DIR}/results/spatial/tables/spatial_07f_deconvolution_validation/validation_manifest.tsv"
 grep -qx 'rctd' "${TMP_DIR}/results/spatial/tables/spatial_07e_deconvolution_compare/recommended_method.txt"
+grep -q 'cell2location' "${TMP_DIR}/results/spatial/tables/spatial_07d_deconvolution_cell2location/cell2location_manifest.tsv"
+grep -Eq 'skipped_no_h5ad|skipped_no_cell2location|skipped_no_reference|skipped_no_deconv_pairs|failed_reference_load|failed_sidecar|ok' "${TMP_DIR}/results/spatial/tables/spatial_07d_deconvolution_cell2location/cell2location_manifest.tsv"
 
 if [[ "${STRICT_DECONV_SMOKE}" == "yes" ]]; then
   for manifest in \

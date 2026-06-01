@@ -34,34 +34,40 @@ if (nrow(candidates) == 0) {
   consensus <- st08_empty_consensus()
 } else {
   consensus <- candidates
-  consensus <- merge_optional_08e(consensus, coloc, c("sender_spatial_abundance", "receiver_spatial_abundance", "sender_receiver_colocalization", "colocalization_support"))
+  consensus <- merge_optional_08e(consensus, coloc, c("sender_spatial_abundance", "receiver_spatial_abundance", "sender_receiver_colocalization", "colocalization_support", "ligand_spot_expression_mean", "receptor_spot_expression_mean", "lr_expression_colocalization", "lr_expression_support"))
   consensus <- merge_optional_08e(consensus, neighbor, c("neighborhood_enrichment_score", "co_occurrence_score", "neighborhood_support"))
   if (nrow(commot) > 0) {
     commot$commot_key <- paste(commot$lr_axis_id, commot$section_id, commot$condition_value, sep = "|")
     consensus$commot_key <- paste(consensus$lr_axis_id, consensus$section_id, consensus$condition_value, sep = "|")
-    commot_keep <- commot[!duplicated(commot$commot_key), c("commot_key", "signal_score", "spatial_support"), drop = FALSE]
-    names(commot_keep) <- c("commot_key", "commot_score", "commot_support")
+    for (col in c("status", "reason", "n_spot_pairs", "distance_threshold")) {
+      if (!col %in% colnames(commot)) commot[[col]] <- if (col %in% c("n_spot_pairs", "distance_threshold")) NA_real_ else ""
+    }
+    commot_keep <- commot[!duplicated(commot$commot_key), c("commot_key", "signal_score", "spatial_support", "status", "reason", "n_spot_pairs", "distance_threshold"), drop = FALSE]
+    names(commot_keep) <- c("commot_key", "commot_score", "commot_support", "commot_status", "commot_reason", "commot_n_spot_pairs", "commot_distance_threshold")
     consensus <- merge(consensus, commot_keep, by = "commot_key", all.x = TRUE, sort = FALSE)
     consensus$commot_key <- NULL
   }
-  for (col in setdiff(colnames(st08_empty_consensus()), colnames(consensus))) consensus[[col]] <- if (col %in% c("sender_spatial_abundance", "receiver_spatial_abundance", "sender_receiver_colocalization", "neighborhood_enrichment_score", "co_occurrence_score", "commot_score")) NA_real_ else ""
+  numeric_cols <- c("sender_spatial_abundance", "receiver_spatial_abundance", "sender_receiver_colocalization", "ligand_spot_expression_mean", "receptor_spot_expression_mean", "lr_expression_colocalization", "neighborhood_enrichment_score", "co_occurrence_score", "commot_score", "commot_n_spot_pairs", "commot_distance_threshold")
+  for (col in setdiff(colnames(st08_empty_consensus()), colnames(consensus))) consensus[[col]] <- if (col %in% numeric_cols) NA_real_ else ""
   if (!"commot_support" %in% colnames(consensus)) consensus$commot_support <- "no"
   consensus$deconv_support_status <- deconv_status
+  consensus$deconv_support_level <- st08_deconv_support_level(deconv_status)
+  consensus$scrna_support_level <- st08_scrna_support_level(consensus)
   consensus$commot_score <- suppressWarnings(as.numeric(consensus$commot_score))
-  scrna_strong <- consensus$scrna_evidence_tier %in% c("primary", "exploratory") & (
-    tolower(as.character(consensus$liana_support)) %in% c("yes", "true", "1", "ok") |
-      tolower(as.character(consensus$multinichenet_support)) %in% c("yes", "true", "1", "ok") |
-      tolower(as.character(consensus$receiver_deg_support)) %in% c("yes", "true", "1", "ok")
-  )
-  deconv_ok <- deconv_status %in% c("ok", "warn", "ok_smoke", "skipped_no_method_outputs")
+  scrna_primary <- consensus$scrna_support_level == "primary"
+  scrna_supporting <- consensus$scrna_support_level %in% c("primary", "supporting")
+  deconv_primary <- consensus$deconv_support_level %in% c("primary", "supporting")
+  deconv_supporting <- consensus$deconv_support_level %in% c("primary", "supporting", "smoke_only")
   localized <- tolower(as.character(consensus$colocalization_support)) %in% c("yes", "true", "1", "ok")
+  lr_expression <- tolower(as.character(consensus$lr_expression_support)) %in% c("yes", "true", "1", "ok")
   neighborhood <- tolower(as.character(consensus$neighborhood_support)) %in% c("yes", "true", "1", "ok")
   commot_support <- tolower(as.character(consensus$commot_support)) %in% c("yes", "true", "1", "ok")
+  spatial_support_n <- as.integer(localized) + as.integer(neighborhood) + as.integer(commot_support | lr_expression)
   consensus$spatial_evidence_tier <- ifelse(
-    scrna_strong & deconv_ok & localized & neighborhood & (commot_support | localized),
+    scrna_primary & deconv_primary & localized & neighborhood & (commot_support | lr_expression),
     "spatial_primary",
-    ifelse(scrna_strong & deconv_ok & (localized | neighborhood | commot_support), "spatial_supporting",
-      ifelse(consensus$cellchat_hypothesis == "yes" | consensus$scrna_evidence_tier %in% c("candidate", "hypothesis_only"), "spatial_hypothesis", "blocked")
+    ifelse(scrna_supporting & deconv_supporting & spatial_support_n >= 2 & consensus$deconv_support_level != "smoke_only", "spatial_supporting",
+      ifelse(consensus$cellchat_hypothesis == "yes" | consensus$scrna_support_level %in% c("hypothesis_only", "supporting") | consensus$deconv_support_level == "smoke_only", "spatial_hypothesis", "blocked")
     )
   )
   consensus$final_interpretation_level <- ifelse(consensus$spatial_evidence_tier == "spatial_primary", "core",
@@ -69,7 +75,9 @@ if (nrow(candidates) == 0) {
       ifelse(consensus$spatial_evidence_tier == "spatial_hypothesis", "hypothesis_only", "blocked")
     )
   )
-  consensus$reason <- ifelse(consensus$spatial_evidence_tier == "blocked", "Insufficient scRNA/deconv/spatial support for spatial communication interpretation.", "")
+  consensus$reason <- ifelse(consensus$spatial_evidence_tier == "blocked", "Insufficient scRNA/deconv/spatial support for spatial communication interpretation.",
+    ifelse(consensus$deconv_support_level == "smoke_only", "Deconvolution validation is smoke-only; communication remains hypothesis-level.", "")
+  )
   consensus <- consensus[, colnames(st08_empty_consensus()), drop = FALSE]
 }
 

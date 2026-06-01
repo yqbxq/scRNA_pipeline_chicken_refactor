@@ -82,7 +82,7 @@ Rscript "${ROOT}/workflow/05single_script/spatial/08a_spatial_communication_io.R
 
 cat >"${SPATIAL_TABLE_DIR}/08_commot/commot_lr.tsv" <<'TSV'
 section_id	lr_axis_id	pair_id	condition_value	ligand	receptor	sender	receiver	signal_score	spatial_support	status	reason
-S1	L1|R1|Sender->Receiver	P1	syf	L1	R1	Sender	Receiver	1.2	no	ok_commot_run	
+S1	L1|R1|Sender->Receiver	P1	syf	L1	R1	Sender	Receiver	1.2	yes	ok_commot_run
 TSV
 
 Rscript "${ROOT}/workflow/05single_script/spatial/08b_spatial_communication_eda.R" >/dev/null
@@ -101,5 +101,39 @@ test -s "${SPATIAL_COMMUNICATION_TABLE_DIR}/spatial_communication_consensus.tsv"
 test -s "${SPATIAL_COMMUNICATION_TABLE_DIR}/spatial_communication_question_gate_status.tsv"
 grep -q 'I19_comm_in_space' "${SPATIAL_COMMUNICATION_TABLE_DIR}/spatial_communication_question_gate_status.tsv"
 grep -q 'spatial_primary' "${SPATIAL_COMMUNICATION_TABLE_DIR}/spatial_communication_consensus.tsv"
+grep -q 'I11_deconv_validation' "${SPATIAL_TABLE_DIR}/spatial_07f_deconvolution_validation/spatial_question_gate_status.tsv"
+grep -q 'external_truth' "${SPATIAL_TABLE_DIR}/spatial_07f_deconvolution_validation/validation_manifest.tsv"
+grep -q 'PASS' "${SPATIAL_COMMUNICATION_TABLE_DIR}/spatial_communication_question_gate_status.tsv"
+
+cat >>"${COMMOT_LR_CANDIDATES_TSV}" <<'TSV'
+CellChatOnly	L2	R2	Sender	Receiver	P2	syf	hypothesis_only	yes	no	no	0	no
+TSV
+Rscript "${ROOT}/workflow/05single_script/spatial/08a_spatial_communication_io.R" >/dev/null
+Rscript "${ROOT}/workflow/05single_script/spatial/08c_lr_colocalization.R" >/dev/null
+Rscript "${ROOT}/workflow/05single_script/spatial/08d_communication_neighborhood_consistency.R" >/dev/null
+Rscript "${ROOT}/workflow/05single_script/spatial/08e_spatial_communication_consensus.R" >/dev/null
+if awk -F'\t' '$3 == "CellChatOnly" && $0 ~ /spatial_primary/ { found = 1 } END { exit found ? 0 : 1 }' "${SPATIAL_COMMUNICATION_TABLE_DIR}/spatial_communication_consensus.tsv"; then
+  echo "CellChat-only candidate must not become spatial_primary" >&2
+  exit 1
+fi
+awk -F'\t' '$3 == "CellChatOnly" && $0 ~ /spatial_hypothesis/ { found = 1 } END { exit found ? 0 : 1 }' "${SPATIAL_COMMUNICATION_TABLE_DIR}/spatial_communication_consensus.tsv"
+
+unset SPATIAL_VALIDATION_TRUTH_TSV
+export SPATIAL_VALIDATION_MODE="dirichlet_only"
+Rscript "${ROOT}/workflow/05single_script/spatial/07f_deconvolution_validation.R" >/dev/null
+if awk -F'\t' '$1 == "I11_deconv_validation" && $3 == "PASS" { found = 1 } END { exit found ? 0 : 1 }' "${SPATIAL_TABLE_DIR}/spatial_07f_deconvolution_validation/spatial_question_gate_status.tsv"; then
+  echo "dirichlet_only must not PASS I11_deconv_validation" >&2
+  exit 1
+fi
+awk -F'\t' '$1 == "I11_deconv_validation" && $3 == "WARN" { found = 1 } END { exit found ? 0 : 1 }' "${SPATIAL_TABLE_DIR}/spatial_07f_deconvolution_validation/spatial_question_gate_status.tsv"
+
+rm -rf "${SPATIAL_TABLE_DIR}/spatial_07a_deconvolution_rctd" "${SPATIAL_TABLE_DIR}/spatial_07b_deconvolution_transfer" "${SPATIAL_TABLE_DIR}/spatial_07f_deconvolution_validation"
+Rscript "${ROOT}/workflow/05single_script/spatial/08c_lr_colocalization.R" >/dev/null
+Rscript "${ROOT}/workflow/05single_script/spatial/08e_spatial_communication_consensus.R" >/dev/null
+if grep -q 'spatial_primary' "${SPATIAL_COMMUNICATION_TABLE_DIR}/spatial_communication_consensus.tsv"; then
+  echo "no-deconv case must not produce spatial_primary" >&2
+  exit 1
+fi
+grep -Eq 'blocked|spatial_hypothesis' "${SPATIAL_COMMUNICATION_TABLE_DIR}/spatial_communication_consensus.tsv"
 
 echo "smoke_st0708_full_chain_ok"

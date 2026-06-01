@@ -12,6 +12,7 @@ source(file.path(PIPELINE_ROOT, "workflow/05single_script/helpers/report_utils.R
 source(file.path(.script_dir, "helpers", "spatial_common.R"), encoding = "UTF-8")
 source(file.path(.script_dir, "helpers", "project_paths_spatial.R"), encoding = "UTF-8")
 source(file.path(.script_dir, "helpers", "spatial_deconv_utils.R"), encoding = "UTF-8")
+source(file.path(.script_dir, "helpers", "spatial_scdesign3_validation_utils.R"), encoding = "UTF-8")
 
 cfg <- get_spatial_script_config()
 module_name <- "spatial_07f_deconvolution_validation"
@@ -38,6 +39,17 @@ safe_pearson_07f <- function(a, b) {
     return(NA_real_)
   }
   suppressWarnings(as.numeric(stats::cor(a, b, method = "pearson", use = "pairwise.complete.obs")))
+}
+
+safe_jsd_07f <- function(a, b) {
+  a[!is.finite(a) | a < 0] <- 0
+  b[!is.finite(b) | b < 0] <- 0
+  if (sum(a) <= 0 || sum(b) <= 0) return(NA_real_)
+  p <- a / sum(a)
+  q <- b / sum(b)
+  m <- 0.5 * (p + q)
+  kl <- function(x, y) sum(ifelse(x > 0 & y > 0, x * log(x / y), 0))
+  sqrt(0.5 * kl(p, m) + 0.5 * kl(q, m))
 }
 
 normalize_truth_07f <- function(df) {
@@ -81,7 +93,7 @@ compare_to_truth_07f <- function(props, truth) {
     pred <- props[props$method == method, , drop = FALSE]
     merged <- merge(truth, pred, by = c("spot_id", "cell_type"))
     if (nrow(merged) == 0) {
-      return(data.frame(method = method, n_spots = 0L, n_celltypes = 0L, mean_rmse = NA_real_, mean_pearson = NA_real_, dominant_cell_type_accuracy = NA_real_, stringsAsFactors = FALSE))
+      return(data.frame(method = method, n_spots = 0L, n_celltypes = 0L, mean_rmse = NA_real_, mean_pearson = NA_real_, mean_jsd = NA_real_, dominant_cell_type_accuracy = NA_real_, stringsAsFactors = FALSE))
     }
     celltype_rows <- lapply(sort(unique(merged$cell_type)), function(ct) {
       hit <- merged[merged$cell_type == ct, , drop = FALSE]
@@ -89,6 +101,7 @@ compare_to_truth_07f <- function(props, truth) {
         cell_type = ct,
         rmse = sqrt(mean((hit$proportion - hit$true_proportion)^2)),
         pearson = safe_pearson_07f(hit$proportion, hit$true_proportion),
+        jsd = safe_jsd_07f(hit$proportion, hit$true_proportion),
         stringsAsFactors = FALSE
       )
     })
@@ -114,6 +127,7 @@ compare_to_truth_07f <- function(props, truth) {
       n_celltypes = length(unique(merged$cell_type)),
       mean_rmse = mean(celltype_df$rmse, na.rm = TRUE),
       mean_pearson = mean(celltype_df$pearson, na.rm = TRUE),
+      mean_jsd = mean(celltype_df$jsd, na.rm = TRUE),
       dominant_cell_type_accuracy = dominant_acc,
       stringsAsFactors = FALSE
     )
@@ -138,7 +152,7 @@ prediction_wide_07f <- function(props) {
 celltype_metrics_07f <- function(props, truth) {
   merged <- merge(truth, props, by = c("spot_id", "cell_type"))
   if (nrow(merged) == 0) {
-    return(data.frame(method = character(), cell_type = character(), n_spots = integer(), rmse = numeric(), pearson = numeric(), stringsAsFactors = FALSE))
+    return(data.frame(method = character(), cell_type = character(), n_spots = integer(), rmse = numeric(), pearson = numeric(), jsd = numeric(), stringsAsFactors = FALSE))
   }
   rows <- lapply(split(merged, list(merged$method, merged$cell_type), drop = TRUE), function(hit) {
     data.frame(
@@ -147,6 +161,7 @@ celltype_metrics_07f <- function(props, truth) {
       n_spots = length(unique(hit$spot_id)),
       rmse = sqrt(mean((hit$proportion - hit$true_proportion)^2)),
       pearson = safe_pearson_07f(hit$proportion, hit$true_proportion),
+      jsd = safe_jsd_07f(hit$proportion, hit$true_proportion),
       stringsAsFactors = FALSE
     )
   })
@@ -156,7 +171,7 @@ celltype_metrics_07f <- function(props, truth) {
 spot_metrics_07f <- function(props, truth) {
   merged <- merge(truth, props, by = c("spot_id", "cell_type"))
   if (nrow(merged) == 0) {
-    return(data.frame(method = character(), spot_id = character(), rmse = numeric(), pearson = numeric(), dominant_match = logical(), stringsAsFactors = FALSE))
+    return(data.frame(method = character(), spot_id = character(), rmse = numeric(), pearson = numeric(), jsd = numeric(), dominant_match = logical(), stringsAsFactors = FALSE))
   }
   rows <- lapply(split(merged, list(merged$method, merged$spot_id), drop = TRUE), function(hit) {
     data.frame(
@@ -164,6 +179,7 @@ spot_metrics_07f <- function(props, truth) {
       spot_id = hit$spot_id[[1]],
       rmse = sqrt(mean((hit$proportion - hit$true_proportion)^2)),
       pearson = safe_pearson_07f(hit$proportion, hit$true_proportion),
+      jsd = safe_jsd_07f(hit$proportion, hit$true_proportion),
       dominant_match = hit$cell_type[which.max(hit$proportion)] == hit$cell_type[which.max(hit$true_proportion)],
       stringsAsFactors = FALSE
     )
@@ -171,7 +187,7 @@ spot_metrics_07f <- function(props, truth) {
   do.call(rbind, rows)
 }
 
-gate_status_from_validation_07f <- function(status, validation_mode, summary_df, cfg) {
+gate_status_from_validation_07f <- function(status, validation_mode, summary_df, cfg, recommended_consistency = data.frame()) {
   if (validation_mode == "dirichlet_only") {
     return(list(gate_status = "WARN", interpretation_allowed = "exploratory", reason = "dirichlet_only validation is smoke/fallback evidence and cannot unlock I11 PASS."))
   }
@@ -181,7 +197,11 @@ gate_status_from_validation_07f <- function(status, validation_mode, summary_df,
   ok_methods <- nrow(summary_df[is.finite(summary_df$mean_rmse), , drop = FALSE])
   best_rmse <- if (ok_methods > 0) min(summary_df$mean_rmse, na.rm = TRUE) else Inf
   best_cor <- if (ok_methods > 0) max(summary_df$mean_pearson, na.rm = TRUE) else -Inf
+  agreement <- if (nrow(recommended_consistency) > 0 && "agreement" %in% colnames(recommended_consistency)) st07_scalar(recommended_consistency$agreement, "") else ""
   if (ok_methods >= 2 && best_rmse <= cfg$spatial_validation_rmse_pass && best_cor >= cfg$spatial_validation_cor_pass) {
+    if (identical(agreement, "no")) {
+      return(list(gate_status = "WARN", interpretation_allowed = "exploratory", reason = "synthetic benchmark passed thresholds, but 07e recommended method disagrees with 07f best method."))
+    }
     return(list(gate_status = "PASS", interpretation_allowed = "yes", reason = "synthetic deconvolution benchmark passed thresholds."))
   }
   if (ok_methods >= 1 && best_rmse <= cfg$spatial_validation_rmse_warn && best_cor >= cfg$spatial_validation_cor_warn) {
@@ -195,6 +215,15 @@ ok_rows <- methods[methods$status == "ok" & nzchar(methods$method), , drop = FAL
 prop_rows <- lapply(seq_len(nrow(ok_rows)), function(i) read_method_props_07f(ok_rows[i, , drop = FALSE], cfg))
 props <- if (length(prop_rows) == 0) st07_empty_df(c("method", "deconv_id", "section", "spot_id", "cell_type", "proportion")) else do.call(rbind, prop_rows)
 
+validation_id <- "deconv_validation_default"
+out_dir <- file.path(cfg$spatial_deconv_validation_table_dir, validation_id)
+ensure_dir(out_dir)
+scdesign3_paths <- list(
+  synthetic_sc_metadata_tsv = file.path(out_dir, "synthetic_sc_metadata.tsv"),
+  synthetic_spot_counts_rds = file.path(out_dir, "synthetic_spot_counts.rds"),
+  synthetic_st_rds = file.path(out_dir, "synthetic_st.rds")
+)
+scdesign3_generation <- list(status = "", reason = "", synthetic_cell_generation = "not_used", synthetic_spot_generation = "not_used")
 truth_input <- Sys.getenv("SPATIAL_VALIDATION_TRUTH_TSV", unset = "")
 validation_mode <- tolower(cfg$spatial_validation_mode)
 if (nzchar(truth_input) && file.exists(truth_input)) {
@@ -204,6 +233,12 @@ truth_source <- if (identical(validation_mode, "external_truth")) truth_input el
 if (identical(validation_mode, "scdesign3") && !requireNamespace("scDesign3", quietly = TRUE)) {
   truth <- st07_empty_df(c("spot_id", "cell_type", "true_proportion"))
   truth_source <- "scdesign3_unavailable"
+} else if (identical(validation_mode, "scdesign3")) {
+  scdesign3_generation <- st07f_run_scdesign3_validation(cfg, props, out_dir)
+  truth <- scdesign3_generation$truth
+  props <- scdesign3_generation$props
+  scdesign3_paths <- scdesign3_generation$paths
+  truth_source <- "scdesign3_synthetic_spots"
 } else if (identical(validation_mode, "external_truth") && nzchar(truth_input) && file.exists(truth_input)) {
   truth <- normalize_truth_07f(st07_read_tsv(truth_input))
 } else {
@@ -214,24 +249,21 @@ if (identical(validation_mode, "scdesign3") && !requireNamespace("scDesign3", qu
 if (identical(cfg$spatial_validation_mode, "scdesign3") && !requireNamespace("scDesign3", quietly = TRUE)) {
   status <- "skipped_no_packages"
   reason <- "SPATIAL_VALIDATION_MODE=scdesign3 requested but scDesign3 is not installed in this R environment"
-  summary_df <- data.frame(method = character(), n_spots = integer(), n_celltypes = integer(), mean_rmse = numeric(), mean_pearson = numeric(), dominant_cell_type_accuracy = numeric(), stringsAsFactors = FALSE)
+  summary_df <- data.frame(method = character(), n_spots = integer(), n_celltypes = integer(), mean_rmse = numeric(), mean_pearson = numeric(), mean_jsd = numeric(), dominant_cell_type_accuracy = numeric(), stringsAsFactors = FALSE)
 } else if (nrow(props) == 0) {
   status <- "skipped_no_method_outputs"
   reason <- "no ok 07a/07b/07c/07d method proportion outputs were available"
-  summary_df <- data.frame(method = character(), n_spots = integer(), n_celltypes = integer(), mean_rmse = numeric(), mean_pearson = numeric(), dominant_cell_type_accuracy = numeric(), stringsAsFactors = FALSE)
+  summary_df <- data.frame(method = character(), n_spots = integer(), n_celltypes = integer(), mean_rmse = numeric(), mean_pearson = numeric(), mean_jsd = numeric(), dominant_cell_type_accuracy = numeric(), stringsAsFactors = FALSE)
 } else if (nrow(truth) == 0) {
   status <- "failed_synthesis"
   reason <- "synthetic truth generation produced no rows"
-  summary_df <- data.frame(method = character(), n_spots = integer(), n_celltypes = integer(), mean_rmse = numeric(), mean_pearson = numeric(), dominant_cell_type_accuracy = numeric(), stringsAsFactors = FALSE)
+  summary_df <- data.frame(method = character(), n_spots = integer(), n_celltypes = integer(), mean_rmse = numeric(), mean_pearson = numeric(), mean_jsd = numeric(), dominant_cell_type_accuracy = numeric(), stringsAsFactors = FALSE)
 } else {
   summary_df <- compare_to_truth_07f(props, truth)
   status <- if (nrow(summary_df) > 0 && any(is.finite(summary_df$mean_rmse))) if (identical(validation_mode, "dirichlet_only")) "ok_smoke" else "ok" else "failed_validation"
   reason <- if (status %in% c("ok", "ok_smoke")) "" else "no method output overlapped synthetic truth"
 }
 
-validation_id <- "deconv_validation_default"
-out_dir <- file.path(cfg$spatial_deconv_validation_table_dir, validation_id)
-ensure_dir(out_dir)
 truth_tsv <- file.path(out_dir, "synthetic_truth.tsv")
 truth_wide_tsv <- file.path(out_dir, "synthetic_truth_wide.tsv")
 generation_summary_tsv <- file.path(out_dir, "synthetic_generation_summary.tsv")
@@ -244,11 +276,17 @@ recommended_consistency_tsv <- file.path(out_dir, "recommended_method_consistenc
 question_gate_tsv <- file.path(cfg$spatial_deconv_validation_table_dir, "spatial_question_gate_status.tsv")
 st07_write_tsv(truth, truth_tsv)
 st07_write_tsv(truth_wide_07f(truth), truth_wide_tsv)
+if (!file.exists(scdesign3_paths$synthetic_sc_metadata_tsv)) {
+  st07_write_tsv(st07_empty_df(c("synthetic_cell_id", "cell_type")), scdesign3_paths$synthetic_sc_metadata_tsv)
+}
 generation_summary <- data.frame(
   validation_mode = validation_mode,
   truth_source = truth_source,
-  synthetic_cell_generation = if (identical(validation_mode, "scdesign3") && requireNamespace("scDesign3", quietly = TRUE)) "pending_runtime" else "not_used",
-  synthetic_spot_generation = if (nrow(truth) > 0) "ok_truth_table" else "not_generated",
+  synthetic_cell_generation = if (identical(validation_mode, "scdesign3")) scdesign3_generation$synthetic_cell_generation else "not_used",
+  synthetic_spot_generation = if (identical(validation_mode, "scdesign3")) scdesign3_generation$synthetic_spot_generation else if (nrow(truth) > 0) "ok_truth_table" else "not_generated",
+  synthetic_sc_metadata_tsv = scdesign3_paths$synthetic_sc_metadata_tsv %||% "",
+  synthetic_spot_counts_rds = scdesign3_paths$synthetic_spot_counts_rds %||% "",
+  synthetic_st_rds = scdesign3_paths$synthetic_st_rds %||% "",
   truth_spot_n = length(unique(truth$spot_id %||% character())),
   truth_celltype_n = length(unique(truth$cell_type %||% character())),
   stringsAsFactors = FALSE
@@ -261,16 +299,31 @@ celltype_metrics <- celltype_metrics_07f(props, truth)
 spot_metrics <- spot_metrics_07f(props, truth)
 st07_write_tsv(celltype_metrics, celltype_metrics_tsv)
 st07_write_tsv(spot_metrics, spot_metrics_tsv)
+method_from_07e <- if (file.exists(cfg$spatial_recommended_deconv_method_file)) {
+  st07_scalar(readLines(cfg$spatial_recommended_deconv_method_file, warn = FALSE), "")
+} else {
+  ""
+}
+best_method <- if (nrow(summary_df) > 0 && any(is.finite(summary_df$mean_rmse))) summary_df$method[order(summary_df$mean_rmse, -summary_df$mean_pearson, summary_df$mean_jsd)][[1]] else ""
+method_from_07e_row <- if (nzchar(method_from_07e) && nrow(summary_df) > 0) summary_df[summary_df$method == method_from_07e, , drop = FALSE] else data.frame()
+best_row <- if (nzchar(best_method) && nrow(summary_df) > 0) summary_df[summary_df$method == best_method, , drop = FALSE] else data.frame()
 recommended_consistency <- data.frame(
-  recommended_method = if (nrow(summary_df) > 0) summary_df$method[order(summary_df$mean_rmse, -summary_df$mean_pearson)][[1]] else "",
+  method_from_07e = method_from_07e,
+  best_method_from_07f = best_method,
+  recommended_method = best_method,
+  agreement = if (nzchar(method_from_07e) && nzchar(best_method) && identical(method_from_07e, best_method)) "yes" else if (nzchar(method_from_07e) && nzchar(best_method)) "no" else "not_available",
+  delta_rmse = if (nrow(method_from_07e_row) > 0 && nrow(best_row) > 0) method_from_07e_row$mean_rmse[[1]] - best_row$mean_rmse[[1]] else NA_real_,
+  delta_pearson = if (nrow(method_from_07e_row) > 0 && nrow(best_row) > 0) method_from_07e_row$mean_pearson[[1]] - best_row$mean_pearson[[1]] else NA_real_,
   validation_status = status,
   validation_mode = validation_mode,
   best_rmse = if (nrow(summary_df) > 0 && any(is.finite(summary_df$mean_rmse))) min(summary_df$mean_rmse, na.rm = TRUE) else NA_real_,
   best_pearson = if (nrow(summary_df) > 0 && any(is.finite(summary_df$mean_pearson))) max(summary_df$mean_pearson, na.rm = TRUE) else NA_real_,
+  best_jsd = if (nrow(summary_df) > 0 && any(is.finite(summary_df$mean_jsd))) min(summary_df$mean_jsd, na.rm = TRUE) else NA_real_,
+  recommendation_note = if (nzchar(method_from_07e) && nzchar(best_method) && !identical(method_from_07e, best_method)) "07e recommendation and 07f validation best method disagree; downstream interpretation should be downgraded to caution/exploratory." else "",
   stringsAsFactors = FALSE
 )
 st07_write_tsv(recommended_consistency, recommended_consistency_tsv)
-gate <- gate_status_from_validation_07f(status, validation_mode, summary_df, cfg)
+gate <- gate_status_from_validation_07f(status, validation_mode, summary_df, cfg, recommended_consistency)
 question_gates <- do.call(rbind, list(
   data.frame(question_id = "I08_deconv_panorama", module = module_name, gate_status = gate$gate_status, interpretation_allowed = gate$interpretation_allowed, reason = gate$reason, stringsAsFactors = FALSE),
   data.frame(question_id = "I09_deconv_GC_subtype", module = module_name, gate_status = gate$gate_status, interpretation_allowed = gate$interpretation_allowed, reason = gate$reason, stringsAsFactors = FALSE),
@@ -289,11 +342,15 @@ manifest_df <- data.frame(
   scdesign3_available = requireNamespace("scDesign3", quietly = TRUE),
   methods_validated = paste(summary_df$method, collapse = ","),
   mean_rmse_best_method = if (nrow(summary_df) > 0 && any(is.finite(summary_df$mean_rmse))) min(summary_df$mean_rmse, na.rm = TRUE) else NA_real_,
+  mean_jsd_best_method = if (nrow(summary_df) > 0 && any(is.finite(summary_df$mean_jsd))) min(summary_df$mean_jsd, na.rm = TRUE) else NA_real_,
   status = status,
   reason = reason,
   synthetic_truth_tsv = truth_tsv,
   synthetic_truth_wide_tsv = truth_wide_tsv,
   synthetic_generation_summary_tsv = generation_summary_tsv,
+  synthetic_sc_metadata_tsv = scdesign3_paths$synthetic_sc_metadata_tsv %||% "",
+  synthetic_spot_counts_rds = scdesign3_paths$synthetic_spot_counts_rds %||% "",
+  synthetic_st_rds = scdesign3_paths$synthetic_st_rds %||% "",
   method_summary_tsv = summary_tsv,
   celltype_metrics_tsv = celltype_metrics_tsv,
   spot_metrics_tsv = spot_metrics_tsv,
@@ -327,6 +384,9 @@ st07_write_manifest_local(
     synthetic_truth = build_output_entry(truth_tsv, "tsv", module_name, "synthetic spot truth proportions", base_dir = cfg$project_root),
     synthetic_generation_summary = build_output_entry(generation_summary_tsv, "tsv", module_name, "synthetic generation status and provenance", base_dir = cfg$project_root, schema = infer_schema_from_df(generation_summary)),
     synthetic_truth_wide = build_output_entry(truth_wide_tsv, "tsv", module_name, "wide synthetic spot truth proportions", base_dir = cfg$project_root),
+    synthetic_sc_metadata = build_output_entry(scdesign3_paths$synthetic_sc_metadata_tsv %||% "", "tsv", module_name, "synthetic single-cell metadata from scDesign3 validation when available", base_dir = cfg$project_root),
+    synthetic_spot_counts = build_output_entry(scdesign3_paths$synthetic_spot_counts_rds %||% "", "rds", module_name, "mixed synthetic spot count matrix from scDesign3 validation when available", base_dir = cfg$project_root),
+    synthetic_st_object = build_output_entry(scdesign3_paths$synthetic_st_rds %||% "", "rds", module_name, "minimal synthetic ST object from scDesign3 validation when available", base_dir = cfg$project_root),
     method_prediction_long = build_output_entry(prediction_long_tsv, "tsv", module_name, "method prediction long table used for validation", base_dir = cfg$project_root),
     method_prediction_wide = build_output_entry(prediction_wide_tsv, "tsv", module_name, "method prediction wide table used for validation", base_dir = cfg$project_root),
     method_summary = build_output_entry(summary_tsv, "tsv", module_name, "per-method validation metrics", base_dir = cfg$project_root, schema = infer_schema_from_df(summary_df)),

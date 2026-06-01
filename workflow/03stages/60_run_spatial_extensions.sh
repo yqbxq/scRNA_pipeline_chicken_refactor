@@ -9,8 +9,8 @@ source "${WORKFLOW_ROOT}/02lib/common.sh"
 
 RUN_SVG="yes"
 RUN_DECONV="yes"
-RUN_DECONV_EXTRA="no"
-RUN_DECONV_VALIDATION="no"
+RUN_DECONV_EXTRA="yes"
+RUN_DECONV_VALIDATION="yes"
 RUN_NEIGHBORHOOD="yes"
 RUN_NICHE="yes"
 RUN_COMMOT="yes"
@@ -25,6 +25,7 @@ while [[ $# -gt 0 ]]; do
     --with-deconv) RUN_DECONV="yes"; shift ;;
     --without-deconv) RUN_DECONV="no"; shift ;;
     --with-deconv-extra) RUN_DECONV_EXTRA="yes"; shift ;;
+    --without-deconv-extra) RUN_DECONV_EXTRA="no"; shift ;;
     --with-deconv-validation) RUN_DECONV_VALIDATION="yes"; shift ;;
     --without-deconv-validation) RUN_DECONV_VALIDATION="no"; shift ;;
     --with-neighborhood) RUN_NEIGHBORHOOD="yes"; shift ;;
@@ -44,7 +45,7 @@ Usage: 60_run_spatial_extensions.sh [flags]
 
 Flags:
   --with-svg / --without-svg
-  --with-deconv / --without-deconv / --with-deconv-extra
+  --with-deconv / --without-deconv / --with-deconv-extra / --without-deconv-extra
   --with-deconv-validation / --without-deconv-validation
   --with-neighborhood / --without-neighborhood
   --with-niche / --without-niche

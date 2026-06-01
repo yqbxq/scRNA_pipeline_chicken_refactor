@@ -22,6 +22,11 @@ prepare_dirs_spatial(cfg)
 commot_lr_tsv <- file.path(cfg$spatial_commot_table_dir, "commot_lr.tsv")
 commot_df <- spatial_read_tsv(commot_lr_tsv)
 summary_df <- summarize_commot_signal(commot_df, signal_threshold = cfg$commot_signal_threshold)
+for (col in c("status", "reason")) {
+  if (!col %in% colnames(summary_df)) summary_df[[col]] <- ""
+}
+if (!"n_spot_pairs" %in% colnames(summary_df)) summary_df$n_spot_pairs <- NA_real_
+if (!"distance_threshold" %in% colnames(summary_df)) summary_df$distance_threshold <- NA_real_
 
 summary_tsv <- file.path(cfg$spatial_commot_table_dir, "commot_spatial_summary.tsv")
 celltype_scores_tsv <- file.path(cfg$spatial_commot_table_dir, "commot_celltype_scores.tsv")

@@ -22,7 +22,92 @@ candidates_tsv <- file.path(cfg$spatial_communication_table_dir, "spatial_comm_c
 candidates <- st07_read_tsv(candidates_tsv)
 props <- st08_collect_deconv_props(cfg)
 
-score_candidate_08c <- function(candidate, props) {
+load_spatial_expression_08c <- function(cfg) {
+  candidates <- c(cfg$spatial_panorama_subannotated_rds, cfg$spatial_panorama_annotated_rds, cfg$spatial_panorama_clustered_rds)
+  object_path <- candidates[nzchar(candidates) & file.exists(candidates)][1]
+  if (is.na(object_path)) {
+    return(list(status = "skipped_missing_expression", reason = "No spatial Seurat/RDS expression object was available.", counts = NULL))
+  }
+  obj <- tryCatch(readRDS(object_path), error = function(e) e)
+  if (inherits(obj, "error")) {
+    return(list(status = "skipped_missing_expression", reason = conditionMessage(obj), counts = NULL))
+  }
+  counts <- NULL
+  if (inherits(obj, "Seurat") && requireNamespace("Seurat", quietly = TRUE)) {
+    assay <- tryCatch(Seurat::DefaultAssay(obj), error = function(e) "Spatial")
+    counts <- tryCatch(Seurat::GetAssayData(obj, assay = assay, layer = "data"), error = function(e) {
+      tryCatch(Seurat::GetAssayData(obj, assay = assay, slot = "data"), error = function(e2) NULL)
+    })
+  } else if (is.list(obj) && !is.null(obj$counts)) {
+    counts <- obj$counts
+  } else if (!is.null(dim(obj)) && length(dim(obj)) == 2) {
+    counts <- obj
+  }
+  if (is.null(counts) || is.null(rownames(counts)) || is.null(colnames(counts))) {
+    return(list(status = "skipped_missing_expression", reason = "Spatial expression matrix could not be extracted with gene and spot names.", counts = NULL))
+  }
+  list(status = "ok", reason = "", counts = counts)
+}
+
+lr_expression_support_08c <- function(candidate, wide, expr) {
+  if (!identical(expr$status, "ok") || is.null(expr$counts)) {
+    return(list(
+      ligand_spot_expression_mean = NA_real_,
+      receptor_spot_expression_mean = NA_real_,
+      lr_expression_colocalization = NA_real_,
+      lr_expression_support = "no",
+      expression_status = expr$status,
+      expression_reason = expr$reason
+    ))
+  }
+  ligand <- st08_scalar(candidate$ligand)
+  receptor <- st08_scalar(candidate$receptor)
+  sender_col <- paste0("proportion.", st08_scalar(candidate$sender_cell_type))
+  receiver_col <- paste0("proportion.", st08_scalar(candidate$receiver_cell_type))
+  if (!ligand %in% rownames(expr$counts) || !receptor %in% rownames(expr$counts) || !sender_col %in% colnames(wide) || !receiver_col %in% colnames(wide)) {
+    return(list(
+      ligand_spot_expression_mean = NA_real_,
+      receptor_spot_expression_mean = NA_real_,
+      lr_expression_colocalization = NA_real_,
+      lr_expression_support = "no",
+      expression_status = "skipped_missing_expression",
+      expression_reason = "Ligand/receptor genes or sender/receiver abundance columns were missing."
+    ))
+  }
+  common_spots <- intersect(as.character(wide$spot_id), colnames(expr$counts))
+  if (length(common_spots) < 2) {
+    return(list(
+      ligand_spot_expression_mean = NA_real_,
+      receptor_spot_expression_mean = NA_real_,
+      lr_expression_colocalization = NA_real_,
+      lr_expression_support = "no",
+      expression_status = "skipped_missing_expression",
+      expression_reason = "Fewer than two shared spots between expression matrix and deconvolution proportions."
+    ))
+  }
+  wide <- wide[match(common_spots, wide$spot_id), , drop = FALSE]
+  ligand_expr <- as.numeric(expr$counts[ligand, common_spots])
+  receptor_expr <- as.numeric(expr$counts[receptor, common_spots])
+  ligand_score <- ligand_expr * suppressWarnings(as.numeric(wide[[sender_col]]))
+  receptor_score <- receptor_expr * suppressWarnings(as.numeric(wide[[receiver_col]]))
+  corr <- if (stats::sd(ligand_score, na.rm = TRUE) > 0 && stats::sd(receptor_score, na.rm = TRUE) > 0) {
+    suppressWarnings(as.numeric(stats::cor(ligand_score, receptor_score, use = "pairwise.complete.obs")))
+  } else {
+    NA_real_
+  }
+  list(
+    ligand_spot_expression_mean = mean(ligand_expr, na.rm = TRUE),
+    receptor_spot_expression_mean = mean(receptor_expr, na.rm = TRUE),
+    lr_expression_colocalization = corr,
+    lr_expression_support = if (!is.na(corr) && corr > 0) "yes" else "no",
+    expression_status = "ok",
+    expression_reason = ""
+  )
+}
+
+expr <- load_spatial_expression_08c(cfg)
+
+score_candidate_08c <- function(candidate, props, expr) {
   if (nrow(props) == 0) {
     return(data.frame(
       comm_candidate_id = candidate$comm_candidate_id,
@@ -34,6 +119,10 @@ score_candidate_08c <- function(candidate, props) {
       receiver_spatial_abundance = NA_real_,
       sender_receiver_colocalization = NA_real_,
       colocalization_support = "no",
+      ligand_spot_expression_mean = NA_real_,
+      receptor_spot_expression_mean = NA_real_,
+      lr_expression_colocalization = NA_real_,
+      lr_expression_support = "no",
       status = "skipped_no_deconv_proportions",
       reason = "No ok deconvolution proportion outputs were available.",
       stringsAsFactors = FALSE
@@ -63,6 +152,10 @@ score_candidate_08c <- function(candidate, props) {
       receiver_spatial_abundance = if (receiver_col %in% colnames(wide)) mean(wide[[receiver_col]], na.rm = TRUE) else NA_real_,
       sender_receiver_colocalization = NA_real_,
       colocalization_support = "no",
+      ligand_spot_expression_mean = NA_real_,
+      receptor_spot_expression_mean = NA_real_,
+      lr_expression_colocalization = NA_real_,
+      lr_expression_support = "no",
       status = "blocked_celltype_not_localized",
       reason = "Sender or receiver cell type was not present in ok deconvolution proportions.",
       stringsAsFactors = FALSE
@@ -76,6 +169,7 @@ score_candidate_08c <- function(candidate, props) {
     NA_real_
   }
   support <- !is.na(corr) && corr > 0 && mean(sender_ab, na.rm = TRUE) > 0 && mean(receiver_ab, na.rm = TRUE) > 0
+  lr_expr <- lr_expression_support_08c(candidate, wide, expr)
   data.frame(
     comm_candidate_id = candidate$comm_candidate_id,
     lr_axis_id = candidate$lr_axis_id,
@@ -86,8 +180,12 @@ score_candidate_08c <- function(candidate, props) {
     receiver_spatial_abundance = mean(receiver_ab, na.rm = TRUE),
     sender_receiver_colocalization = corr,
     colocalization_support = if (support) "yes" else "no",
+    ligand_spot_expression_mean = lr_expr$ligand_spot_expression_mean,
+    receptor_spot_expression_mean = lr_expr$receptor_spot_expression_mean,
+    lr_expression_colocalization = lr_expr$lr_expression_colocalization,
+    lr_expression_support = lr_expr$lr_expression_support,
     status = "ok",
-    reason = "",
+    reason = if (identical(lr_expr$expression_status, "ok")) "" else lr_expr$expression_reason,
     stringsAsFactors = FALSE
   )
 }
@@ -95,7 +193,7 @@ score_candidate_08c <- function(candidate, props) {
 coloc <- if (nrow(candidates) == 0) {
   st08_empty_colocalization()
 } else {
-  do.call(rbind, lapply(seq_len(nrow(candidates)), function(i) score_candidate_08c(candidates[i, , drop = FALSE], props)))
+  do.call(rbind, lapply(seq_len(nrow(candidates)), function(i) score_candidate_08c(candidates[i, , drop = FALSE], props, expr)))
 }
 
 lr_coloc_tsv <- file.path(cfg$spatial_communication_table_dir, "lr_colocalization.tsv")

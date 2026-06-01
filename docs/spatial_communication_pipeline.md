@@ -19,7 +19,7 @@ before niche derivation when `COMMOT_ENABLED != no`.
 
 ## Runtime Behavior
 
-08f uses Python COMMOT when `commot` and `anndata` are available. If the runtime
+08b uses Python COMMOT when `commot` and `anndata` are available. If the runtime
 is unavailable and `COMMOT_REQUIRE_RUNTIME=no`, the stage writes a schema-valid
 skip table so downstream manifests remain explicit. Set
 `COMMOT_REQUIRE_RUNTIME=yes` on the server when a missing COMMOT runtime should
@@ -36,8 +36,16 @@ object, an LR table, a distance threshold, and a cluster label column.
 `commot_spatial_hit` before assigning evidence tiers. 08e also reads the same
 summary and crosses it with deconvolution, colocalization, and neighborhood
 support. CellChat-only candidates remain `spatial_hypothesis`; `spatial_primary`
-requires scRNA consensus support, deconvolution support, sender/receiver
-localization, neighborhood support, and COMMOT or colocalization support.
+requires primary scRNA support, formal deconvolution support, sender/receiver
+localization, neighborhood support, and either COMMOT support or ligand/receptor
+expression-level colocalization. Sender/receiver abundance colocalization alone
+is retained as localization evidence but does not replace COMMOT or LR expression
+support for primary evidence.
+
+Deconvolution support is tiered. `ok`/`PASS` can support primary evidence,
+`warn`/`WARN` can support exploratory evidence, `ok_smoke` is smoke-only and
+cannot produce `spatial_primary`, and missing/failed/skipped method outputs are
+blocked.
 
 ## Question Gates
 

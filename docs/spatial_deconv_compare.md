@@ -14,7 +14,7 @@ Outputs:
 | `method_comparison_matrix.tsv` | Pairwise real metric rows for method pairs and cell types. |
 | `method_pairwise_metrics.tsv` | Alias of pairwise Pearson/RMSE/JSD metrics. |
 | `celltype_method_consistency.tsv` | Cell type-specific method consistency metrics. |
-| `spot_method_consistency.tsv` | Spot-level consistency contract. |
+| `spot_method_consistency.tsv` | Spot-level dominant cell type agreement, entropy, and pairwise cosine consistency. |
 | `recommended_method_by_celltype.tsv` | Cell type-level recommendation contract. |
 | `deconv_evidence_tier.tsv` | Method evidence tier from completion and consensus. |
 | `recommended_method.txt` | Method name consumed by post-07 niche derivation. |

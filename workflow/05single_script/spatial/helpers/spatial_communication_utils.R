@@ -35,6 +35,10 @@ st08_empty_colocalization <- function() {
     receiver_spatial_abundance = numeric(),
     sender_receiver_colocalization = numeric(),
     colocalization_support = character(),
+    ligand_spot_expression_mean = numeric(),
+    receptor_spot_expression_mean = numeric(),
+    lr_expression_colocalization = numeric(),
+    lr_expression_support = character(),
     status = character(),
     reason = character(),
     stringsAsFactors = FALSE
@@ -78,12 +82,25 @@ st08_empty_consensus <- function() {
     receiver_deg_support = character(),
     cellchat_hypothesis = character(),
     deconv_support_status = character(),
+    deconv_support_level = character(),
+    scrna_support_level = character(),
     sender_spatial_abundance = numeric(),
     receiver_spatial_abundance = numeric(),
     sender_receiver_colocalization = numeric(),
+    colocalization_support = character(),
+    ligand_spot_expression_mean = numeric(),
+    receptor_spot_expression_mean = numeric(),
+    lr_expression_colocalization = numeric(),
+    lr_expression_support = character(),
     neighborhood_enrichment_score = numeric(),
     co_occurrence_score = numeric(),
+    neighborhood_support = character(),
     commot_score = numeric(),
+    commot_support = character(),
+    commot_status = character(),
+    commot_reason = character(),
+    commot_n_spot_pairs = numeric(),
+    commot_distance_threshold = numeric(),
     spatial_evidence_tier = character(),
     final_interpretation_level = character(),
     reason = character(),
@@ -191,6 +208,29 @@ st08_deconv_validation_status <- function(cfg) {
   df <- st07_read_tsv(manifest_tsv)
   if (nrow(df) == 0 || !"status" %in% colnames(df)) return("missing")
   st08_scalar(df$status, "missing")
+}
+
+st08_deconv_support_level <- function(status) {
+  status <- tolower(st08_scalar(status, "missing"))
+  if (status %in% c("ok", "pass")) return("primary")
+  if (status %in% c("warn")) return("supporting")
+  if (status %in% c("ok_smoke")) return("smoke_only")
+  "blocked"
+}
+
+st08_scrna_support_level <- function(df) {
+  tier <- tolower(as.character(df$scrna_evidence_tier %||% "candidate"))
+  bool_vec <- function(x) tolower(as.character(x %||% "no")) %in% c("yes", "true", "1", "ok", "support", "supported", "primary")
+  liana <- bool_vec(df$liana_support)
+  multinichenet <- bool_vec(df$multinichenet_support)
+  receiver_deg <- bool_vec(df$receiver_deg_support)
+  support_n <- as.integer(liana) + as.integer(multinichenet) + as.integer(receiver_deg)
+  cellchat <- bool_vec(df$cellchat_hypothesis)
+  out <- rep("blocked", length(tier))
+  out[tier %in% c("primary") & support_n >= 2] <- "primary"
+  out[tier %in% c("primary", "supporting", "exploratory") & support_n >= 1 & out == "blocked"] <- "supporting"
+  out[(cellchat | tier %in% c("candidate", "hypothesis_only", "exploratory")) & out == "blocked"] <- "hypothesis_only"
+  out
 }
 
 st08_gate_row <- function(question_id, module, gate_status, interpretation_allowed, reason, evidence_tier = "") {

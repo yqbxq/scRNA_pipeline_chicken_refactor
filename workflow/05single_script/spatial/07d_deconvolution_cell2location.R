@@ -60,6 +60,9 @@ c2l_sidecar_status <- function(code, text) {
   if (grepl("skipped_no_gpu", text, fixed = TRUE) || identical(code, 21L)) {
     return(list(status = "skipped_no_gpu", reason = text))
   }
+  if (grepl("cell2location Python stack import failed", text, fixed = TRUE)) {
+    return(list(status = "skipped_no_cell2location", reason = text))
+  }
   if (grepl("skipped_no_python_env", text, fixed = TRUE) || identical(code, 20L) || identical(code, 127L)) {
     return(list(status = "skipped_no_python_env", reason = text))
   }
@@ -105,6 +108,12 @@ if (nrow(pairs) == 0) {
     outputs <- c2l_output_paths(cfg, pair, section)
     ensure_dir(outputs$out_dir)
     st_h5ad <- c2l_latest_h5ad(cfg, Sys.getenv("SPATIAL_C2L_ST_MODULE", unset = "spatial_03_region"), section)
+    if (!nzchar(ref_h5ad) || !nzchar(st_h5ad)) {
+      missing <- paste(c(if (!nzchar(ref_h5ad)) "reference_h5ad" else character(0), if (!nzchar(st_h5ad)) "spatial_h5ad" else character(0)), collapse = ",")
+      empty <- write_empty_deconv_outputs_st(cfg, cfg$spatial_c2l_table_dir, pair, section, "cell2location", "skipped_no_h5ad", sprintf("cell2location requires H5AD inputs; missing %s", missing))
+      rows[[length(rows) + 1L]] <- st07_deconv_row(pair, section, "cell2location", "skipped_no_h5ad", sprintf("cell2location requires H5AD inputs; missing %s", missing), outputs = empty)
+      next
+    }
     args <- c(
       sidecar,
       "--annotation-col", reference$annotation_col,
