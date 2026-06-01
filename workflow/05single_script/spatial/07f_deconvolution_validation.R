@@ -187,7 +187,7 @@ spot_metrics_07f <- function(props, truth) {
   do.call(rbind, rows)
 }
 
-gate_status_from_validation_07f <- function(status, validation_mode, summary_df, cfg, recommended_consistency = data.frame()) {
+gate_status_from_validation_07f <- function(status, validation_mode, summary_df, cfg, recommended_consistency = data.frame(), prediction_source = "", synthetic_rerun_ok_methods = 0L) {
   if (validation_mode == "dirichlet_only") {
     return(list(gate_status = "WARN", interpretation_allowed = "exploratory", reason = "dirichlet_only validation is smoke/fallback evidence and cannot unlock I11 PASS."))
   }
@@ -199,6 +199,9 @@ gate_status_from_validation_07f <- function(status, validation_mode, summary_df,
   best_cor <- if (ok_methods > 0) max(summary_df$mean_pearson, na.rm = TRUE) else -Inf
   agreement <- if (nrow(recommended_consistency) > 0 && "agreement" %in% colnames(recommended_consistency)) st07_scalar(recommended_consistency$agreement, "") else ""
   if (ok_methods >= 2 && best_rmse <= cfg$spatial_validation_rmse_pass && best_cor >= cfg$spatial_validation_cor_pass) {
+    if (identical(validation_mode, "scdesign3") && (!identical(prediction_source, "synthetic_h5ad_rerun") || synthetic_rerun_ok_methods < 2L)) {
+      return(list(gate_status = "WARN", interpretation_allowed = "exploratory", reason = "scDesign3 validation met metric thresholds, but I11 PASS requires synthetic_h5ad_rerun with at least two successful rerun methods."))
+    }
     if (identical(agreement, "no")) {
       return(list(gate_status = "WARN", interpretation_allowed = "exploratory", reason = "synthetic benchmark passed thresholds, but 07e recommended method disagrees with 07f best method."))
     }
@@ -220,10 +223,24 @@ out_dir <- file.path(cfg$spatial_deconv_validation_table_dir, validation_id)
 ensure_dir(out_dir)
 scdesign3_paths <- list(
   synthetic_sc_metadata_tsv = file.path(out_dir, "synthetic_sc_metadata.tsv"),
+  synthetic_sc_counts_rds = file.path(out_dir, "synthetic_sc_counts.rds"),
   synthetic_spot_counts_rds = file.path(out_dir, "synthetic_spot_counts.rds"),
-  synthetic_st_rds = file.path(out_dir, "synthetic_st.rds")
+  synthetic_st_rds = file.path(out_dir, "synthetic_st.rds"),
+  synthetic_reference_h5ad = file.path(out_dir, "synthetic_reference.h5ad"),
+  synthetic_spatial_h5ad = file.path(out_dir, "synthetic_spatial.h5ad"),
+  synthetic_h5ad_manifest_tsv = file.path(out_dir, "synthetic_h5ad_manifest.tsv"),
+  synthetic_deconv_manifest_tsv = file.path(out_dir, "synthetic_deconv_manifest.tsv")
 )
-scdesign3_generation <- list(status = "", reason = "", synthetic_cell_generation = "not_used", synthetic_spot_generation = "not_used")
+scdesign3_generation <- list(
+  status = "",
+  reason = "",
+  synthetic_cell_generation = "not_used",
+  synthetic_spot_generation = "not_used",
+  synthetic_prediction_source = "input_method_outputs",
+  synthetic_rerun_methods = "",
+  synthetic_rerun_ok_methods = 0L,
+  synthetic_deconv_manifest_tsv = scdesign3_paths$synthetic_deconv_manifest_tsv
+)
 truth_input <- Sys.getenv("SPATIAL_VALIDATION_TRUTH_TSV", unset = "")
 validation_mode <- tolower(cfg$spatial_validation_mode)
 if (nzchar(truth_input) && file.exists(truth_input)) {
@@ -279,14 +296,42 @@ st07_write_tsv(truth_wide_07f(truth), truth_wide_tsv)
 if (!file.exists(scdesign3_paths$synthetic_sc_metadata_tsv)) {
   st07_write_tsv(st07_empty_df(c("synthetic_cell_id", "cell_type")), scdesign3_paths$synthetic_sc_metadata_tsv)
 }
+if (!file.exists(scdesign3_paths$synthetic_h5ad_manifest_tsv)) {
+  st07_write_tsv(data.frame(
+    artifact_id = paste(validation_id, c("synthetic_reference", "synthetic_spatial"), sep = ":"),
+    artifact_role = c("synthetic_reference", "synthetic_spatial"),
+    h5ad_path = c(scdesign3_paths$synthetic_reference_h5ad, scdesign3_paths$synthetic_spatial_h5ad),
+    source_object = "scDesign3_synthetic",
+    n_obs = 0L,
+    n_vars = 0L,
+    obs_required_cols = c("synthetic_cell_id,cell_type,validation_id", "spot_id,section_id,validation_id"),
+    obsm_required_keys = c("", "spatial"),
+    var_required_cols = "gene_id,gene_name",
+    fingerprint = "",
+    status = if (identical(validation_mode, "scdesign3")) status else "not_used",
+    reason = if (identical(validation_mode, "scdesign3")) reason else "synthetic H5AD artifacts are only generated in scdesign3 mode",
+    stringsAsFactors = FALSE
+  ), scdesign3_paths$synthetic_h5ad_manifest_tsv)
+}
+if (!file.exists(scdesign3_generation$synthetic_deconv_manifest_tsv)) {
+  st07_write_tsv(st07f_empty_synthetic_deconv_manifest(), scdesign3_generation$synthetic_deconv_manifest_tsv)
+}
 generation_summary <- data.frame(
   validation_mode = validation_mode,
   truth_source = truth_source,
   synthetic_cell_generation = if (identical(validation_mode, "scdesign3")) scdesign3_generation$synthetic_cell_generation else "not_used",
   synthetic_spot_generation = if (identical(validation_mode, "scdesign3")) scdesign3_generation$synthetic_spot_generation else if (nrow(truth) > 0) "ok_truth_table" else "not_generated",
+  synthetic_prediction_source = scdesign3_generation$synthetic_prediction_source,
+  synthetic_rerun_methods = scdesign3_generation$synthetic_rerun_methods,
+  synthetic_rerun_ok_methods = scdesign3_generation$synthetic_rerun_ok_methods,
   synthetic_sc_metadata_tsv = scdesign3_paths$synthetic_sc_metadata_tsv %||% "",
+  synthetic_sc_counts_rds = scdesign3_paths$synthetic_sc_counts_rds %||% "",
   synthetic_spot_counts_rds = scdesign3_paths$synthetic_spot_counts_rds %||% "",
   synthetic_st_rds = scdesign3_paths$synthetic_st_rds %||% "",
+  synthetic_reference_h5ad = scdesign3_paths$synthetic_reference_h5ad %||% "",
+  synthetic_spatial_h5ad = scdesign3_paths$synthetic_spatial_h5ad %||% "",
+  synthetic_h5ad_manifest_tsv = scdesign3_paths$synthetic_h5ad_manifest_tsv %||% "",
+  synthetic_deconv_manifest_tsv = scdesign3_generation$synthetic_deconv_manifest_tsv %||% "",
   truth_spot_n = length(unique(truth$spot_id %||% character())),
   truth_celltype_n = length(unique(truth$cell_type %||% character())),
   stringsAsFactors = FALSE
@@ -323,7 +368,7 @@ recommended_consistency <- data.frame(
   stringsAsFactors = FALSE
 )
 st07_write_tsv(recommended_consistency, recommended_consistency_tsv)
-gate <- gate_status_from_validation_07f(status, validation_mode, summary_df, cfg, recommended_consistency)
+gate <- gate_status_from_validation_07f(status, validation_mode, summary_df, cfg, recommended_consistency, scdesign3_generation$synthetic_prediction_source, as.integer(scdesign3_generation$synthetic_rerun_ok_methods %||% 0L))
 question_gates <- do.call(rbind, list(
   data.frame(question_id = "I08_deconv_panorama", module = module_name, gate_status = gate$gate_status, interpretation_allowed = gate$interpretation_allowed, reason = gate$reason, stringsAsFactors = FALSE),
   data.frame(question_id = "I09_deconv_GC_subtype", module = module_name, gate_status = gate$gate_status, interpretation_allowed = gate$interpretation_allowed, reason = gate$reason, stringsAsFactors = FALSE),
@@ -349,8 +394,16 @@ manifest_df <- data.frame(
   synthetic_truth_wide_tsv = truth_wide_tsv,
   synthetic_generation_summary_tsv = generation_summary_tsv,
   synthetic_sc_metadata_tsv = scdesign3_paths$synthetic_sc_metadata_tsv %||% "",
+  synthetic_sc_counts_rds = scdesign3_paths$synthetic_sc_counts_rds %||% "",
   synthetic_spot_counts_rds = scdesign3_paths$synthetic_spot_counts_rds %||% "",
   synthetic_st_rds = scdesign3_paths$synthetic_st_rds %||% "",
+  synthetic_reference_h5ad = scdesign3_paths$synthetic_reference_h5ad %||% "",
+  synthetic_spatial_h5ad = scdesign3_paths$synthetic_spatial_h5ad %||% "",
+  synthetic_h5ad_manifest_tsv = scdesign3_paths$synthetic_h5ad_manifest_tsv %||% "",
+  synthetic_prediction_source = scdesign3_generation$synthetic_prediction_source,
+  synthetic_rerun_methods = scdesign3_generation$synthetic_rerun_methods,
+  synthetic_rerun_ok_methods = scdesign3_generation$synthetic_rerun_ok_methods,
+  synthetic_deconv_manifest_tsv = scdesign3_generation$synthetic_deconv_manifest_tsv %||% "",
   method_summary_tsv = summary_tsv,
   celltype_metrics_tsv = celltype_metrics_tsv,
   spot_metrics_tsv = spot_metrics_tsv,
@@ -385,8 +438,13 @@ st07_write_manifest_local(
     synthetic_generation_summary = build_output_entry(generation_summary_tsv, "tsv", module_name, "synthetic generation status and provenance", base_dir = cfg$project_root, schema = infer_schema_from_df(generation_summary)),
     synthetic_truth_wide = build_output_entry(truth_wide_tsv, "tsv", module_name, "wide synthetic spot truth proportions", base_dir = cfg$project_root),
     synthetic_sc_metadata = build_output_entry(scdesign3_paths$synthetic_sc_metadata_tsv %||% "", "tsv", module_name, "synthetic single-cell metadata from scDesign3 validation when available", base_dir = cfg$project_root),
+    synthetic_sc_counts = build_output_entry(scdesign3_paths$synthetic_sc_counts_rds %||% "", "rds", module_name, "synthetic single-cell count matrix from scDesign3 validation when available", base_dir = cfg$project_root),
     synthetic_spot_counts = build_output_entry(scdesign3_paths$synthetic_spot_counts_rds %||% "", "rds", module_name, "mixed synthetic spot count matrix from scDesign3 validation when available", base_dir = cfg$project_root),
     synthetic_st_object = build_output_entry(scdesign3_paths$synthetic_st_rds %||% "", "rds", module_name, "minimal synthetic ST object from scDesign3 validation when available", base_dir = cfg$project_root),
+    synthetic_reference_h5ad = build_output_entry(scdesign3_paths$synthetic_reference_h5ad %||% "", "h5ad", module_name, "synthetic scRNA reference H5AD for 07f rerun when available", base_dir = cfg$project_root),
+    synthetic_spatial_h5ad = build_output_entry(scdesign3_paths$synthetic_spatial_h5ad %||% "", "h5ad", module_name, "synthetic spatial H5AD for 07f rerun when available", base_dir = cfg$project_root),
+    synthetic_h5ad_manifest = build_output_entry(scdesign3_paths$synthetic_h5ad_manifest_tsv %||% "", "tsv", module_name, "R02-style manifest for synthetic H5AD artifacts", base_dir = cfg$project_root),
+    synthetic_deconv_manifest = build_output_entry(scdesign3_generation$synthetic_deconv_manifest_tsv %||% "", "tsv", module_name, "synthetic H5AD-first deconvolution rerun manifest", base_dir = cfg$project_root),
     method_prediction_long = build_output_entry(prediction_long_tsv, "tsv", module_name, "method prediction long table used for validation", base_dir = cfg$project_root),
     method_prediction_wide = build_output_entry(prediction_wide_tsv, "tsv", module_name, "method prediction wide table used for validation", base_dir = cfg$project_root),
     method_summary = build_output_entry(summary_tsv, "tsv", module_name, "per-method validation metrics", base_dir = cfg$project_root, schema = infer_schema_from_df(summary_df)),
