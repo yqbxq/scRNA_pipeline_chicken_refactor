@@ -181,11 +181,47 @@ ensure_dir(dirname(cfg$spatial_recommended_deconv_method_file))
 writeLines(preferred, cfg$spatial_recommended_deconv_method_file, useBytes = TRUE)
 
 summary_tsv <- file.path(cfg$spatial_deconv_compare_table_dir, "method_ranking.tsv")
+method_summary_tsv <- file.path(cfg$spatial_deconv_compare_table_dir, "method_summary.tsv")
 matrix_tsv <- file.path(cfg$spatial_deconv_compare_table_dir, "method_comparison_matrix.tsv")
+method_pairwise_metrics_tsv <- file.path(cfg$spatial_deconv_compare_table_dir, "method_pairwise_metrics.tsv")
+celltype_consistency_tsv <- file.path(cfg$spatial_deconv_compare_table_dir, "celltype_method_consistency.tsv")
+spot_consistency_tsv <- file.path(cfg$spatial_deconv_compare_table_dir, "spot_method_consistency.tsv")
+recommended_by_celltype_tsv <- file.path(cfg$spatial_deconv_compare_table_dir, "recommended_method_by_celltype.tsv")
+deconv_evidence_tier_tsv <- file.path(cfg$spatial_deconv_compare_table_dir, "deconv_evidence_tier.tsv")
 manifest_tsv <- file.path(cfg$spatial_deconv_compare_table_dir, "deconv_compare_manifest.tsv")
 report_path <- file.path(cfg$spatial_deconv_compare_report_dir, "report.md")
 st07_write_tsv(ranking, summary_tsv)
+st07_write_tsv(ranking, method_summary_tsv)
 st07_write_tsv(comparison_matrix, matrix_tsv)
+st07_write_tsv(comparison_matrix, method_pairwise_metrics_tsv)
+celltype_consistency <- comparison_matrix[comparison_matrix$celltype != "all", , drop = FALSE]
+spot_consistency <- st07_empty_df(c("spot_id", "method_a", "method_b", "dominant_celltype_agreement", "entropy_delta", "status", "reason"))
+recommended_by_celltype <- if (nrow(celltype_consistency) == 0) {
+  st07_empty_df(c("celltype", "recommended_method", "mean_pearson", "mean_rmse", "status"))
+} else {
+  do.call(rbind, lapply(sort(unique(celltype_consistency$celltype)), function(ct) {
+    hit <- celltype_consistency[celltype_consistency$celltype == ct, , drop = FALSE]
+    data.frame(
+      celltype = ct,
+      recommended_method = preferred,
+      mean_pearson = if (all(is.na(hit$pearson))) NA_real_ else mean(hit$pearson, na.rm = TRUE),
+      mean_rmse = if (all(is.na(hit$rmse))) NA_real_ else mean(hit$rmse, na.rm = TRUE),
+      status = if (all(is.na(hit$pearson))) "skipped_no_metric" else "ok",
+      stringsAsFactors = FALSE
+    )
+  }))
+}
+deconv_evidence_tier <- data.frame(
+  method = ranking$method %||% character(),
+  completion_score = ranking$completion_score %||% numeric(),
+  consensus_pearson = ranking$consensus_pearson %||% numeric(),
+  deconv_evidence_tier = ifelse((ranking$completion_score %||% 0) >= 1 & !is.na(ranking$consensus_pearson %||% NA_real_) & ranking$consensus_pearson >= 0.8, "primary", ifelse((ranking$completion_score %||% 0) > 0, "supporting", "blocked")),
+  stringsAsFactors = FALSE
+)
+st07_write_tsv(celltype_consistency, celltype_consistency_tsv)
+st07_write_tsv(spot_consistency, spot_consistency_tsv)
+st07_write_tsv(recommended_by_celltype, recommended_by_celltype_tsv)
+st07_write_tsv(deconv_evidence_tier, deconv_evidence_tier_tsv)
 manifest_df <- data.frame(
   deconv_id = "all",
   methods_compared = paste(sort(ok_methods), collapse = ","),
@@ -194,7 +230,13 @@ manifest_df <- data.frame(
   status = status,
   reason = reason,
   method_ranking_tsv = summary_tsv,
+  method_summary_tsv = method_summary_tsv,
   method_comparison_matrix_tsv = matrix_tsv,
+  method_pairwise_metrics_tsv = method_pairwise_metrics_tsv,
+  celltype_method_consistency_tsv = celltype_consistency_tsv,
+  spot_method_consistency_tsv = spot_consistency_tsv,
+  recommended_method_by_celltype_tsv = recommended_by_celltype_tsv,
+  deconv_evidence_tier_tsv = deconv_evidence_tier_tsv,
   recommended_method_file = cfg$spatial_recommended_deconv_method_file,
   stringsAsFactors = FALSE
 )
@@ -220,7 +262,13 @@ st07_write_manifest_local(
   new_outputs = list(
     deconv_compare_manifest = build_output_entry(manifest_tsv, "tsv", module_name, "single-row deconvolution compare status manifest", base_dir = cfg$project_root, schema = infer_schema_from_df(manifest_df)),
     method_ranking = build_output_entry(summary_tsv, "tsv", module_name, "method recommendation ranking", base_dir = cfg$project_root, schema = infer_schema_from_df(ranking)),
+    method_summary = build_output_entry(method_summary_tsv, "tsv", module_name, "method completion and recommendation summary", base_dir = cfg$project_root, schema = infer_schema_from_df(ranking)),
     method_comparison_matrix = build_output_entry(matrix_tsv, "tsv", module_name, "pairwise method comparison matrix", base_dir = cfg$project_root, schema = infer_schema_from_df(comparison_matrix)),
+    method_pairwise_metrics = build_output_entry(method_pairwise_metrics_tsv, "tsv", module_name, "pairwise method Pearson/RMSE/JSD metrics", base_dir = cfg$project_root, schema = infer_schema_from_df(comparison_matrix)),
+    celltype_method_consistency = build_output_entry(celltype_consistency_tsv, "tsv", module_name, "celltype-specific method consistency metrics", base_dir = cfg$project_root, schema = infer_schema_from_df(celltype_consistency)),
+    spot_method_consistency = build_output_entry(spot_consistency_tsv, "tsv", module_name, "spot-level method consistency placeholder until dominant agreement is materialized", base_dir = cfg$project_root, schema = infer_schema_from_df(spot_consistency)),
+    recommended_method_by_celltype = build_output_entry(recommended_by_celltype_tsv, "tsv", module_name, "celltype-level recommended deconvolution method", base_dir = cfg$project_root, schema = infer_schema_from_df(recommended_by_celltype)),
+    deconv_evidence_tier = build_output_entry(deconv_evidence_tier_tsv, "tsv", module_name, "deconvolution method evidence tier derived from completion and consensus", base_dir = cfg$project_root, schema = infer_schema_from_df(deconv_evidence_tier)),
     recommended_method = build_output_entry(cfg$spatial_recommended_deconv_method_file, "txt", module_name, "recommended deconvolution method for 06e niche derivation", base_dir = cfg$project_root),
     report = build_output_entry(report_path, "md", module_name, "spatial deconvolution comparison report", base_dir = cfg$project_root)
   ),

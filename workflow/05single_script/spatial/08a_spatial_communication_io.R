@@ -14,6 +14,7 @@ source(file.path(PIPELINE_ROOT, "workflow/05single_script/helpers/commot_signal_
 source(file.path(.script_dir, "helpers", "spatial_common.R"), encoding = "UTF-8")
 source(file.path(.script_dir, "helpers", "project_paths_spatial.R"), encoding = "UTF-8")
 source(file.path(.script_dir, "helpers", "spatial_deconv_utils.R"), encoding = "UTF-8")
+source(file.path(.script_dir, "helpers", "spatial_communication_utils.R"), encoding = "UTF-8")
 
 cfg <- get_spatial_script_config()
 module_name <- "spatial_08a_spatial_communication_io"
@@ -62,11 +63,23 @@ input_rows <- if (nrow(sections) == 0) {
 
 consensus <- read_tsv_optional(cfg$commot_lr_candidates_tsv)
 lr_candidates <- prepare_commot_lr_candidates(consensus)
+spatial_candidates <- st08_normalize_candidates(consensus, sections)
 
 input_manifest_tsv <- file.path(cfg$spatial_commot_table_dir, "commot_input_manifest.tsv")
 lr_candidates_tsv <- file.path(cfg$spatial_commot_table_dir, "commot_lr_candidates.tsv")
+spatial_candidates_tsv <- file.path(cfg$spatial_communication_table_dir, "spatial_comm_candidates.tsv")
+spatial_input_manifest_tsv <- file.path(cfg$spatial_communication_table_dir, "spatial_comm_input_manifest.tsv")
 spatial_write_tsv(input_rows, input_manifest_tsv)
 spatial_write_tsv(lr_candidates, lr_candidates_tsv)
+spatial_write_tsv(spatial_candidates, spatial_candidates_tsv)
+spatial_write_tsv(data.frame(
+  status = if (nrow(spatial_candidates) > 0) "ok" else "skipped_no_candidates",
+  candidate_n = nrow(spatial_candidates),
+  section_n = nrow(input_rows),
+  source_consensus_tsv = cfg$commot_lr_candidates_tsv,
+  spatial_comm_candidates_tsv = spatial_candidates_tsv,
+  stringsAsFactors = FALSE
+), spatial_input_manifest_tsv)
 
 if (file.exists(cfg$module_08a_spatial_communication_io_manifest_path)) {
   unlink(cfg$module_08a_spatial_communication_io_manifest_path)
@@ -75,7 +88,9 @@ st07_write_manifest_local(
   manifest_path = cfg$module_08a_spatial_communication_io_manifest_path,
   new_outputs = list(
     commot_input_manifest = build_output_entry(input_manifest_tsv, "tsv", module_name, "one row per section-level COMMOT H5AD input", base_dir = cfg$project_root, schema = infer_schema_from_df(input_rows)),
-    commot_lr_candidates_tsv = build_output_entry(lr_candidates_tsv, "tsv", module_name, "one row per LR axis candidate passed to COMMOT", base_dir = cfg$project_root, schema = infer_schema_from_df(lr_candidates))
+    commot_lr_candidates_tsv = build_output_entry(lr_candidates_tsv, "tsv", module_name, "one row per LR axis candidate passed to COMMOT", base_dir = cfg$project_root, schema = infer_schema_from_df(lr_candidates)),
+    spatial_comm_candidates_tsv = build_output_entry(spatial_candidates_tsv, "tsv", module_name, "one row per scRNA communication candidate expanded to ST sections", base_dir = cfg$project_root, schema = infer_schema_from_df(spatial_candidates)),
+    spatial_comm_input_manifest_tsv = build_output_entry(spatial_input_manifest_tsv, "tsv", module_name, "candidate IO status manifest for ST 08 evidence chain", base_dir = cfg$project_root)
   ),
   module_name = module_name,
   base_dir = cfg$project_root,
@@ -84,4 +99,4 @@ st07_write_manifest_local(
   depends_on = list(spatial_07e_deconvolution_compare = cfg$module_07e_deconvolution_compare_manifest_path)
 )
 
-message(sprintf("08a COMMOT IO completed. sections=%d lr_candidates=%d", nrow(input_rows), nrow(lr_candidates)))
+message(sprintf("08a spatial communication IO completed. sections=%d lr_candidates=%d spatial_candidates=%d", nrow(input_rows), nrow(lr_candidates), nrow(spatial_candidates)))

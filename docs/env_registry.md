@@ -74,6 +74,11 @@ This file records project-level environment variables that are exported through 
 | `COMMOT_REQUIRE_RUNTIME` | `no` | When `yes`, missing Python COMMOT/anndata runtime is a hard failure instead of a schema-valid skip. |
 | `COMMOT_LR_CANDIDATES_TSV` | `${TABLE_DIR}/communication/consensus/method_consensus.tsv` | Source LR axis table used by 08a to prepare COMMOT candidates. |
 | `COMMOT_SPATIAL_SUMMARY_TSV` | `${RESULTS_DIR}/spatial/tables/08_commot/commot_spatial_summary.tsv` | 08b spatial support table consumed by 07d consensus. |
+| `SPATIAL_VALIDATION_MODE` | `dirichlet_only` | 07f validation mode: `scdesign3`, `external_truth`, or smoke/fallback `dirichlet_only`. |
+| `SPATIAL_VALIDATION_RMSE_PASS` / `SPATIAL_VALIDATION_RMSE_WARN` | `0.10` / `0.20` | 07f RMSE thresholds for deconvolution question gates. |
+| `SPATIAL_VALIDATION_COR_PASS` / `SPATIAL_VALIDATION_COR_WARN` | `0.80` / `0.60` | 07f correlation thresholds for deconvolution question gates. |
+| `SPATIAL_COMMUNICATION_TABLE_DIR` | `${SPATIAL_TABLE_DIR}/08_spatial_communication` | ST-08 integrated evidence-chain tables. |
+| `SPATIAL_COMMUNICATION_REPORT_DIR` | `${EDA_REPORT_DIR}/spatial_08_communication` | ST-08 final spatial communication report directory. |
 | `MODULE_03A3_VERSION` | `1.0` | Version marker for the independent panorama UMAP stage. |
 | `MODULE_SPATIAL_02A2_VERSION` | `1.0` | Version marker for the independent spatial UMAP stage. |
 | `UMAP_N_NEIGHBORS` | `30` | Shared UMAP neighbor count for 03a3 and spatial 02a2. |

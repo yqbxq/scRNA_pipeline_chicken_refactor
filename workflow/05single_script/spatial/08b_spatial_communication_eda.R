@@ -24,8 +24,18 @@ commot_df <- spatial_read_tsv(commot_lr_tsv)
 summary_df <- summarize_commot_signal(commot_df, signal_threshold = cfg$commot_signal_threshold)
 
 summary_tsv <- file.path(cfg$spatial_commot_table_dir, "commot_spatial_summary.tsv")
+celltype_scores_tsv <- file.path(cfg$spatial_commot_table_dir, "commot_celltype_scores.tsv")
+spot_pair_scores_tsv <- file.path(cfg$spatial_commot_table_dir, "commot_spot_pair_scores.tsv")
 report_md <- file.path(cfg$spatial_commot_report_dir, "report.md")
 spatial_write_tsv(summary_df, summary_tsv)
+celltype_scores <- if (nrow(summary_df) == 0) {
+  data.frame(section_id = character(), lr_axis_id = character(), sender = character(), receiver = character(), signal_score = numeric(), spatial_support = character(), status = character(), stringsAsFactors = FALSE)
+} else {
+  aggregate(signal_score ~ section_id + lr_axis_id + sender + receiver + spatial_support + status, data = summary_df, FUN = function(x) if (all(is.na(x))) NA_real_ else max(x, na.rm = TRUE))
+}
+spot_pair_scores <- data.frame(section_id = character(), lr_axis_id = character(), source_spot_id = character(), target_spot_id = character(), signal_score = numeric(), status = character(), reason = character(), stringsAsFactors = FALSE)
+spatial_write_tsv(celltype_scores, celltype_scores_tsv)
+spatial_write_tsv(spot_pair_scores, spot_pair_scores_tsv)
 
 status_counts <- if (nrow(summary_df) == 0) {
   data.frame(status = "empty", n = 0L, stringsAsFactors = FALSE)
@@ -61,6 +71,8 @@ st07_write_manifest_local(
   manifest_path = cfg$module_08b_spatial_communication_eda_manifest_path,
   new_outputs = list(
     commot_spatial_summary_tsv = build_output_entry(summary_tsv, "tsv", module_name, "one row per COMMOT LR axis spatial-support decision", base_dir = cfg$project_root, schema = infer_schema_from_df(summary_df)),
+    commot_celltype_scores_tsv = build_output_entry(celltype_scores_tsv, "tsv", module_name, "COMMOT-backed sender/receiver celltype score summary", base_dir = cfg$project_root, schema = infer_schema_from_df(celltype_scores)),
+    commot_spot_pair_scores_tsv = build_output_entry(spot_pair_scores_tsv, "tsv", module_name, "spot-pair COMMOT score contract; populated when runtime exposes spot-level transport", base_dir = cfg$project_root, schema = infer_schema_from_df(spot_pair_scores)),
     report_md = build_output_entry(report_md, "md", module_name, "spatial COMMOT EDA report", base_dir = cfg$project_root)
   ),
   module_name = module_name,

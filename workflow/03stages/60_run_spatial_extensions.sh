@@ -129,6 +129,18 @@ if [[ "${RUN_COMMOT}" == "yes" && "${COMMOT_ENABLED:-auto}" != "no" ]]; then
   run_future_spatial_r_stage "08b_spatial_communication_eda.R" "spatial_08b_spatial_communication_eda" \
     "${COMMOT_MANIFEST}"
   export COMMOT_SPATIAL_SUMMARY_TSV="${SPATIAL_TABLE_DIR}/08_commot/commot_spatial_summary.tsv"
+  run_future_spatial_r_stage "08c_lr_colocalization.R" "spatial_08c_lr_colocalization" \
+    "${MANIFEST_DIR}/spatial_08a_spatial_communication_io/_manifest.json" \
+    "${MANIFEST_DIR}/spatial_07e_deconvolution_compare/_manifest.json"
+  run_future_spatial_r_stage "08d_communication_neighborhood_consistency.R" "spatial_08d_communication_neighborhood" \
+    "${MANIFEST_DIR}/spatial_08c_lr_colocalization/_manifest.json" \
+    "${MANIFEST_DIR}/spatial_06d_neighborhood/_manifest.json"
+  run_future_spatial_r_stage "08e_spatial_communication_consensus.R" "spatial_08e_spatial_communication_consensus" \
+    "${MANIFEST_DIR}/spatial_08b_spatial_communication_eda/_manifest.json" \
+    "${MANIFEST_DIR}/spatial_08c_lr_colocalization/_manifest.json" \
+    "${MANIFEST_DIR}/spatial_08d_communication_neighborhood/_manifest.json"
+  run_future_spatial_r_stage "08f_spatial_communication_report.R" "spatial_08f_spatial_communication_report" \
+    "${MANIFEST_DIR}/spatial_08e_spatial_communication_consensus/_manifest.json"
 fi
 if [[ "${RUN_NICHE}" == "yes" ]]; then
   run_future_spatial_r_stage "06e_niche_derivation.R" "spatial_06e_niche"

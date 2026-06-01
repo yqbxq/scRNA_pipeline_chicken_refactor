@@ -8,6 +8,7 @@
 
 PIPELINE_ROOT <- Sys.getenv("PIPELINE_ROOT", unset = normalizePath(file.path(.script_dir, "..", "..", ".."), winslash = "/", mustWork = FALSE))
 source(file.path(PIPELINE_ROOT, "workflow/02lib/r/r_runtime_bootstrap.R"), encoding = "UTF-8")
+source(file.path(PIPELINE_ROOT, "workflow/05single_script/helpers/report_utils.R"), encoding = "UTF-8")
 source(file.path(.script_dir, "helpers", "spatial_common.R"), encoding = "UTF-8")
 source(file.path(.script_dir, "helpers", "project_paths_spatial.R"), encoding = "UTF-8")
 source(file.path(.script_dir, "helpers", "spatial_deconv_utils.R"), encoding = "UTF-8")
@@ -120,21 +121,101 @@ compare_to_truth_07f <- function(props, truth) {
   do.call(rbind, rows)
 }
 
+truth_wide_07f <- function(truth) {
+  if (nrow(truth) == 0) {
+    return(st07_empty_df(c("spot_id")))
+  }
+  reshape(truth, idvar = "spot_id", timevar = "cell_type", direction = "wide")
+}
+
+prediction_wide_07f <- function(props) {
+  if (nrow(props) == 0) {
+    return(st07_empty_df(c("method", "spot_id")))
+  }
+  reshape(props[, c("method", "spot_id", "cell_type", "proportion"), drop = FALSE], idvar = c("method", "spot_id"), timevar = "cell_type", direction = "wide")
+}
+
+celltype_metrics_07f <- function(props, truth) {
+  merged <- merge(truth, props, by = c("spot_id", "cell_type"))
+  if (nrow(merged) == 0) {
+    return(data.frame(method = character(), cell_type = character(), n_spots = integer(), rmse = numeric(), pearson = numeric(), stringsAsFactors = FALSE))
+  }
+  rows <- lapply(split(merged, list(merged$method, merged$cell_type), drop = TRUE), function(hit) {
+    data.frame(
+      method = hit$method[[1]],
+      cell_type = hit$cell_type[[1]],
+      n_spots = length(unique(hit$spot_id)),
+      rmse = sqrt(mean((hit$proportion - hit$true_proportion)^2)),
+      pearson = safe_pearson_07f(hit$proportion, hit$true_proportion),
+      stringsAsFactors = FALSE
+    )
+  })
+  do.call(rbind, rows)
+}
+
+spot_metrics_07f <- function(props, truth) {
+  merged <- merge(truth, props, by = c("spot_id", "cell_type"))
+  if (nrow(merged) == 0) {
+    return(data.frame(method = character(), spot_id = character(), rmse = numeric(), pearson = numeric(), dominant_match = logical(), stringsAsFactors = FALSE))
+  }
+  rows <- lapply(split(merged, list(merged$method, merged$spot_id), drop = TRUE), function(hit) {
+    data.frame(
+      method = hit$method[[1]],
+      spot_id = hit$spot_id[[1]],
+      rmse = sqrt(mean((hit$proportion - hit$true_proportion)^2)),
+      pearson = safe_pearson_07f(hit$proportion, hit$true_proportion),
+      dominant_match = hit$cell_type[which.max(hit$proportion)] == hit$cell_type[which.max(hit$true_proportion)],
+      stringsAsFactors = FALSE
+    )
+  })
+  do.call(rbind, rows)
+}
+
+gate_status_from_validation_07f <- function(status, validation_mode, summary_df, cfg) {
+  if (validation_mode == "dirichlet_only") {
+    return(list(gate_status = "WARN", interpretation_allowed = "exploratory", reason = "dirichlet_only validation is smoke/fallback evidence and cannot unlock I11 PASS."))
+  }
+  if (!identical(status, "ok")) {
+    return(list(gate_status = "FAIL", interpretation_allowed = "no", reason = status))
+  }
+  ok_methods <- nrow(summary_df[is.finite(summary_df$mean_rmse), , drop = FALSE])
+  best_rmse <- if (ok_methods > 0) min(summary_df$mean_rmse, na.rm = TRUE) else Inf
+  best_cor <- if (ok_methods > 0) max(summary_df$mean_pearson, na.rm = TRUE) else -Inf
+  if (ok_methods >= 2 && best_rmse <= cfg$spatial_validation_rmse_pass && best_cor >= cfg$spatial_validation_cor_pass) {
+    return(list(gate_status = "PASS", interpretation_allowed = "yes", reason = "synthetic deconvolution benchmark passed thresholds."))
+  }
+  if (ok_methods >= 1 && best_rmse <= cfg$spatial_validation_rmse_warn && best_cor >= cfg$spatial_validation_cor_warn) {
+    return(list(gate_status = "WARN", interpretation_allowed = "exploratory", reason = "synthetic deconvolution benchmark met warning thresholds."))
+  }
+  list(gate_status = "FAIL", interpretation_allowed = "no", reason = "synthetic deconvolution benchmark did not meet thresholds.")
+}
+
 methods <- collect_deconv_method_manifests_st(cfg)
 ok_rows <- methods[methods$status == "ok" & nzchar(methods$method), , drop = FALSE]
 prop_rows <- lapply(seq_len(nrow(ok_rows)), function(i) read_method_props_07f(ok_rows[i, , drop = FALSE], cfg))
 props <- if (length(prop_rows) == 0) st07_empty_df(c("method", "deconv_id", "section", "spot_id", "cell_type", "proportion")) else do.call(rbind, prop_rows)
 
 truth_input <- Sys.getenv("SPATIAL_VALIDATION_TRUTH_TSV", unset = "")
-truth_source <- "dirichlet_from_deconv_spots"
+validation_mode <- tolower(cfg$spatial_validation_mode)
 if (nzchar(truth_input) && file.exists(truth_input)) {
+  validation_mode <- "external_truth"
+}
+truth_source <- if (identical(validation_mode, "external_truth")) truth_input else "dirichlet_from_deconv_spots"
+if (identical(validation_mode, "scdesign3") && !requireNamespace("scDesign3", quietly = TRUE)) {
+  truth <- st07_empty_df(c("spot_id", "cell_type", "true_proportion"))
+  truth_source <- "scdesign3_unavailable"
+} else if (identical(validation_mode, "external_truth") && nzchar(truth_input) && file.exists(truth_input)) {
   truth <- normalize_truth_07f(st07_read_tsv(truth_input))
-  truth_source <- truth_input
 } else {
+  validation_mode <- "dirichlet_only"
   truth <- generate_dirichlet_truth_07f(props, cfg)
 }
 
-if (nrow(props) == 0) {
+if (identical(cfg$spatial_validation_mode, "scdesign3") && !requireNamespace("scDesign3", quietly = TRUE)) {
+  status <- "skipped_no_packages"
+  reason <- "SPATIAL_VALIDATION_MODE=scdesign3 requested but scDesign3 is not installed in this R environment"
+  summary_df <- data.frame(method = character(), n_spots = integer(), n_celltypes = integer(), mean_rmse = numeric(), mean_pearson = numeric(), dominant_cell_type_accuracy = numeric(), stringsAsFactors = FALSE)
+} else if (nrow(props) == 0) {
   status <- "skipped_no_method_outputs"
   reason <- "no ok 07a/07b/07c/07d method proportion outputs were available"
   summary_df <- data.frame(method = character(), n_spots = integer(), n_celltypes = integer(), mean_rmse = numeric(), mean_pearson = numeric(), dominant_cell_type_accuracy = numeric(), stringsAsFactors = FALSE)
@@ -144,21 +225,65 @@ if (nrow(props) == 0) {
   summary_df <- data.frame(method = character(), n_spots = integer(), n_celltypes = integer(), mean_rmse = numeric(), mean_pearson = numeric(), dominant_cell_type_accuracy = numeric(), stringsAsFactors = FALSE)
 } else {
   summary_df <- compare_to_truth_07f(props, truth)
-  status <- if (nrow(summary_df) > 0 && any(is.finite(summary_df$mean_rmse))) "ok" else "failed_validation"
-  reason <- if (identical(status, "ok")) "" else "no method output overlapped synthetic truth"
+  status <- if (nrow(summary_df) > 0 && any(is.finite(summary_df$mean_rmse))) if (identical(validation_mode, "dirichlet_only")) "ok_smoke" else "ok" else "failed_validation"
+  reason <- if (status %in% c("ok", "ok_smoke")) "" else "no method output overlapped synthetic truth"
 }
 
 validation_id <- "deconv_validation_default"
 out_dir <- file.path(cfg$spatial_deconv_validation_table_dir, validation_id)
 ensure_dir(out_dir)
 truth_tsv <- file.path(out_dir, "synthetic_truth.tsv")
+truth_wide_tsv <- file.path(out_dir, "synthetic_truth_wide.tsv")
+generation_summary_tsv <- file.path(out_dir, "synthetic_generation_summary.tsv")
+prediction_long_tsv <- file.path(out_dir, "method_prediction_long.tsv")
+prediction_wide_tsv <- file.path(out_dir, "method_prediction_wide.tsv")
 summary_tsv <- file.path(out_dir, "method_summary.tsv")
+celltype_metrics_tsv <- file.path(out_dir, "celltype_metrics.tsv")
+spot_metrics_tsv <- file.path(out_dir, "spot_metrics.tsv")
+recommended_consistency_tsv <- file.path(out_dir, "recommended_method_consistency.tsv")
+question_gate_tsv <- file.path(cfg$spatial_deconv_validation_table_dir, "spatial_question_gate_status.tsv")
 st07_write_tsv(truth, truth_tsv)
+st07_write_tsv(truth_wide_07f(truth), truth_wide_tsv)
+generation_summary <- data.frame(
+  validation_mode = validation_mode,
+  truth_source = truth_source,
+  synthetic_cell_generation = if (identical(validation_mode, "scdesign3") && requireNamespace("scDesign3", quietly = TRUE)) "pending_runtime" else "not_used",
+  synthetic_spot_generation = if (nrow(truth) > 0) "ok_truth_table" else "not_generated",
+  truth_spot_n = length(unique(truth$spot_id %||% character())),
+  truth_celltype_n = length(unique(truth$cell_type %||% character())),
+  stringsAsFactors = FALSE
+)
+st07_write_tsv(generation_summary, generation_summary_tsv)
+st07_write_tsv(props, prediction_long_tsv)
+st07_write_tsv(prediction_wide_07f(props), prediction_wide_tsv)
 st07_write_tsv(summary_df, summary_tsv)
+celltype_metrics <- celltype_metrics_07f(props, truth)
+spot_metrics <- spot_metrics_07f(props, truth)
+st07_write_tsv(celltype_metrics, celltype_metrics_tsv)
+st07_write_tsv(spot_metrics, spot_metrics_tsv)
+recommended_consistency <- data.frame(
+  recommended_method = if (nrow(summary_df) > 0) summary_df$method[order(summary_df$mean_rmse, -summary_df$mean_pearson)][[1]] else "",
+  validation_status = status,
+  validation_mode = validation_mode,
+  best_rmse = if (nrow(summary_df) > 0 && any(is.finite(summary_df$mean_rmse))) min(summary_df$mean_rmse, na.rm = TRUE) else NA_real_,
+  best_pearson = if (nrow(summary_df) > 0 && any(is.finite(summary_df$mean_pearson))) max(summary_df$mean_pearson, na.rm = TRUE) else NA_real_,
+  stringsAsFactors = FALSE
+)
+st07_write_tsv(recommended_consistency, recommended_consistency_tsv)
+gate <- gate_status_from_validation_07f(status, validation_mode, summary_df, cfg)
+question_gates <- do.call(rbind, list(
+  data.frame(question_id = "I08_deconv_panorama", module = module_name, gate_status = gate$gate_status, interpretation_allowed = gate$interpretation_allowed, reason = gate$reason, stringsAsFactors = FALSE),
+  data.frame(question_id = "I09_deconv_GC_subtype", module = module_name, gate_status = gate$gate_status, interpretation_allowed = gate$interpretation_allowed, reason = gate$reason, stringsAsFactors = FALSE),
+  data.frame(question_id = "I10_deconv_TC_subtype", module = module_name, gate_status = "PLANNED", interpretation_allowed = "no", reason = "TC subtype deconvolution remains planned until TC subtype labels are stable.", stringsAsFactors = FALSE),
+  data.frame(question_id = "I11_deconv_validation", module = module_name, gate_status = gate$gate_status, interpretation_allowed = gate$interpretation_allowed, reason = gate$reason, stringsAsFactors = FALSE),
+  data.frame(question_id = "I12_ST_region_compo", module = module_name, gate_status = if (gate$gate_status %in% c("PASS", "WARN")) "WARN" else "FAIL", interpretation_allowed = if (gate$gate_status %in% c("PASS", "WARN")) "exploratory" else "no", reason = "ST region composition depends on 07e recommendation and 07f validation status.", stringsAsFactors = FALSE)
+))
+st07_write_tsv(question_gates, question_gate_tsv)
 manifest_tsv <- file.path(cfg$spatial_deconv_validation_table_dir, "validation_manifest.tsv")
 report_path <- file.path(cfg$spatial_deconv_validation_report_dir, "report.md")
 manifest_df <- data.frame(
   validation_id = validation_id,
+  validation_mode = validation_mode,
   synthetic_n_spots = cfg$spatial_validation_n_spots,
   truth_source = truth_source,
   scdesign3_available = requireNamespace("scDesign3", quietly = TRUE),
@@ -167,7 +292,12 @@ manifest_df <- data.frame(
   status = status,
   reason = reason,
   synthetic_truth_tsv = truth_tsv,
+  synthetic_truth_wide_tsv = truth_wide_tsv,
+  synthetic_generation_summary_tsv = generation_summary_tsv,
   method_summary_tsv = summary_tsv,
+  celltype_metrics_tsv = celltype_metrics_tsv,
+  spot_metrics_tsv = spot_metrics_tsv,
+  spatial_question_gate_status_tsv = question_gate_tsv,
   stringsAsFactors = FALSE
 )
 st07_write_tsv(manifest_df, manifest_tsv)
@@ -176,6 +306,7 @@ report_lines <- c(
   "# Spatial Deconvolution Validation",
   "",
   sprintf("- status: `%s`", status),
+  sprintf("- validation_mode: `%s`", validation_mode),
   sprintf("- synthetic_n_spots: `%s`", cfg$spatial_validation_n_spots),
   sprintf("- dirichlet_alpha: `%s`", cfg$spatial_validation_dirichlet_alpha),
   sprintf("- truth_source: `%s`", truth_source),
@@ -194,7 +325,15 @@ st07_write_manifest_local(
   new_outputs = list(
     validation_manifest = build_output_entry(manifest_tsv, "tsv", module_name, "deconvolution validation manifest", base_dir = cfg$project_root, schema = infer_schema_from_df(manifest_df)),
     synthetic_truth = build_output_entry(truth_tsv, "tsv", module_name, "synthetic spot truth proportions", base_dir = cfg$project_root),
+    synthetic_generation_summary = build_output_entry(generation_summary_tsv, "tsv", module_name, "synthetic generation status and provenance", base_dir = cfg$project_root, schema = infer_schema_from_df(generation_summary)),
+    synthetic_truth_wide = build_output_entry(truth_wide_tsv, "tsv", module_name, "wide synthetic spot truth proportions", base_dir = cfg$project_root),
+    method_prediction_long = build_output_entry(prediction_long_tsv, "tsv", module_name, "method prediction long table used for validation", base_dir = cfg$project_root),
+    method_prediction_wide = build_output_entry(prediction_wide_tsv, "tsv", module_name, "method prediction wide table used for validation", base_dir = cfg$project_root),
     method_summary = build_output_entry(summary_tsv, "tsv", module_name, "per-method validation metrics", base_dir = cfg$project_root, schema = infer_schema_from_df(summary_df)),
+    celltype_metrics = build_output_entry(celltype_metrics_tsv, "tsv", module_name, "per-method per-celltype validation metrics", base_dir = cfg$project_root, schema = infer_schema_from_df(celltype_metrics)),
+    spot_metrics = build_output_entry(spot_metrics_tsv, "tsv", module_name, "per-method per-spot validation metrics", base_dir = cfg$project_root, schema = infer_schema_from_df(spot_metrics)),
+    recommended_method_consistency = build_output_entry(recommended_consistency_tsv, "tsv", module_name, "validation-derived method recommendation consistency", base_dir = cfg$project_root, schema = infer_schema_from_df(recommended_consistency)),
+    spatial_question_gate_status = build_output_entry(question_gate_tsv, "tsv", module_name, "I08/I09/I10/I11/I12 deconvolution question gates", base_dir = cfg$project_root, schema = infer_schema_from_df(question_gates)),
     report = build_output_entry(report_path, "md", module_name, "spatial deconvolution validation report", base_dir = cfg$project_root)
   ),
   module_name = module_name,
