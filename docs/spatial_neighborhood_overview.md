@@ -1,6 +1,6 @@
 # Spatial Module 06 Neighborhood Overview
 
-`06d_spatial_neighborhood.R` consumes the annotated or subannotated ST panorama, exports a transient AnnData `.h5ad` via `sceasy::convertFormat()` or `MuDataSeurat::WriteH5AD()`, and deletes that temporary file after the Python sidecar finishes. The sidecar `workflow/04python/spatial_neighborhood.py` requires AnnData `obsm["spatial"]` plus the selected `obs` label column, then runs Squidpy graph functions directly.
+`06d_spatial_neighborhood.R` is H5AD-first. It first resolves a spatial H5AD mirror from `results/90a_export_h5ad/${SPATIAL_NEIGHBORHOOD_H5AD_MODULE:-spatial_03_region}` and runs Squidpy with `${SPATIAL_NEIGHBORHOOD_GROUP_BY:-region_label}`. The legacy annotated/subannotated ST panorama RDS conversion path remains as a fallback only when no H5AD mirror is available. The sidecar `workflow/04python/spatial_neighborhood.py` requires AnnData `obsm["spatial"]` plus the selected `obs` label column, then runs Squidpy graph functions directly.
 
 | Output | Meaning |
 | --- | --- |

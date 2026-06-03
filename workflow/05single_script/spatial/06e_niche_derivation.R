@@ -23,7 +23,8 @@ niche_manifest_cols_st <- function() {
   c(
     "status", "reason", "input_rds", "neighborhood_manifest", "deconv_manifest",
     "deconv_method", "recommended_method", "score_tsv", "label_tsv",
-    "spatial_panorama_niched_rds", "spot_n", "niche_n", "k", "k_neighbors"
+    "spatial_panorama_niched_rds", "spatial_06e_niche_h5ad", "spatial_06e_niche_h5ad_manifest",
+    "spot_n", "niche_n", "k", "k_neighbors"
   )
 }
 
@@ -107,6 +108,8 @@ write_niche_skip_st <- function(status, reason, input_rds = "", neighborhood_man
     score_tsv = "",
     label_tsv = "",
     spatial_panorama_niched_rds = "",
+    spatial_06e_niche_h5ad = "",
+    spatial_06e_niche_h5ad_manifest = "",
     spot_n = 0L,
     niche_n = 0L,
     k = cfg$spatial_niche_k,
@@ -160,7 +163,7 @@ run_niche_kmeans_st <- function(obj, deconv_row, cfg) {
   st06_write_tsv(label_df, label_tsv)
 
   meta <- obj@meta.data
-  for (col in c("spatial_niche", "spatial_niche_cluster", "spatial_niche_method", "spatial_niche_deconv_method")) {
+  for (col in c("spatial_niche", "spatial_niche_cluster", "spatial_niche_method", "spatial_niche_deconv_method", "niche_label", "niche_score", "niche_confidence", "deconv_primary_method")) {
     if (!col %in% colnames(meta)) {
       meta[[col]] <- NA
     }
@@ -170,6 +173,10 @@ run_niche_kmeans_st <- function(obj, deconv_row, cfg) {
   meta$spatial_niche_cluster[idx] <- label_df$spatial_niche_cluster
   meta$spatial_niche_method[idx] <- label_df$spatial_niche_method
   meta$spatial_niche_deconv_method[idx] <- label_df$deconv_method
+  meta$niche_label[idx] <- label_df$spatial_niche
+  meta$niche_score[idx] <- 1
+  meta$niche_confidence[idx] <- 1
+  meta$deconv_primary_method[idx] <- label_df$deconv_method
   obj@meta.data <- meta
   saveRDS(obj, cfg$spatial_panorama_niched_rds)
 
@@ -182,6 +189,37 @@ run_niche_kmeans_st <- function(obj, deconv_row, cfg) {
     spot_n = nrow(label_df),
     niche_n = length(unique(label_df$spatial_niche))
   )
+}
+
+export_niche_h5ad_mirror_st <- function(manifest_df, cfg) {
+  if (!identical(st06_scalar(manifest_df$status), "ok") || !file.exists(st06_scalar(manifest_df$spatial_panorama_niched_rds))) {
+    return(list(h5ad = "", manifest = ""))
+  }
+  target_dir <- file.path(cfg$results_dir, "90a_export_h5ad", "spatial_06e_niche")
+  target_manifest <- file.path(target_dir, "_manifest.json")
+  ensure_dir(target_dir)
+  env <- c(
+    PROJECT_ROOT = cfg$project_root,
+    PIPELINE_ROOT = cfg$pipeline_root,
+    WORKFLOW_ROOT = file.path(cfg$pipeline_root, "workflow"),
+    RESULTS_DIR = cfg$results_dir,
+    H5AD_UPSTREAM_RDS = st06_scalar(manifest_df$spatial_panorama_niched_rds),
+    H5AD_TARGET_DIR = target_dir,
+    H5AD_TARGET_MANIFEST = target_manifest,
+    H5AD_SOURCE_MODULE = "spatial_06e_niche",
+    H5AD_OUTPUT_KEY = "niche",
+    H5AD_EXPORT_MODULE = "spatial_06e_niche",
+    H5AD_EXPORT_CONTRACT_FAIL_ON = "warn"
+  )
+  script <- file.path(cfg$pipeline_root, "workflow", "05single_script", "spatial", "90b_export_h5ad_spatial.R")
+  run <- tryCatch(system2(file.path(R.home("bin"), "Rscript"), args = script, env = paste(names(env), env, sep = "="), stdout = TRUE, stderr = TRUE), error = function(e) structure(conditionMessage(e), status = 127))
+  summary_tsv <- file.path(target_dir, "h5ad_export_summary.tsv")
+  summary <- st06_read_tsv(summary_tsv)
+  h5ad <- if (nrow(summary) > 0 && "h5ad_path" %in% colnames(summary)) st06_scalar(summary$h5ad_path) else ""
+  if (!nzchar(h5ad)) {
+    h5ad <- ""
+  }
+  list(h5ad = h5ad, manifest = if (file.exists(target_manifest)) target_manifest else "", run = paste(as.character(run), collapse = " "))
 }
 
 panorama_input <- resolve_panorama_input_st(cfg)
@@ -221,6 +259,8 @@ if (!nzchar(panorama_input)) {
       score_tsv = run$score_tsv,
       label_tsv = run$label_tsv,
       spatial_panorama_niched_rds = run$spatial_panorama_niched_rds,
+      spatial_06e_niche_h5ad = "",
+      spatial_06e_niche_h5ad_manifest = "",
       spot_n = run$spot_n,
       niche_n = run$niche_n,
       k = cfg$spatial_niche_k,
@@ -229,6 +269,10 @@ if (!nzchar(panorama_input)) {
     )
   }
 }
+
+h5ad_export <- export_niche_h5ad_mirror_st(manifest_df, cfg)
+manifest_df$spatial_06e_niche_h5ad <- h5ad_export$h5ad
+manifest_df$spatial_06e_niche_h5ad_manifest <- h5ad_export$manifest
 
 manifest_tsv <- file.path(cfg$spatial_niche_table_dir, "niche_manifest.tsv")
 report_path <- file.path(cfg$spatial_niche_figure_dir, "niche_report.md")
@@ -250,6 +294,11 @@ st06_write_manifest_local(
   new_outputs = c(
     if (nzchar(manifest_df$spatial_panorama_niched_rds[[1]]) && file.exists(manifest_df$spatial_panorama_niched_rds[[1]])) {
       list(panorama_niched = build_output_entry(manifest_df$spatial_panorama_niched_rds[[1]], "rds", module_name, "spatial panorama with niche labels", base_dir = cfg$project_root))
+    } else {
+      list()
+    },
+    if (nzchar(manifest_df$spatial_06e_niche_h5ad[[1]])) {
+      list(spatial_06e_niche_h5ad = build_output_entry(manifest_df$spatial_06e_niche_h5ad[[1]], "h5ad", module_name, "spatial H5AD mirror with niche labels", base_dir = cfg$project_root))
     } else {
       list()
     },

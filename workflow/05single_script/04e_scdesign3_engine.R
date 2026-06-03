@@ -122,11 +122,111 @@ per_simulation <- scd_bind_rows(lapply(target_results, `[[`, "per_simulation"), 
 per_label <- scd_bind_rows(lapply(target_results, `[[`, "per_label"), scd_per_label_cols)
 engine_status <- scd_bind_rows(lapply(target_results, `[[`, "engine_status"), scd_engine_status_cols)
 
+write_scdesign3_h5ad_mirror <- function(result, cfg, module_name) {
+  synthetic <- result$synthetic_reference
+  target_id <- if (nrow(result$engine_status) > 0) result$engine_status$target_id[[1]] else ""
+  target_id <- scd_scalar(target_id, "unknown_target")
+  mirror_dir <- file.path(cfg$results_dir, "90a_export_h5ad", "scdesign3_04e")
+  ensure_dir(mirror_dir)
+  target_dir <- file.path(table_dir, target_id)
+  ensure_dir(target_dir)
+  manifest_tsv <- file.path(target_dir, "synthetic_h5ad_manifest.tsv")
+  h5ad_path <- file.path(mirror_dir, paste0(target_id, ".h5ad"))
+  if (is.null(synthetic) || is.null(synthetic$counts) || is.null(synthetic$meta)) {
+    row <- data.frame(
+      artifact_id = target_id,
+      artifact_role = "scdesign3_synthetic_reference",
+      h5ad_path = h5ad_path,
+      source_object = "scDesign3_04e",
+      target_id = target_id,
+      question_ids = "",
+      n_obs = 0L,
+      n_vars = 0L,
+      fingerprint = "",
+      status = "not_available",
+      reason = "04e did not produce a synthetic reference count matrix for this target.",
+      stringsAsFactors = FALSE
+    )
+    write_tsv_local(row, manifest_tsv)
+    return(row)
+  }
+  counts <- synthetic$counts
+  meta <- synthetic$meta
+  counts_rds <- file.path(target_dir, "synthetic_counts.rds")
+  meta_tsv <- file.path(target_dir, "synthetic_cell_metadata.tsv")
+  genes_tsv <- file.path(target_dir, "synthetic_genes.tsv")
+  mtx_path <- file.path(target_dir, "synthetic_counts.mtx")
+  saveRDS(counts, counts_rds)
+  write_tsv_local(meta, meta_tsv)
+  genes <- data.frame(gene_id = rownames(counts), gene_symbol = rownames(counts), stringsAsFactors = FALSE)
+  write_tsv_local(genes, genes_tsv)
+  if (!requireNamespace("Matrix", quietly = TRUE)) {
+    row <- data.frame(
+      artifact_id = target_id,
+      artifact_role = "scdesign3_synthetic_reference",
+      h5ad_path = h5ad_path,
+      source_object = "scDesign3_04e",
+      target_id = target_id,
+      question_ids = "",
+      n_obs = 0L,
+      n_vars = 0L,
+      fingerprint = "",
+      status = "skipped_no_matrix_package",
+      reason = "Matrix package is required to write Matrix Market inputs for H5AD mirror.",
+      stringsAsFactors = FALSE
+    )
+    write_tsv_local(row, manifest_tsv)
+    return(row)
+  }
+  Matrix::writeMM(Matrix::Matrix(counts, sparse = TRUE), mtx_path)
+  writer <- file.path(cfg$pipeline_root, "workflow", "04python", "write_matrix_h5ad.py")
+  run <- tryCatch(system2(Sys.getenv("PY_SPATIAL_BIN", unset = "python3"), args = c(
+    writer,
+    "--mtx", mtx_path,
+    "--genes", genes_tsv,
+    "--obs", meta_tsv,
+    "--obs-id-col", "synthetic_cell_id",
+    "--out-h5ad", h5ad_path,
+    "--manifest", manifest_tsv,
+    "--artifact-id", target_id,
+    "--artifact-role", "scdesign3_synthetic_reference",
+    "--source-object", "scDesign3_04e"
+  ), stdout = TRUE, stderr = TRUE), error = function(e) structure(conditionMessage(e), status = 127))
+  if (!file.exists(manifest_tsv)) {
+    row <- data.frame(
+      artifact_id = target_id,
+      artifact_role = "scdesign3_synthetic_reference",
+      h5ad_path = h5ad_path,
+      source_object = "scDesign3_04e",
+      target_id = target_id,
+      question_ids = "",
+      n_obs = 0L,
+      n_vars = 0L,
+      fingerprint = "",
+      status = "failed_write_h5ad",
+      reason = paste(as.character(run), collapse = " "),
+      stringsAsFactors = FALSE
+    )
+    write_tsv_local(row, manifest_tsv)
+  }
+  row <- read_tsv_optional(manifest_tsv)
+  for (col in c("target_id", "question_ids")) {
+    if (!col %in% colnames(row)) row[[col]] <- if (identical(col, "target_id")) target_id else ""
+  }
+  row
+}
+
+scdesign3_h5ad_manifest <- scd_bind_rows(
+  lapply(target_results, write_scdesign3_h5ad_mirror, cfg = cfg, module_name = module_name),
+  c("artifact_id", "artifact_role", "h5ad_path", "source_object", "target_id", "question_ids", "n_obs", "n_vars", "fingerprint", "status", "reason")
+)
+
 paths <- list(
   target_metrics_tsv = file.path(table_dir, "target_metrics.tsv"),
   per_simulation_metrics_tsv = file.path(table_dir, "per_simulation_metrics.tsv"),
   per_label_metrics_tsv = file.path(table_dir, "per_label_metrics.tsv"),
   engine_status_tsv = file.path(table_dir, "engine_status.tsv"),
+  scdesign3_h5ad_manifest_tsv = file.path(table_dir, "scdesign3_h5ad_manifest.tsv"),
   report_md = file.path(report_dir, "04e_scdesign3_engine.md"),
   figure_dir = figure_root
 )
@@ -135,6 +235,7 @@ write_tsv_local(target_metrics, paths$target_metrics_tsv)
 write_tsv_local(per_simulation, paths$per_simulation_metrics_tsv)
 write_tsv_local(per_label, paths$per_label_metrics_tsv)
 write_tsv_local(engine_status, paths$engine_status_tsv)
+write_tsv_local(scdesign3_h5ad_manifest, paths$scdesign3_h5ad_manifest_tsv)
 
 status_summary <- if (nrow(target_metrics) > 0) {
   target_metrics %>%
@@ -168,6 +269,7 @@ report_lines <- build_report_lines_v04(
     per_simulation_metrics = paths$per_simulation_metrics_tsv,
     per_label_metrics = paths$per_label_metrics_tsv,
     engine_status = paths$engine_status_tsv,
+    scdesign3_h5ad_manifest = paths$scdesign3_h5ad_manifest_tsv,
     figures = paths$figure_dir
   ),
   review_focus = c(
@@ -192,6 +294,7 @@ write_manifest_local(
     per_simulation_metrics_tsv = build_output_entry(paths$per_simulation_metrics_tsv, "tsv", module_name, "one row per target, simulation, and resolution", base_dir = cfg$project_root, schema = infer_schema_from_df(per_simulation)),
     per_label_metrics_tsv = build_output_entry(paths$per_label_metrics_tsv, "tsv", module_name, "truth-label recovery metrics per simulation", base_dir = cfg$project_root, schema = infer_schema_from_df(per_label)),
     engine_status_tsv = build_output_entry(paths$engine_status_tsv, "tsv", module_name, "fit/simulate/score runtime status per target", base_dir = cfg$project_root, schema = infer_schema_from_df(engine_status)),
+    scdesign3_h5ad_manifest_tsv = build_output_entry(paths$scdesign3_h5ad_manifest_tsv, "tsv", module_name, "H5AD mirror manifest for 04e synthetic references", base_dir = cfg$project_root, schema = infer_schema_from_df(scdesign3_h5ad_manifest)),
     figure_dir = build_output_entry(paths$figure_dir, "directory", module_name, "per-target scDesign3 diagnostic figures", base_dir = cfg$project_root),
     report = build_output_entry(paths$report_md, "md", module_name, "04e scDesign3 engine report", base_dir = cfg$project_root)
   ),

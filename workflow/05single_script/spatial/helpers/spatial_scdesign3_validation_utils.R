@@ -336,13 +336,28 @@ st07f_run_deconv_methods_on_synthetic <- function(cfg, synthetic_cells, spot_cou
   manifest <- if (length(rows) == 0) st07f_empty_synthetic_deconv_manifest() else do.call(rbind, rows)
   st07_write_tsv(manifest, manifest_tsv)
   pred <- if (length(props) == 0) st07_empty_df(c("method", "deconv_id", "section", "spot_id", "cell_type", "proportion")) else do.call(rbind, props)
+  h5ad_manifest <- st07_read_tsv(paths$synthetic_h5ad_manifest_tsv %||% "")
+  h5ad_manifest_ok <- nrow(h5ad_manifest) > 0 && "status" %in% colnames(h5ad_manifest) && all(h5ad_manifest$status == "ok")
+  ok_methods <- manifest$method[manifest$status == "ok"]
+  ok_has_native <- any(ok_methods == "cell2location")
+  ok_has_adapter <- any(ok_methods %in% c("rctd", "transfer", "card"))
+  prediction_source <- if (length(ok_methods) == 0) {
+    "none"
+  } else if (ok_has_native && ok_has_adapter) {
+    "mixed_synthetic_rerun"
+  } else if (ok_has_native) {
+    "synthetic_h5ad_rerun"
+  } else {
+    "synthetic_r_adapter_fallback"
+  }
   list(
     manifest = manifest,
     manifest_tsv = manifest_tsv,
     props = pred,
-    synthetic_prediction_source = if (sum(manifest$status == "ok") > 0) "synthetic_h5ad_rerun" else "none",
+    synthetic_prediction_source = prediction_source,
     synthetic_rerun_methods = paste(manifest$method, collapse = ","),
-    synthetic_rerun_ok_methods = sum(manifest$status == "ok")
+    synthetic_rerun_ok_methods = sum(manifest$status == "ok"),
+    synthetic_h5ad_manifest_ok = h5ad_manifest_ok
   )
 }
 
@@ -385,7 +400,7 @@ st07f_run_scdesign3_validation <- function(cfg, props, out_dir) {
     manifest_tsv <- file.path(out_dir, "synthetic_deconv_manifest.tsv")
     empty <- st07f_empty_synthetic_deconv_manifest()
     st07_write_tsv(empty, manifest_tsv)
-    list(manifest = empty, manifest_tsv = manifest_tsv, props = st07_empty_df(c("method", "deconv_id", "section", "spot_id", "cell_type", "proportion")), synthetic_prediction_source = "none", synthetic_rerun_methods = "", synthetic_rerun_ok_methods = 0L)
+    list(manifest = empty, manifest_tsv = manifest_tsv, props = st07_empty_df(c("method", "deconv_id", "section", "spot_id", "cell_type", "proportion")), synthetic_prediction_source = "none", synthetic_rerun_methods = "", synthetic_rerun_ok_methods = 0L, synthetic_h5ad_manifest_ok = FALSE)
   }
   list(
     status = if (identical(synthetic_cells$status, "ok") && identical(spot_counts$status, "ok")) "ok" else synthetic_cells$status,
@@ -397,6 +412,7 @@ st07f_run_scdesign3_validation <- function(cfg, props, out_dir) {
     synthetic_prediction_source = rerun$synthetic_prediction_source,
     synthetic_rerun_methods = rerun$synthetic_rerun_methods,
     synthetic_rerun_ok_methods = rerun$synthetic_rerun_ok_methods,
+    synthetic_h5ad_manifest_ok = rerun$synthetic_h5ad_manifest_ok %||% FALSE,
     synthetic_deconv_manifest_tsv = rerun$manifest_tsv,
     paths = paths
   )

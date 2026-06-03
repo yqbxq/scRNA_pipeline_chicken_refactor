@@ -18,9 +18,29 @@ obsm.spatial	matrix	yes	float32	primary	spatial	Spatial coordinates	AnnData spat
 layers.counts	matrix	yes	int64	primary	both	Raw counts	Unnormalized count matrix.
 layers.logcounts	matrix	conditional	float32	primary	both	Log-normalized matrix	Required after normalize/export hookup.
 layers.SCT	matrix	conditional	float32	exploratory	both	SCT matrix	Optional SCTransform matrix.
+layers.spliced	matrix	conditional	int64	primary	scrna	Spliced count matrix	Required by H5AD-first RNA velocity when available.
+layers.unspliced	matrix	conditional	int64	primary	scrna	Unspliced count matrix	Required by H5AD-first RNA velocity when available.
+layers.ambiguous	matrix	conditional	int64	exploratory	scrna	Ambiguous molecule count matrix	Optional RNA velocity layer from velocyto.
+obsm.X_velocity_umap	matrix	no	float32	exploratory	scrna	Velocity UMAP vectors	Optional scVelo velocity embedding mirror.
+obsm.X_regulon	matrix	no	float32	exploratory	both	Regulon activity embedding	Optional Python SCENIC activity matrix.
+obsm.X_tf_activity	matrix	no	float32	exploratory	both	TF activity embedding	Optional decoupleR or SCENIC TF activity matrix.
+obsm.X_pathway_activity	matrix	no	float32	exploratory	spatial	Pathway activity embedding	Optional spatial decoupleR pathway activity matrix.
+obs.velocity_pseudotime	scalar	no	float32	exploratory	scrna	Velocity pseudotime	Optional scVelo pseudotime per cell.
+obs.velocity_confidence	scalar	no	float32	exploratory	scrna	Velocity confidence	Optional scVelo confidence per cell.
+obs.spatial_niche	scalar	no	str	exploratory	spatial	Spatial niche label	Niche identity added by ST-06e.
+obs.niche_label	scalar	no	str	exploratory	spatial	Display niche label	Human-readable niche label added by ST-06e.
+obs.niche_score	scalar	no	float32	exploratory	spatial	Spatial niche score	Optional confidence-like score for ST-06e niche assignment.
+obs.niche_confidence	scalar	no	float32	exploratory	spatial	Spatial niche confidence	Optional ST-06e niche confidence.
+obs.deconv_primary_method	scalar	no	str	exploratory	spatial	Primary deconvolution method	Deconvolution method selected upstream of niche derivation.
 uns.module	scalar	yes	str	primary	both	Export module name	Module writing the H5AD.
 uns.export_timestamp	scalar	yes	str	primary	both	Export timestamp	ISO 8601 timestamp.
 uns.fingerprints	dict	conditional	-	primary	both	Checkpoint fingerprints	Copied from module manifest when available.
 uns.cluster_eligibility_summary	dict	conditional	-	exploratory	both	Cluster eligibility summary	Added by P-R01/P-R02 hookup.
+uns.velocity_graph	dict	no	-	exploratory	scrna	Velocity graph	Optional scVelo graph provenance.
+uns.regulation_network_source	scalar	no	str	exploratory	both	Regulation network source	Network/database used for Python-side regulation scoring.
+uns.niche_derivation_source	scalar	no	str	exploratory	spatial	Niche derivation source	Method used to assign spatial niches.
+uns.niche_derivation_timestamp	scalar	no	str	exploratory	spatial	Niche derivation timestamp	ISO 8601 timestamp for ST-06e H5AD mirror.
+uns.deconv_input_manifest	scalar	no	str	exploratory	spatial	Deconvolution input manifest	Manifest consumed by ST-06e.
+uns.neighborhood_input_manifest	scalar	no	str	exploratory	spatial	Neighborhood input manifest	06d manifest consumed by ST-06e.
 spatial.tissue_positions	dataframe	yes	-	primary	spatial	Tissue position table	Spatial image/spot coordinate table.
 spatial.scale_factors	dict	yes	-	primary	spatial	Spatial scale factors	Required for spatial visualization.

@@ -68,3 +68,19 @@ def resolve_spatial_h5ad_path(
         warnings.warn("Using explicit fallback H5AD/RDS bridge path. DEPRECATED: P-R02-E", stacklevel=2)
         return Path(fallback_path)
     raise FileNotFoundError(f"H5AD not found for spatial module={module} section_id={section_id or '*'}")
+
+
+def resolve_spatial_h5ad_path_strict(
+    module: str = "spatial_03_region",
+    section_id: str | None = None,
+    base_dir: str | Path | None = None,
+    fallback_path: str | Path | None = None,
+) -> Path:
+    path = find_spatial_h5ad(module=module, section_id=section_id, base_dir=base_dir)
+    if path is not None:
+        return path
+    if fallback_path:
+        candidate = Path(fallback_path)
+        if candidate.exists() and candidate.suffix.lower() == ".h5ad":
+            return candidate
+    raise FileNotFoundError(f"H5AD-first spatial input not found for module={module} section_id={section_id or '*'}; fallback RDS paths are disabled")

@@ -58,3 +58,27 @@ Python-side helpers now live under `workflow/04python/helpers/`:
 - `spatial_io.py`: `find_spatial_h5ad`, `resolve_spatial_h5ad_path`, `load_spatial_h5ad`, `load_all_spatial_h5ad`
 
 Consumers should resolve H5AD through these helpers instead of reconstructing AnnData from Seurat RDS. During the transition, `H5AD_PYTHON_FALLBACK_TO_RDS=yes` allows explicit legacy paths to remain usable and emits a deprecation warning.
+
+## H5AD-First Consumers
+
+P-R02-H promotes only H5AD-native or cross-language modules to H5AD-first execution. R-native DE, enrichment, CellChat, NicheNet, MultiNicheNet, Seurat clustering/annotation, RCTD, TransferData, CARD, and TSV-only evidence/report stages continue to use their existing contracts.
+
+H5AD-first modules now use strict resolvers:
+
+- `resolve_scrna_h5ad_path_strict()` for scRNA Python consumers.
+- `resolve_spatial_h5ad_path_strict()` for spatial Python consumers.
+
+Strict resolvers accept only real `.h5ad` files from `results/90a_export_h5ad/<module>/` or an explicit `.h5ad` override. They do not fall back to RDS.
+
+Current H5AD-first and mirror targets:
+
+| Area | Module | Contract |
+| --- | --- | --- |
+| scRNA velocity | `10c_scvelo_dynamical.py` | `VELOCITY_INPUT_MODE=auto|h5ad|loom`; H5AD mode requires `layers.spliced`, `layers.unspliced`, and `layers.counts`. |
+| scRNA regulation | `decoupler_scrna.py`, `pyscenic_pipeline.py` | Reads scRNA H5AD directly and writes activity TSV plus optional result H5AD. |
+| scDesign3 | `04e_scdesign3_engine.R` | Keeps RDS/TSV outputs and adds `scdesign3_04e` H5AD mirror manifests for synthetic references. |
+| ST neighborhood | `06d_spatial_neighborhood.R` | Prefers `spatial_03_region` H5AD and uses legacy transient conversion only when no H5AD is present. |
+| ST niche | `06e_niche_derivation.R` | Computes from TSV/RDS inputs but exports `spatial_06e_niche` H5AD mirror. |
+| ST cell2location | `07d_deconvolution_cell2location.R` | Reads scRNA and spatial H5AD through Python helpers and writes `cell2location_result.h5ad`. |
+| ST validation | `07f_deconvolution_validation.R` | Requires ok synthetic H5AD manifest plus at least two successful synthetic rerun methods for scDesign3-mode I11 PASS. |
+| ST regulation/SVG/joint sidecars | `spatial_decoupler.py`, `spatial_pyscenic.py`, `spatialde2_svg.py`, `joint_spatial_sidecar.py` | Resolve spatial H5AD strictly and write schema-valid manifests when runtime dependencies are unavailable. |

@@ -44,3 +44,14 @@ def resolve_scrna_h5ad_path(module: str = "03d_panorama", base_dir: str | Path |
         warnings.warn("Using explicit fallback H5AD/RDS bridge path. DEPRECATED: P-R02-E", stacklevel=2)
         return Path(fallback_path)
     raise FileNotFoundError(f"H5AD not found for scRNA module={module}")
+
+
+def resolve_scrna_h5ad_path_strict(module: str = "03d_panorama", base_dir: str | Path | None = None, fallback_path: str | Path | None = None) -> Path:
+    path = find_scrna_h5ad(module=module, base_dir=base_dir)
+    if path is not None:
+        return path
+    if fallback_path:
+        candidate = Path(fallback_path)
+        if candidate.exists() and candidate.suffix.lower() == ".h5ad":
+            return candidate
+    raise FileNotFoundError(f"H5AD-first scRNA input not found for module={module}; fallback RDS paths are disabled")

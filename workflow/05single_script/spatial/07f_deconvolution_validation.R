@@ -187,7 +187,7 @@ spot_metrics_07f <- function(props, truth) {
   do.call(rbind, rows)
 }
 
-gate_status_from_validation_07f <- function(status, validation_mode, summary_df, cfg, recommended_consistency = data.frame(), prediction_source = "", synthetic_rerun_ok_methods = 0L) {
+gate_status_from_validation_07f <- function(status, validation_mode, summary_df, cfg, recommended_consistency = data.frame(), prediction_source = "", synthetic_rerun_ok_methods = 0L, synthetic_h5ad_manifest_ok = FALSE) {
   if (validation_mode == "dirichlet_only") {
     return(list(gate_status = "WARN", interpretation_allowed = "exploratory", reason = "dirichlet_only validation is smoke/fallback evidence and cannot unlock I11 PASS."))
   }
@@ -199,8 +199,8 @@ gate_status_from_validation_07f <- function(status, validation_mode, summary_df,
   best_cor <- if (ok_methods > 0) max(summary_df$mean_pearson, na.rm = TRUE) else -Inf
   agreement <- if (nrow(recommended_consistency) > 0 && "agreement" %in% colnames(recommended_consistency)) st07_scalar(recommended_consistency$agreement, "") else ""
   if (ok_methods >= 2 && best_rmse <= cfg$spatial_validation_rmse_pass && best_cor >= cfg$spatial_validation_cor_pass) {
-    if (identical(validation_mode, "scdesign3") && (!identical(prediction_source, "synthetic_h5ad_rerun") || synthetic_rerun_ok_methods < 2L)) {
-      return(list(gate_status = "WARN", interpretation_allowed = "exploratory", reason = "scDesign3 validation met metric thresholds, but I11 PASS requires synthetic_h5ad_rerun with at least two successful rerun methods."))
+    if (identical(validation_mode, "scdesign3") && (!prediction_source %in% c("synthetic_h5ad_rerun", "mixed_synthetic_rerun", "synthetic_r_adapter_fallback") || synthetic_rerun_ok_methods < 2L || !isTRUE(synthetic_h5ad_manifest_ok))) {
+      return(list(gate_status = "WARN", interpretation_allowed = "exploratory", reason = "scDesign3 validation met metric thresholds, but I11 PASS requires ok synthetic H5AD manifest plus at least two successful synthetic rerun methods."))
     }
     if (identical(agreement, "no")) {
       return(list(gate_status = "WARN", interpretation_allowed = "exploratory", reason = "synthetic benchmark passed thresholds, but 07e recommended method disagrees with 07f best method."))
@@ -239,6 +239,7 @@ scdesign3_generation <- list(
   synthetic_prediction_source = "input_method_outputs",
   synthetic_rerun_methods = "",
   synthetic_rerun_ok_methods = 0L,
+  synthetic_h5ad_manifest_ok = FALSE,
   synthetic_deconv_manifest_tsv = scdesign3_paths$synthetic_deconv_manifest_tsv
 )
 truth_input <- Sys.getenv("SPATIAL_VALIDATION_TRUTH_TSV", unset = "")
@@ -324,6 +325,7 @@ generation_summary <- data.frame(
   synthetic_prediction_source = scdesign3_generation$synthetic_prediction_source,
   synthetic_rerun_methods = scdesign3_generation$synthetic_rerun_methods,
   synthetic_rerun_ok_methods = scdesign3_generation$synthetic_rerun_ok_methods,
+  synthetic_h5ad_manifest_ok = scdesign3_generation$synthetic_h5ad_manifest_ok %||% FALSE,
   synthetic_sc_metadata_tsv = scdesign3_paths$synthetic_sc_metadata_tsv %||% "",
   synthetic_sc_counts_rds = scdesign3_paths$synthetic_sc_counts_rds %||% "",
   synthetic_spot_counts_rds = scdesign3_paths$synthetic_spot_counts_rds %||% "",
@@ -368,7 +370,7 @@ recommended_consistency <- data.frame(
   stringsAsFactors = FALSE
 )
 st07_write_tsv(recommended_consistency, recommended_consistency_tsv)
-gate <- gate_status_from_validation_07f(status, validation_mode, summary_df, cfg, recommended_consistency, scdesign3_generation$synthetic_prediction_source, as.integer(scdesign3_generation$synthetic_rerun_ok_methods %||% 0L))
+gate <- gate_status_from_validation_07f(status, validation_mode, summary_df, cfg, recommended_consistency, scdesign3_generation$synthetic_prediction_source, as.integer(scdesign3_generation$synthetic_rerun_ok_methods %||% 0L), isTRUE(scdesign3_generation$synthetic_h5ad_manifest_ok))
 question_gates <- do.call(rbind, list(
   data.frame(question_id = "I08_deconv_panorama", module = module_name, gate_status = gate$gate_status, interpretation_allowed = gate$interpretation_allowed, reason = gate$reason, stringsAsFactors = FALSE),
   data.frame(question_id = "I09_deconv_GC_subtype", module = module_name, gate_status = gate$gate_status, interpretation_allowed = gate$interpretation_allowed, reason = gate$reason, stringsAsFactors = FALSE),
@@ -403,6 +405,7 @@ manifest_df <- data.frame(
   synthetic_prediction_source = scdesign3_generation$synthetic_prediction_source,
   synthetic_rerun_methods = scdesign3_generation$synthetic_rerun_methods,
   synthetic_rerun_ok_methods = scdesign3_generation$synthetic_rerun_ok_methods,
+  synthetic_h5ad_manifest_ok = scdesign3_generation$synthetic_h5ad_manifest_ok %||% FALSE,
   synthetic_deconv_manifest_tsv = scdesign3_generation$synthetic_deconv_manifest_tsv %||% "",
   method_summary_tsv = summary_tsv,
   celltype_metrics_tsv = celltype_metrics_tsv,

@@ -19,6 +19,8 @@ import scvelo as scv
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.lines import Line2D
 
+from helpers.scrna_io import resolve_scrna_h5ad_path_strict
+
 
 CELLTYPE_COLOR_POOL = [
     "#79BB7D",
@@ -72,6 +74,9 @@ INDEX_COLUMNS = [
     "method",
     "methods_enabled",
     "input_path",
+    "input_h5ad_path",
+    "h5ad_manifest",
+    "fingerprint",
     "output_path",
     "extra_path",
     "figure_path",
@@ -357,6 +362,34 @@ def integrate_metadata(adata, meta_df, umap_df):
     return adata
 
 
+def require_velocity_layers(adata):
+    missing = [layer for layer in ("spliced", "unspliced", "counts") if layer not in adata.layers]
+    if missing:
+        raise ValueError(f"H5AD-first velocity input missing required layers: {','.join(missing)}")
+
+
+def load_velocity_h5ad_unit(unit, args, meta_df, umap_df):
+    h5ad_module = str(unit.get("h5ad_module", "") or args.h5ad_module)
+    explicit = str(unit.get("input_h5ad_path", "") or unit.get("h5ad_path", "") or "")
+    h5ad_path = resolve_scrna_h5ad_path_strict(module=h5ad_module, base_dir=args.results_dir, fallback_path=explicit or None)
+    adata = ad.read_h5ad(h5ad_path)
+    require_velocity_layers(adata)
+
+    common_cells = adata.obs_names.intersection(meta_df.index).intersection(umap_df.index)
+    if len(common_cells) == 0:
+        raise ValueError(f"H5AD cells do not overlap exported velocity metadata/UMAP: {h5ad_path}")
+    adata = adata[common_cells].copy()
+    if "X_umap" not in adata.obsm:
+        adata.obsm["X_umap"] = umap_df.loc[common_cells, ["UMAP_1", "UMAP_2"]].to_numpy()
+    for column in meta_df.columns:
+        if column not in adata.obs:
+            adata.obs[column] = meta_df.loc[common_cells, column].values
+    if "cell_type" not in adata.obs and "cell_subtype" in adata.obs:
+        adata.obs["cell_type"] = adata.obs["cell_subtype"].astype(str)
+    adata.uns["velocity_h5ad_first_input"] = str(h5ad_path)
+    return adata
+
+
 def assign_discrete_colors(categories, color_pool=None):
     clean = [str(x) for x in categories if pd.notna(x) and str(x)]
     if color_pool is None:
@@ -479,6 +512,19 @@ def matrix_total(matrix):
     if hasattr(total, "item"):
         return float(total.item())
     return float(total)
+
+
+def file_fingerprint(path):
+    path = Path(str(path or ""))
+    if not path.exists():
+        return ""
+    import hashlib
+
+    h = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def copy_stochastic_outputs(adata):
@@ -627,9 +673,23 @@ def run_unit(unit, args, loom_table):
 
     try:
         meta_df, umap_df = read_unit_metadata(unit)
-        samples = samples_from_metadata(meta_df)
-        adata = load_looms(loom_table, args.loom_dir, samples)
-        adata = integrate_metadata(adata, meta_df, umap_df)
+        input_mode = str(args.input_mode).lower()
+        if input_mode not in {"h5ad", "loom", "auto"}:
+            raise ValueError(f"invalid --input-mode: {args.input_mode}")
+        h5ad_error = None
+        if input_mode in {"h5ad", "auto"}:
+            try:
+                adata = load_velocity_h5ad_unit(unit, args, meta_df, umap_df)
+            except Exception as exc:
+                h5ad_error = exc
+                if input_mode == "h5ad":
+                    raise
+        if input_mode == "loom" or (input_mode == "auto" and h5ad_error is not None):
+            samples = samples_from_metadata(meta_df)
+            adata = load_looms(loom_table, args.loom_dir, samples)
+            adata = integrate_metadata(adata, meta_df, umap_df)
+            if h5ad_error is not None:
+                adata.uns["velocity_h5ad_first_fallback_reason"] = str(h5ad_error)
         if adata.n_obs < 3 or adata.n_vars < 3:
             raise ValueError("Fewer than 3 cells or genes after metadata/loom intersection.")
 
@@ -665,6 +725,7 @@ def run_unit(unit, args, loom_table):
         qc_row = build_qc_row(pair_id, split_value, adata)
         write_tsv([qc_row], qc_path, QC_COLUMNS)
         export_velocity_vectors(pair_id, split_value, adata, vector_path)
+        unit["input_h5ad_path"] = str(adata.uns.get("velocity_h5ad_first_input", ""))
         row = index_row(pair_id, split_value, unit, h5ad_path, qc_path, vector_path, figures, "yes", "ok", "", time.time() - start, stochastic_status, adata.n_obs)
         dynamic = dynamic_outputs(args.project_root, pair_id, split_value, h5ad_path, qc_path, vector_path, figures)
         return row, [qc_row], dynamic
@@ -678,12 +739,16 @@ def run_unit(unit, args, loom_table):
 
 
 def index_row(pair_id, split_value, unit, h5ad_path, qc_path, vector_path, figures, enabled, status, reason, runtime_s, stochastic_status, n_cells=0):
+    input_h5ad = unit.get("input_h5ad_path", "")
     return {
         "pair_id": pair_id,
         "split_value": display_split(split_value),
         "method": "scvelo_dynamical",
         "methods_enabled": enabled,
         "input_path": unit.get("metadata_csv", ""),
+        "input_h5ad_path": input_h5ad,
+        "h5ad_manifest": unit.get("h5ad_manifest", ""),
+        "fingerprint": file_fingerprint(input_h5ad),
         "output_path": str(h5ad_path) if status == "ok" else "",
         "extra_path": unit.get("umap_csv", ""),
         "figure_path": ";".join(str(path) for path in figures.values() if Path(path).exists()),
@@ -742,6 +807,8 @@ def write_manifest(args, outputs):
             "velocity_loom_index": str(args.loom_index),
             "trajectory_pairs": str(args.pairs),
             "loom_dir": str(args.loom_dir),
+            "h5ad_module": str(args.h5ad_module),
+            "input_mode": str(args.input_mode),
         },
         "outputs": outputs,
         "depends_on": {
@@ -767,6 +834,9 @@ def parse_args():
     parser.add_argument("--loom-index", default=str(table_dir / "velocity/inputs/velocity_loom_index.tsv"))
     parser.add_argument("--pairs", default=str(project_root / "metadata/trajectory_pairs.tsv"))
     parser.add_argument("--loom-dir", default=str(env.get("VELOCITY_LOOM_DIR", velocity_dir / "loom")))
+    parser.add_argument("--results-dir", default=str(results_dir))
+    parser.add_argument("--h5ad-module", default=env.get("VELOCITY_H5AD_MODULE", "GC_subcluster"))
+    parser.add_argument("--input-mode", default=env.get("VELOCITY_INPUT_MODE", "auto"), choices=["auto", "h5ad", "loom"])
     parser.add_argument("--velocity-output-dir", default=str(env.get("VELOCITY_OUTPUT_DIR", velocity_dir / "output")))
     parser.add_argument("--figure-dir", default=str(Path(env.get("FIGURE_DIR", results_dir / "figures")) / "velocity/scvelo"))
     parser.add_argument("--out-index", default=str(table_dir / "velocity/methods/scvelo/scvelo_index.tsv"))

@@ -24,6 +24,12 @@ This file records project-level environment variables that are exported through 
 | `H5AD_EXPORT_GATES` | empty | Empty means recommended hard-coded H5AD gate hooks; otherwise comma-separated explicit gate list. |
 | `H5AD_EXPORT_ON_FAILURE` | `skip` | H5AD hook failure policy: `skip`, `warn`, or `error`. |
 | `H5AD_PYTHON_FALLBACK_TO_RDS` | `yes` | Python H5AD helpers may fall back to legacy RDS/explicit input paths when H5AD is missing. |
+| `VELOCITY_INPUT_MODE` | `auto` | `10c_scvelo_dynamical.py` input policy: `auto` tries H5AD then loom, `h5ad` requires H5AD, `loom` keeps legacy loom input. |
+| `VELOCITY_H5AD_MODULE` | `GC_subcluster` | scRNA H5AD export module used by H5AD-first velocity when `input_h5ad_path` is not supplied in the velocity reference index. |
+| `SPATIAL_NEIGHBORHOOD_H5AD_MODULE` | `spatial_03_region` | Spatial H5AD export module consumed first by ST-06d Squidpy neighborhood. |
+| `SPATIAL_NEIGHBORHOOD_GROUP_BY` | `region_label` | H5AD `.obs` label used by ST-06d Squidpy neighborhood. |
+| `SPATIAL_REGULATION_H5AD_MODULE` | `spatial_03_region` | Spatial H5AD export module consumed by ST spatial decoupleR/pySCENIC wrappers. |
+| `SPATIAL_SVG_H5AD_MODULE` | `spatial_03_region` | Spatial H5AD export module consumed by ST-09a SpatialDE2 sidecar. |
 | `CELL_COUNT_INVENTORY_THRESHOLD_OVERRIDE_TSV` | `metadata/cell_count_thresholds.tsv` | Per-celltype threshold override table for inventory eligibility. |
 | `CELL_COUNT_INVENTORY_MIN_CELLS_PER_SAMPLE` | `20` | Default per-sample minimum cell count. |
 | `CELL_COUNT_INVENTORY_MIN_SAMPLES_PER_GROUP` | `2` | Default minimum biological samples per group. |

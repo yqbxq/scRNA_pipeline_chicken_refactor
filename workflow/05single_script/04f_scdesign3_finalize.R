@@ -45,6 +45,7 @@ question_gate_pre_path <- file.path(cfg$table_dir, "04d_cluster_robustness", "qu
 communication_pairs_path <- env_or_default_03("COMMUNICATION_PAIRS_SHEET", file.path(cfg$metadata_dir, "communication_pairs.tsv"))
 engine_metrics_path <- file.path(cfg$table_dir, "04e_scdesign3_engine", "target_metrics.tsv")
 engine_status_path <- file.path(cfg$table_dir, "04e_scdesign3_engine", "engine_status.tsv")
+engine_h5ad_manifest_path <- file.path(cfg$table_dir, "04e_scdesign3_engine", "scdesign3_h5ad_manifest.tsv")
 
 target_gates_old <- read_tsv_optional(target_gate_pre_path)
 question_gates_old <- read_tsv_optional(question_gate_pre_path)
@@ -254,6 +255,7 @@ report_lines <- build_report_lines_v04(
   ),
   key_files = list(
     engine_target_metrics = engine_metrics_path,
+    engine_h5ad_manifest = engine_h5ad_manifest_path,
     target_gate_status_post_engine = paths$target_gate_status_post_engine_tsv,
     question_gate_status_post_engine = paths$question_gate_status_post_engine_tsv,
     communication_scdesign3_gate_post_engine = paths$communication_scdesign3_gate_post_engine_tsv,

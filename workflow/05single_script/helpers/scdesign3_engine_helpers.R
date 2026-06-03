@@ -865,6 +865,7 @@ run_cluster_target <- function(target, engine_cfg) {
   per_sim_rows <- list()
   per_label_rows <- list()
   pseudobulk_df <- NULL
+  synthetic_reference <- NULL
 
   for (sim_i in seq_len(n_sim_requested)) {
     sim_start <- proc.time()[["elapsed"]]
@@ -903,6 +904,18 @@ run_cluster_target <- function(target, engine_cfg) {
         synth_mean <- rowMeans(as.matrix(synth$counts[common_genes, , drop = FALSE]))
         pseudobulk_df <- data.frame(gene = common_genes, real_mean = real_mean, synth_mean = synth_mean, stringsAsFactors = FALSE)
       }
+    }
+    if (is.null(synthetic_reference)) {
+      synthetic_reference <- list(
+        counts = synth$counts,
+        meta = data.frame(
+          synthetic_cell_id = colnames(synth$counts),
+          truth_label = as.character(synth$truth),
+          target_id = target_id,
+          simulation_id = sprintf("%s_SIM%02d", target_id, sim_i),
+          stringsAsFactors = FALSE
+        )
+      )
     }
 
     for (resolution in resolutions) {
@@ -967,6 +980,7 @@ run_cluster_target <- function(target, engine_cfg) {
       per_simulation = per_sim,
       per_label = per_label,
       engine_status = scd_engine_status_row(target, resolved_input_path, n_sim_requested, 0L, TRUE, FALSE, FALSE, "score_failed", reason, proc.time()[["elapsed"]] - start, checkpoint_path),
+      synthetic_reference = synthetic_reference,
       figures = scd_write_engine_figures(target_id, engine_cfg$figure_root, per_sim, per_label, pseudobulk_df, reason)
     ))
   }
@@ -980,6 +994,7 @@ run_cluster_target <- function(target, engine_cfg) {
       per_simulation = per_sim,
       per_label = per_label,
       engine_status = scd_engine_status_row(target, resolved_input_path, n_sim_requested, 0L, TRUE, TRUE, FALSE, "score_failed", reason, proc.time()[["elapsed"]] - start, checkpoint_path),
+      synthetic_reference = synthetic_reference,
       figures = scd_write_engine_figures(target_id, engine_cfg$figure_root, per_sim, per_label, pseudobulk_df, reason)
     ))
   }
@@ -1004,6 +1019,7 @@ run_cluster_target <- function(target, engine_cfg) {
     per_simulation = per_sim,
     per_label = per_label,
     engine_status = scd_engine_status_row(target, resolved_input_path, n_sim_requested, n_sim_done, TRUE, TRUE, TRUE, "ok", "", runtime_s, checkpoint_path),
+    synthetic_reference = synthetic_reference,
     figures = scd_write_engine_figures(target_id, engine_cfg$figure_root, per_sim, per_label, pseudobulk_df, "")
   )
 }

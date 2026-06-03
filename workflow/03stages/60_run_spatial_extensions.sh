@@ -82,7 +82,7 @@ run_spatial_python_script() {
   "${python_bin}" "${script_path}"
 }
 
-[[ "${RUN_SVG}" == "yes" ]] && run_future_spatial_r_stage "05_svg.R" "spatial_05_svg"
+[[ "${RUN_SVG}" == "yes" ]] && run_future_spatial_r_stage "09a_spatialde2_svg.R" "spatial_09a_spatialde2_svg"
 if [[ "${RUN_ENRICHMENT}" == "yes" ]]; then
   run_future_spatial_r_stage "06a_region_go_enrichment.R" "spatial_06a_region_go" "${COMPARISON_SHEET}"
   run_future_spatial_r_stage "06b_region_kegg_enrichment.R" "spatial_06b_region_kegg" "${COMPARISON_SHEET}"
