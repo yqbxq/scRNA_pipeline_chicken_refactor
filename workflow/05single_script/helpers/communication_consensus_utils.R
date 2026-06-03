@@ -262,3 +262,35 @@ attach_commot_spatial <- function(consensus_df, commot_df) {
   consensus_df$commot_spatial_hit <- as.character(consensus_df$lr_axis_id) %in% supported_axes
   consensus_df
 }
+
+svg_support_level_07d <- function(ligand_svg_tier, receptor_svg_tier, receiver_target_support_n = 0) {
+  ligand_svg_tier <- as.character(ligand_svg_tier)
+  receptor_svg_tier <- as.character(receptor_svg_tier)
+  receiver_target_support_n <- suppressWarnings(as.numeric(receiver_target_support_n))
+  receiver_target_support_n[is.na(receiver_target_support_n)] <- 0
+  strong <- ligand_svg_tier %in% c("high_confidence_svg", "condition_specific_svg") |
+    receptor_svg_tier %in% c("high_confidence_svg", "condition_specific_svg") |
+    receiver_target_support_n > 0
+  moderate <- ligand_svg_tier %in% c("single_method_svg", "condition_stable_svg") |
+    receptor_svg_tier %in% c("single_method_svg", "condition_stable_svg")
+  weak <- ligand_svg_tier == "proxy_only_svg" | receptor_svg_tier == "proxy_only_svg"
+  out <- rep("none", max(length(ligand_svg_tier), length(receptor_svg_tier), length(receiver_target_support_n)))
+  out[weak] <- "weak"
+  out[moderate] <- "moderate"
+  out[strong] <- "strong"
+  out
+}
+
+svg_support_note_07d <- function(spatial_evidence_tier, svg_spatial_support_level) {
+  spatial_evidence_tier <- as.character(spatial_evidence_tier)
+  svg_spatial_support_level <- as.character(svg_spatial_support_level)
+  ifelse(
+    spatial_evidence_tier == "spatial_primary" & svg_spatial_support_level == "strong",
+    "core communication with SVG gene-level spatial support",
+    ifelse(
+      spatial_evidence_tier == "spatial_hypothesis" & svg_spatial_support_level == "strong",
+      "hypothesis with SVG-compatible spatial expression pattern",
+      ifelse(svg_spatial_support_level %in% c("moderate", "weak"), paste("SVG gene-level spatial support:", svg_spatial_support_level), "")
+    )
+  )
+}

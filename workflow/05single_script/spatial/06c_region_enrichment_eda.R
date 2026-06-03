@@ -193,6 +193,8 @@ matrix_tsv <- file.path(cfg$spatial_region_enrichment_eda_table_dir, "region_pat
 cross_stage_tsv <- file.path(cfg$spatial_region_enrichment_eda_table_dir, "cross_stage_top_pathways.tsv")
 manifest_tsv <- file.path(cfg$spatial_region_enrichment_eda_table_dir, "region_enrichment_eda_manifest.tsv")
 report_path <- file.path(cfg$spatial_enrichment_report_dir, "region_enrichment_eda.md")
+svg_enrichment_handoff_path <- Sys.getenv("SVG_ENRICHMENT_HANDOFF_TSV", unset = file.path(cfg$spatial_table_dir, "09_svg", "09c_consensus", "svg_enrichment_handoff.tsv"))
+svg_enrichment_handoff <- st06_read_tsv(svg_enrichment_handoff_path)
 st06_write_tsv(summary_df, summary_tsv)
 st06_write_tsv(matrix_df, matrix_tsv)
 st06_write_tsv(cross_stage_df, cross_stage_tsv)
@@ -204,6 +206,7 @@ manifest_df <- data.frame(
   summary_tsv = summary_tsv,
   matrix_tsv = matrix_tsv,
   cross_stage_top_pathways_tsv = cross_stage_tsv,
+  svg_enrichment_handoff_tsv = ifelse(file.exists(svg_enrichment_handoff_path), svg_enrichment_handoff_path, ""),
   report = report_path,
   stringsAsFactors = FALSE
 )
@@ -224,7 +227,10 @@ report_lines <- c(
   render_markdown_table_local(utils::head(summary_df, 50)),
   "",
   "## Cross-stage Pathway Drift",
-  render_markdown_table_local(utils::head(cross_stage_df, 50))
+  render_markdown_table_local(utils::head(cross_stage_df, 50)),
+  "",
+  "## ST09 SVG Enrichment Handoff",
+  if (file.exists(svg_enrichment_handoff_path)) render_markdown_table_local(utils::head(svg_enrichment_handoff, 50)) else "No ST09 SVG enrichment handoff was available."
 )
 write_markdown_local(report_lines, report_path)
 
@@ -235,11 +241,12 @@ st06_write_manifest_local(
     region_enrichment_summary = build_output_entry(summary_tsv, "tsv", module_name, "region-level GO/KEGG term count summary", base_dir = cfg$project_root, schema = infer_schema_from_df(summary_df)),
     region_pathway_matrix = build_output_entry(matrix_tsv, "tsv", module_name, "long region-pathway score matrix", base_dir = cfg$project_root, schema = infer_schema_from_df(matrix_df)),
     cross_stage_top_pathways = build_output_entry(cross_stage_tsv, "tsv", module_name, "top pathway score drift across inferred stages", base_dir = cfg$project_root, schema = infer_schema_from_df(cross_stage_df)),
+    svg_enrichment_handoff = build_output_entry(svg_enrichment_handoff_path, "tsv", module_name, "optional ST09 SVG gene set handoff", base_dir = cfg$project_root, schema = infer_schema_from_df(svg_enrichment_handoff)),
     report = build_output_entry(report_path, "md", module_name, "spatial region enrichment EDA report", base_dir = cfg$project_root)
   ),
   module_name = module_name,
   base_dir = cfg$project_root,
-  inputs = list(spatial_06a_region_go = cfg$module_06a_region_go_manifest_path, spatial_06b_region_kegg = cfg$module_06b_region_kegg_manifest_path),
+  inputs = list(spatial_06a_region_go = cfg$module_06a_region_go_manifest_path, spatial_06b_region_kegg = cfg$module_06b_region_kegg_manifest_path, svg_enrichment_handoff = svg_enrichment_handoff_path),
   version = cfg$module_06_version,
   depends_on = list(spatial_06a_region_go = cfg$module_06a_region_go_manifest_path, spatial_06b_region_kegg = cfg$module_06b_region_kegg_manifest_path)
 )

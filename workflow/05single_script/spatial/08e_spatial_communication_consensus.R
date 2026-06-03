@@ -13,6 +13,7 @@ source(file.path(.script_dir, "helpers", "spatial_common.R"), encoding = "UTF-8"
 source(file.path(.script_dir, "helpers", "project_paths_spatial.R"), encoding = "UTF-8")
 source(file.path(.script_dir, "helpers", "spatial_deconv_utils.R"), encoding = "UTF-8")
 source(file.path(.script_dir, "helpers", "spatial_communication_utils.R"), encoding = "UTF-8")
+source(file.path(.script_dir, "helpers", "spatial_svg_utils.R"), encoding = "UTF-8")
 
 cfg <- get_spatial_script_config()
 module_name <- "spatial_08e_spatial_communication_consensus"
@@ -23,6 +24,7 @@ coloc <- st07_read_tsv(file.path(cfg$spatial_communication_table_dir, "lr_coloca
 neighbor <- st07_read_tsv(file.path(cfg$spatial_communication_table_dir, "communication_neighborhood_consistency.tsv"))
 commot <- st07_read_tsv(file.path(cfg$spatial_commot_table_dir, "commot_spatial_summary.tsv"))
 deconv_status <- st08_deconv_validation_status(cfg)
+svg_lr <- st07_read_tsv(Sys.getenv("SVG_LR_SUPPORT_TSV", unset = file.path(cfg$spatial_table_dir, "09_svg", "09c_consensus", "svg_lr_support.tsv")))
 
 merge_optional_08e <- function(left, right, keep_cols) {
   if (nrow(right) == 0 || !"comm_candidate_id" %in% colnames(right)) return(left)
@@ -47,9 +49,22 @@ if (nrow(candidates) == 0) {
     consensus <- merge(consensus, commot_keep, by = "commot_key", all.x = TRUE, sort = FALSE)
     consensus$commot_key <- NULL
   }
+  if (nrow(svg_lr) > 0) {
+    for (col in c("comm_candidate_id", "lr_axis_id", "condition", "ligand_svg_tier", "receptor_svg_tier", "receiver_target_svg_support_n", "receiver_target_svg_support_genes", "svg_spatial_support_level", "svg_support_reason")) {
+      if (!col %in% colnames(svg_lr)) svg_lr[[col]] <- ""
+    }
+    svg_keep <- svg_lr[!duplicated(svg_lr$comm_candidate_id), c("comm_candidate_id", "ligand_svg_tier", "receptor_svg_tier", "receiver_target_svg_support_n", "receiver_target_svg_support_genes", "svg_spatial_support_level", "svg_support_reason"), drop = FALSE]
+    names(svg_keep) <- c("comm_candidate_id", "svg_ligand_support", "svg_receptor_support", "svg_receiver_target_support", "svg_receiver_target_support_genes", "svg_spatial_support_level", "svg_support_reason")
+    consensus <- merge(consensus, svg_keep, by = "comm_candidate_id", all.x = TRUE, sort = FALSE)
+  }
   numeric_cols <- c("sender_spatial_abundance", "receiver_spatial_abundance", "sender_receiver_colocalization", "ligand_spot_expression_mean", "receptor_spot_expression_mean", "lr_expression_colocalization", "neighborhood_enrichment_score", "co_occurrence_score", "commot_score", "commot_n_spot_pairs", "commot_distance_threshold")
   for (col in setdiff(colnames(st08_empty_consensus()), colnames(consensus))) consensus[[col]] <- if (col %in% numeric_cols) NA_real_ else ""
   if (!"commot_support" %in% colnames(consensus)) consensus$commot_support <- "no"
+  consensus$svg_spatial_support_level <- ifelse(nzchar(consensus$svg_spatial_support_level), consensus$svg_spatial_support_level, "none")
+  consensus$svg_ligand_support <- ifelse(nzchar(consensus$svg_ligand_support), consensus$svg_ligand_support, "unsupported")
+  consensus$svg_receptor_support <- ifelse(nzchar(consensus$svg_receptor_support), consensus$svg_receptor_support, "unsupported")
+  consensus$svg_receiver_target_support <- ifelse(nzchar(as.character(consensus$svg_receiver_target_support)), as.character(consensus$svg_receiver_target_support), "0")
+  consensus$svg_support_reason <- ifelse(nzchar(consensus$svg_support_reason), consensus$svg_support_reason, "No SVG gene-level support available.")
   consensus$deconv_support_status <- deconv_status
   consensus$deconv_support_level <- st08_deconv_support_level(deconv_status)
   consensus$scrna_support_level <- st08_scrna_support_level(consensus)
@@ -78,6 +93,9 @@ if (nrow(candidates) == 0) {
   consensus$reason <- ifelse(consensus$spatial_evidence_tier == "blocked", "Insufficient scRNA/deconv/spatial support for spatial communication interpretation.",
     ifelse(consensus$deconv_support_level == "smoke_only", "Deconvolution validation is smoke-only; communication remains hypothesis-level.", "")
   )
+  strong_svg <- consensus$svg_spatial_support_level == "strong"
+  consensus$reason[strong_svg & consensus$spatial_evidence_tier == "spatial_primary"] <- paste(trimws(consensus$reason[strong_svg & consensus$spatial_evidence_tier == "spatial_primary"]), "Core communication with SVG gene-level spatial support.")
+  consensus$reason[strong_svg & consensus$spatial_evidence_tier == "spatial_hypothesis"] <- paste(trimws(consensus$reason[strong_svg & consensus$spatial_evidence_tier == "spatial_hypothesis"]), "Hypothesis with SVG-compatible spatial expression pattern.")
   consensus <- consensus[, colnames(st08_empty_consensus()), drop = FALSE]
 }
 
@@ -94,7 +112,7 @@ st07_write_manifest_local(
   ),
   module_name = module_name,
   base_dir = cfg$project_root,
-  inputs = list(spatial_comm_candidates = file.path(cfg$spatial_communication_table_dir, "spatial_comm_candidates.tsv")),
+  inputs = list(spatial_comm_candidates = file.path(cfg$spatial_communication_table_dir, "spatial_comm_candidates.tsv"), svg_lr_support = file.path(cfg$spatial_table_dir, "09_svg", "09c_consensus", "svg_lr_support.tsv")),
   version = cfg$module_07_version,
   depends_on = list(spatial_08b_spatial_communication_eda = cfg$module_08b_spatial_communication_eda_manifest_path, spatial_08c_lr_colocalization = cfg$module_08c_lr_colocalization_manifest_path, spatial_08d_neighborhood_consistency = cfg$module_08d_neighborhood_consistency_manifest_path)
 )

@@ -30,6 +30,14 @@ This file records project-level environment variables that are exported through 
 | `SPATIAL_NEIGHBORHOOD_GROUP_BY` | `region_label` | H5AD `.obs` label used by ST-06d Squidpy neighborhood. |
 | `SPATIAL_REGULATION_H5AD_MODULE` | `spatial_03_region` | Spatial H5AD export module consumed by ST spatial decoupleR/pySCENIC wrappers. |
 | `SPATIAL_SVG_H5AD_MODULE` | `spatial_03_region` | Spatial H5AD export module consumed by ST-09a SpatialDE2 sidecar. |
+| `SPATIALDE2_ALLOW_PROXY` | `no` | Allows ST-09a to emit exploratory variance-proxy SVG output when SpatialDE2 is unavailable. |
+| `SPARKX_ALLOW_PROXY` | `no` | Allows ST-09b to emit exploratory variance-proxy SVG output when SPARK-X is unavailable. |
+| `SPARKX_SPATIAL_RDS` | spatial annotated checkpoint | Optional Seurat/RDS input for ST-09b SPARK-X. |
+| `SPARKX_SPATIAL_H5AD` | empty | Optional H5AD adapter input for ST-09b proxy fallback. |
+| `SVG_REQUIRE_REVIEW` | `no` | When `yes`, stage 60 holds on `spatial_svg` after 09a/09b/09c for manual review. |
+| `SVG_LR_SUPPORT_TSV` | `${SPATIAL_TABLE_DIR}/09_svg/09c_consensus/svg_lr_support.tsv` | Optional SVG support table consumed by ST-08e communication consensus. |
+| `SVG_ENRICHMENT_HANDOFF_TSV` | `${SPATIAL_TABLE_DIR}/09_svg/09c_consensus/svg_enrichment_handoff.tsv` | Optional SVG gene set handoff consumed by ST-06c enrichment EDA. |
+| `SPATIAL_REGULATION_SVG_GENE_SETS` | `${SPATIAL_TABLE_DIR}/09_svg/09c_consensus/svg_gene_sets.tsv` | Optional SVG gene sets recorded by spatial regulation sidecars. |
 | `CELL_COUNT_INVENTORY_THRESHOLD_OVERRIDE_TSV` | `metadata/cell_count_thresholds.tsv` | Per-celltype threshold override table for inventory eligibility. |
 | `CELL_COUNT_INVENTORY_MIN_CELLS_PER_SAMPLE` | `20` | Default per-sample minimum cell count. |
 | `CELL_COUNT_INVENTORY_MIN_SAMPLES_PER_GROUP` | `2` | Default minimum biological samples per group. |

@@ -32,6 +32,7 @@ def write_manifest(args, status: str, reason: str, h5ad_path: Path | str = "") -
         "tf_activity_tsv": str(out_dir / "tf_activity.tsv") if status == "ok" else "",
         "pathway_activity_tsv": str(out_dir / "pathway_activity.tsv") if status == "ok" else "",
         "regulation_result_h5ad": str(out_dir / "regulation_result.h5ad") if status == "ok" else "",
+        "svg_gene_sets_tsv": args.svg_gene_sets if getattr(args, "svg_gene_sets", "") else "",
     }]).to_csv(out_dir / "spatial_regulation_h5ad_manifest.tsv", sep="\t", index=False)
 
 
@@ -42,6 +43,7 @@ def main() -> int:
     parser.add_argument("--st-module", default="spatial_03_region")
     parser.add_argument("--section-id", default="")
     parser.add_argument("--network-tsv", default="")
+    parser.add_argument("--svg-gene-sets", default="")
     parser.add_argument("--out-dir", default="results/spatial/tables/spatial_regulation")
     parser.add_argument("--results-dir", default=None)
     args = parser.parse_args()
@@ -68,6 +70,9 @@ def main() -> int:
     if args.network_tsv and not Path(args.network_tsv).exists():
         write_manifest(args, "skipped_no_network", f"network TSV not found: {args.network_tsv}", h5ad)
         return 22
+    if args.svg_gene_sets and not Path(args.svg_gene_sets).exists():
+        write_manifest(args, "skipped_no_svg_gene_sets", f"SVG gene sets TSV not found: {args.svg_gene_sets}", h5ad)
+        return 23
 
     try:
         adata = ad.read_h5ad(h5ad)
@@ -80,6 +85,8 @@ def main() -> int:
         adata.obsm["X_tf_activity"] = tf.to_numpy(dtype=float)
         adata.obsm["X_pathway_activity"] = pathway.to_numpy(dtype=float)
         adata.uns["regulation_network_source"] = args.network_tsv or "not_supplied_placeholder"
+        if args.svg_gene_sets:
+            adata.uns["svg_gene_sets_source"] = args.svg_gene_sets
         adata.write_h5ad(out_dir / "regulation_result.h5ad")
     except Exception as exc:
         write_manifest(args, "failed_sidecar", str(exc), h5ad)

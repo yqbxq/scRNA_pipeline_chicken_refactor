@@ -82,7 +82,15 @@ run_spatial_python_script() {
   "${python_bin}" "${script_path}"
 }
 
-[[ "${RUN_SVG}" == "yes" ]] && run_future_spatial_r_stage "09a_spatialde2_svg.R" "spatial_09a_spatialde2_svg"
+if [[ "${RUN_SVG}" == "yes" ]]; then
+  run_future_spatial_r_stage "09a_spatialde2_svg.R" "spatial_09a_spatialde2_svg"
+  run_future_spatial_r_stage "09b_sparkx_svg.R" "spatial_09b_sparkx_svg"
+  run_future_spatial_r_stage "09c_svg_consensus_report.R" "spatial_09c_svg_consensus"
+  if [[ "${SVG_REQUIRE_REVIEW:-no}" == "yes" ]]; then
+    set_eda_gate_status "spatial_svg" "pending" "" "Review exploratory SVG gene evidence before downstream interpretation."
+    hold_for_gate spatial_svg
+  fi
+fi
 if [[ "${RUN_ENRICHMENT}" == "yes" ]]; then
   run_future_spatial_r_stage "06a_region_go_enrichment.R" "spatial_06a_region_go" "${COMPARISON_SHEET}"
   run_future_spatial_r_stage "06b_region_kegg_enrichment.R" "spatial_06b_region_kegg" "${COMPARISON_SHEET}"
