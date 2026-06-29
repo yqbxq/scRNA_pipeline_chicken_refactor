@@ -194,13 +194,14 @@ metric_long <- function(seu, stage_name) {
     dplyr::mutate(
       sample_id = if ("sample_id" %in% colnames(.)) sample_id else orig.ident,
       percent.mito = if ("percent.mito" %in% colnames(.)) percent.mito else 0,
+      percent.rbc = if ("percent.rbc" %in% colnames(.)) percent.rbc else 0,
       log10GenesPerUMI = if ("log10GenesPerUMI" %in% colnames(.)) log10GenesPerUMI else log10(nFeature_RNA + 1) / log10(nCount_RNA + 1)
     )
   meta$log10GenesPerUMI[!is.finite(meta$log10GenesPerUMI)] <- 0
   meta %>%
-    dplyr::select(sample_id, nCount_RNA, nFeature_RNA, percent.mito, log10GenesPerUMI) %>%
+    dplyr::select(sample_id, nCount_RNA, nFeature_RNA, percent.mito, percent.rbc, log10GenesPerUMI) %>%
     tidyr::pivot_longer(
-      cols = c("nCount_RNA", "nFeature_RNA", "percent.mito", "log10GenesPerUMI"),
+      cols = c("nCount_RNA", "nFeature_RNA", "percent.mito", "percent.rbc", "log10GenesPerUMI"),
       names_to = "metric",
       values_to = "value"
     ) %>%

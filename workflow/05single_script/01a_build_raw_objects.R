@@ -116,6 +116,8 @@ sample_builds <- lapply(sample_ids, function(sample_id) {
   obj$mito_warning_messages <- qc_payload$feature_context$mito_warning_messages_text
   obj$species_guess <- qc_payload$feature_context$species_guess
   obj$ribo_feature_count <- qc_payload$feature_context$ribo_feature_count
+  obj$rbc_feature_count <- qc_payload$feature_context$rbc_feature_count
+  obj$rbc_detection_method <- qc_payload$feature_context$rbc_detection_method
   obj$cell_cycle_s_feature_count <- qc_payload$feature_context$cell_cycle_s_feature_count
   obj$cell_cycle_g2m_feature_count <- qc_payload$feature_context$cell_cycle_g2m_feature_count
   obj$cell_cycle_gene_source <- qc_payload$feature_context$cell_cycle_gene_source
@@ -142,6 +144,10 @@ sample_feature_contracts <- dplyr::bind_rows(lapply(sample_ids, function(sample_
     mito_detected_feature_names = feature_context$mito_detected_feature_names_text,
     mito_reference_seqnames = feature_context$mito_reference_seqnames_text,
     species_guess = feature_context$species_guess,
+    rbc_feature_count = feature_context$rbc_feature_count,
+    rbc_detection_method = feature_context$rbc_detection_method,
+    rbc_detected_gene_names = feature_context$rbc_detected_gene_names_text,
+    rbc_gene_list_file = feature_context$rbc_gene_list_file,
     stringsAsFactors = FALSE
   )
 }))
@@ -166,15 +172,21 @@ sample_summary <- raw_obj@meta.data %>%
     median_nfeature = stats::median(nFeature_RNA),
     median_percent_mito = stats::median(percent.mito),
     median_percent_ribo = stats::median(percent.ribo),
+    median_percent_rbc = stats::median(percent.rbc),
     median_log10GenesPerUMI = stats::median(log10GenesPerUMI),
     mito_feature_count = dplyr::first(mito_feature_count),
     ribo_feature_count = dplyr::first(ribo_feature_count),
+    rbc_feature_count = dplyr::first(rbc_feature_count),
+    rbc_detection_method = dplyr::first(rbc_detection_method),
     cell_cycle_s_feature_count = dplyr::first(cell_cycle_s_feature_count),
     cell_cycle_g2m_feature_count = dplyr::first(cell_cycle_g2m_feature_count),
     cell_cycle_gene_source = dplyr::first(cell_cycle_gene_source),
     .groups = "drop"
   ) %>%
-  dplyr::left_join(sample_feature_contracts, by = "sample_id")
+  dplyr::left_join(
+    sample_feature_contracts[, setdiff(colnames(sample_feature_contracts), c("rbc_feature_count", "rbc_detection_method")), drop = FALSE],
+    by = "sample_id"
+  )
 
 raw_obj_path <- file.path(cfg$checkpoint_dir, "01a_raw_objects.rds")
 sample_summary_path <- file.path(cfg$table_dir, "raw_sample_summary.csv")

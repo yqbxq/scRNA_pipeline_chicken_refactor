@@ -75,6 +75,9 @@ for (sample_id in names(split_objs)) {
   if (!"percent.ribo" %in% colnames(sample_obj@meta.data)) {
     sample_obj$percent.ribo <- 0
   }
+  if (!"percent.rbc" %in% colnames(sample_obj@meta.data)) {
+    sample_obj$percent.rbc <- 0
+  }
   if (!"log10GenesPerUMI" %in% colnames(sample_obj@meta.data)) {
     sample_obj$log10GenesPerUMI <- log10(sample_obj$nFeature_RNA + 1) / log10(sample_obj$nCount_RNA + 1)
     sample_obj$log10GenesPerUMI[!is.finite(sample_obj$log10GenesPerUMI)] <- 0
@@ -133,6 +136,7 @@ for (sample_id in names(split_objs)) {
       nFeature_RNA,
       percent.mito,
       percent.ribo,
+      percent.rbc,
       log10GenesPerUMI,
       qc_min_nfeature,
       qc_min_ncount,

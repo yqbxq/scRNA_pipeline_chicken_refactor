@@ -88,6 +88,7 @@ get_single_script_config_02 <- function() {
     qc_threshold_file = env_or_default_02("QC_THRESHOLD_FILE", file.path(config_dir, "qc_thresholds.tsv")),
     eda_gate_file = env_or_default_02("EDA_GATE_FILE", file.path(config_dir, "eda_gates.tsv")),
     mito_gene_list_file = env_or_default_02("MITO_GENE_LIST_FILE", file.path(config_dir, "mito_gene_list.txt")),
+    rbc_gene_list_file = env_or_default_02("RBC_GENE_LIST_FILE", file.path(config_dir, "rbc_gene_list.txt")),
     reference_root = reference_root,
     reference_dir = reference_dir,
     reference_version = env_or_default_02("REFERENCE_VERSION", "ensembl_release112"),

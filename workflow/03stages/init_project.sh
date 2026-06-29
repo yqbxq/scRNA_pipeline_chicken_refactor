@@ -182,6 +182,7 @@ write_project_config() {
     shell_export OBJECT_LAYER_CONFIG_FILE "${OBJECT_LAYER_CONFIG_FILE}"
     shell_export MARKER_PANEL_DIR "${MARKER_PANEL_DIR}"
     shell_export MITO_GENE_LIST_FILE "${MITO_GENE_LIST_FILE}"
+    shell_export RBC_GENE_LIST_FILE "${RBC_GENE_LIST_FILE}"
     shell_export AMBIENT_REPORT_DIR "${AMBIENT_REPORT_DIR}"
     shell_export PRE_QC_REPORT_DIR "${PRE_QC_REPORT_DIR}"
     shell_export POST_QC_REPORT_DIR "${POST_QC_REPORT_DIR}"
@@ -519,6 +520,7 @@ EDA_GATE_FILE="${PROJECT_CONFIG_DIR}/eda_gates.tsv"
 OBJECT_LAYER_CONFIG_FILE="${PROJECT_CONFIG_DIR}/object_layers.tsv"
 MARKER_PANEL_DIR="${PROJECT_CONFIG_DIR}/marker_panels"
 MITO_GENE_LIST_FILE="${PROJECT_CONFIG_DIR}/mito_gene_list.txt"
+RBC_GENE_LIST_FILE="${PROJECT_CONFIG_DIR}/rbc_gene_list.txt"
 AMBIENT_REPORT_DIR="${EDA_REPORT_DIR}/ambient"
 PRE_QC_REPORT_DIR="${EDA_REPORT_DIR}/pre_qc"
 POST_QC_REPORT_DIR="${EDA_REPORT_DIR}/post_qc"
@@ -591,6 +593,13 @@ Add layer- or tissue-specific marker panels here before running annotation stage
 The metadata generator can also populate this directory from analysis_questions.tsv.
 EOF
 touch "${MITO_GENE_LIST_FILE}"
+if [[ ! -s "${RBC_GENE_LIST_FILE}" ]]; then
+  if [[ -f "${PIPELINE_ROOT}/config/rbc_gene_list.txt" ]]; then
+    cp -f "${PIPELINE_ROOT}/config/rbc_gene_list.txt" "${RBC_GENE_LIST_FILE}"
+  else
+    touch "${RBC_GENE_LIST_FILE}"
+  fi
+fi
 
 if [[ "${ACTIVATE_SERVER_CONFIG}" == "yes" ]]; then
   activate_server_config

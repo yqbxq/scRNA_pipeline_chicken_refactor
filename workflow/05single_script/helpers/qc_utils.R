@@ -349,6 +349,25 @@ resolve_feature_context <- function(gene_names, cfg, declared_gene_id_type = "au
     ribo_features <- unique(gene_names[grepl("^(RPL|RPS|Mrpl|Mrps|MRPL|MRPS)", gene_names)])
   }
 
+  rbc_identifiers <- read_identifier_list(cfg$rbc_gene_list_file)
+  rbc_features <- match_features_from_identifier_list(
+    gene_names,
+    rbc_identifiers,
+    annotation_df
+  )
+  rbc_detected_gene_names <- if (nrow(annotation_df) > 0) {
+    matched_gene_names_from_annotation(rbc_features, annotation_df)
+  } else {
+    rbc_features
+  }
+  rbc_detection_method <- if (length(rbc_identifiers) == 0) {
+    "not_configured"
+  } else if (length(rbc_features) == 0) {
+    "configured_no_match"
+  } else {
+    "user_list"
+  }
+
   cc_genes <- load_cell_cycle_genes_local(cfg)
   s_features <- match_features_from_identifier_list(gene_names, cc_genes$s.genes, annotation_df)
   g2m_features <- match_features_from_identifier_list(gene_names, cc_genes$g2m.genes, annotation_df)
@@ -372,6 +391,12 @@ resolve_feature_context <- function(gene_names, cfg, declared_gene_id_type = "au
     mito_warning_messages_text = collapse_unique_values(mito_payload$mito_warning_messages),
     species_guess = mito_payload$species_guess,
     ribo_feature_count = length(unique(ribo_features)),
+    rbc_features = unique(rbc_features),
+    rbc_feature_count = length(unique(rbc_features)),
+    rbc_detected_gene_names = unique(rbc_detected_gene_names),
+    rbc_detected_gene_names_text = collapse_unique_values(rbc_detected_gene_names),
+    rbc_detection_method = rbc_detection_method,
+    rbc_gene_list_file = normalize_scalar_value(cfg$rbc_gene_list_file),
     cell_cycle_s_features = unique(s_features),
     cell_cycle_g2m_features = unique(g2m_features),
     cell_cycle_s_feature_count = length(unique(s_features)),
@@ -394,6 +419,11 @@ add_basic_qc_metrics <- function(seu, cfg, declared_gene_id_type = "auto") {
   } else {
     0
   }
+  seu$percent.rbc <- if (length(feature_context$rbc_features) > 0) {
+    Seurat::PercentageFeatureSet(seu, features = feature_context$rbc_features)
+  } else {
+    0
+  }
   seu$log10GenesPerUMI <- log10(seu$nFeature_RNA + 1) / log10(seu$nCount_RNA + 1)
   seu$log10GenesPerUMI[!is.finite(seu$log10GenesPerUMI)] <- 0
   seu@misc$feature_contract <- list(
@@ -412,6 +442,11 @@ add_basic_qc_metrics <- function(seu, cfg, declared_gene_id_type = "auto") {
     mito_warning_messages_text = feature_context$mito_warning_messages_text,
     species_guess = feature_context$species_guess,
     ribo_feature_count = feature_context$ribo_feature_count,
+    rbc_feature_count = feature_context$rbc_feature_count,
+    rbc_detected_gene_names = feature_context$rbc_detected_gene_names,
+    rbc_detected_gene_names_text = feature_context$rbc_detected_gene_names_text,
+    rbc_detection_method = feature_context$rbc_detection_method,
+    rbc_gene_list_file = feature_context$rbc_gene_list_file,
     cell_cycle_s_feature_count = feature_context$cell_cycle_s_feature_count,
     cell_cycle_g2m_feature_count = feature_context$cell_cycle_g2m_feature_count,
     cell_cycle_gene_source = feature_context$cell_cycle_gene_source,

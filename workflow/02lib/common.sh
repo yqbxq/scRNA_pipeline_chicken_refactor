@@ -179,6 +179,7 @@ export EDA_GATE_FILE="${EDA_GATE_FILE:-${PROJECT_CONFIG_DIR}/eda_gates.tsv}"
 export OBJECT_LAYER_CONFIG_FILE="${OBJECT_LAYER_CONFIG_FILE:-${PROJECT_CONFIG_DIR}/object_layers.tsv}"
 export MARKER_PANEL_DIR="${MARKER_PANEL_DIR:-${PROJECT_CONFIG_DIR}/marker_panels}"
 export MITO_GENE_LIST_FILE="${MITO_GENE_LIST_FILE:-${PROJECT_CONFIG_DIR}/mito_gene_list.txt}"
+export RBC_GENE_LIST_FILE="${RBC_GENE_LIST_FILE:-${PROJECT_CONFIG_DIR}/rbc_gene_list.txt}"
 export AMBIENT_REPORT_DIR="${AMBIENT_REPORT_DIR:-${EDA_REPORT_DIR}/ambient}"
 export PRE_QC_REPORT_DIR="${PRE_QC_REPORT_DIR:-${EDA_REPORT_DIR}/pre_qc}"
 export POST_QC_REPORT_DIR="${POST_QC_REPORT_DIR:-${EDA_REPORT_DIR}/post_qc}"
@@ -426,6 +427,32 @@ ensure_mito_gene_list_file() {
 EOF
 }
 
+ensure_rbc_gene_list_file() {
+  ensure_dir "${PROJECT_CONFIG_DIR}"
+
+  if [[ -s "${RBC_GENE_LIST_FILE}" ]]; then
+    return 0
+  fi
+
+  if [[ -f "${PIPELINE_ROOT}/config/rbc_gene_list.txt" ]]; then
+    cp -f "${PIPELINE_ROOT}/config/rbc_gene_list.txt" "${RBC_GENE_LIST_FILE}"
+    return 0
+  fi
+
+  cat > "${RBC_GENE_LIST_FILE}" <<'EOF'
+# RBC / hemoglobin marker gene list
+# Format: one Ensembl gene ID per line
+# Do NOT add inline comments after gene IDs.
+# These IDs must match rownames(seu), or be mappable through the Ensembl GTF.
+#
+# ENSGALG000000XXXXX
+# ENSGALG000000YYYYY
+# ENSGALG000000ZZZZZ
+# ENSGALG000000AAAAA
+# ENSGALG000000BBBBB
+EOF
+}
+
 now_iso() {
   date --iso-8601=seconds
 }
@@ -591,6 +618,7 @@ prepare_project_state_dirs() {
   ensure_object_layer_config_file
   ensure_marker_panel_dir
   ensure_mito_gene_list_file
+  ensure_rbc_gene_list_file
 }
 
 LIB_DIR="${SCRIPT_DIR}"

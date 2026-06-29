@@ -1,0 +1,10 @@
+# RBC / hemoglobin marker gene list
+# Format: one Ensembl gene ID per line
+# Do NOT add inline comments after gene IDs.
+# These IDs must match rownames(seu), or be mappable through the Ensembl GTF.
+#
+# ENSGALG000000XXXXX
+# ENSGALG000000YYYYY
+# ENSGALG000000ZZZZZ
+# ENSGALG000000AAAAA
+# ENSGALG000000BBBBB

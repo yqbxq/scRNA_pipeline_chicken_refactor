@@ -295,14 +295,16 @@ sample_contract_rows_pre_qc <- function(row) {
       "标准路径", "标准路径", "标准路径", "标准路径",
       "Ambient", "Ambient", "Ambient", "Ambient", "Ambient", "Ambient",
       "Feature/QC", "Feature/QC", "Feature/QC", "Feature/QC", "Feature/QC",
-      "Feature/QC", "Feature/QC", "Feature/QC", "Feature/QC", "Feature/QC"
+      "Feature/QC", "Feature/QC", "Feature/QC", "Feature/QC", "Feature/QC",
+      "Feature/QC", "Feature/QC", "Feature/QC", "Feature/QC"
     ),
     字段 = c(
       "platform", "feature_name_profile", "gene_id_type", "reference_version",
       "filtered_matrix_dir", "raw_matrix_dir", "metrics_path", "bam_path",
       "preferred_method", "fallback_method", "soupx_ready", "decontx_ready", "cellbender_ready", "ambient_notes",
       "mito_detection_method", "mito_detection_detail", "species_guess", "mito_reference_seqnames", "mito_feature_count",
-      "ribo_feature_count", "cell_cycle_s_features", "cell_cycle_g2m_features", "mito_gene_list", "mito_warnings"
+      "ribo_feature_count", "rbc_detection_method", "rbc_feature_count", "rbc_detected_gene_names", "rbc_gene_list",
+      "cell_cycle_s_features", "cell_cycle_g2m_features", "mito_gene_list", "mito_warnings"
     ),
     值 = c(
       display_scalar_value(row$platform),
@@ -325,6 +327,10 @@ sample_contract_rows_pre_qc <- function(row) {
       display_scalar_value(row$mito_reference_seqnames),
       display_scalar_value(row$mito_feature_count),
       display_scalar_value(row$ribo_feature_count),
+      display_scalar_value(row$rbc_detection_method, "unknown"),
+      display_scalar_value(row$rbc_feature_count),
+      display_scalar_value(row$rbc_detected_gene_names),
+      display_scalar_value(row$rbc_gene_list_file),
       display_scalar_value(row$cell_cycle_s_feature_count),
       display_scalar_value(row$cell_cycle_g2m_feature_count),
       display_scalar_value(row$mito_detected_gene_names),

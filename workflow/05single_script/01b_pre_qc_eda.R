@@ -58,8 +58,11 @@ meta_df <- raw_obj@meta.data %>%
     sample_id = if ("sample_id" %in% colnames(.)) sample_id else orig.ident,
     analysis_group = if ("analysis_group" %in% colnames(.)) analysis_group else orig.ident,
     percent.ribo = if ("percent.ribo" %in% colnames(.)) percent.ribo else 0,
+    percent.rbc = if ("percent.rbc" %in% colnames(.)) percent.rbc else 0,
     mito_feature_count = if ("mito_feature_count" %in% colnames(.)) mito_feature_count else NA_real_,
     ribo_feature_count = if ("ribo_feature_count" %in% colnames(.)) ribo_feature_count else NA_real_,
+    rbc_feature_count = if ("rbc_feature_count" %in% colnames(.)) rbc_feature_count else NA_real_,
+    rbc_detection_method = if ("rbc_detection_method" %in% colnames(.)) rbc_detection_method else "unknown",
     cell_cycle_s_feature_count = if ("cell_cycle_s_feature_count" %in% colnames(.)) cell_cycle_s_feature_count else NA_real_,
     cell_cycle_g2m_feature_count = if ("cell_cycle_g2m_feature_count" %in% colnames(.)) cell_cycle_g2m_feature_count else NA_real_
   )
@@ -96,9 +99,12 @@ sample_summary <- dplyr::bind_rows(lapply(unique(meta_df$sample_id), function(sa
     median_nfeature = stats::median(sample_meta$nFeature_RNA),
     median_percent_mito = stats::median(sample_meta$percent.mito),
     median_percent_ribo = stats::median(sample_meta$percent.ribo),
+    median_percent_rbc = stats::median(sample_meta$percent.rbc),
     median_log10GenesPerUMI = stats::median(sample_meta$log10GenesPerUMI),
     mito_feature_count = if ("mito_feature_count" %in% colnames(sample_meta)) dplyr::first(sample_meta$mito_feature_count) else NA_real_,
     ribo_feature_count = if ("ribo_feature_count" %in% colnames(sample_meta)) dplyr::first(sample_meta$ribo_feature_count) else NA_real_,
+    rbc_feature_count = if ("rbc_feature_count" %in% colnames(sample_meta)) dplyr::first(sample_meta$rbc_feature_count) else NA_real_,
+    rbc_detection_method = if ("rbc_detection_method" %in% colnames(sample_meta)) dplyr::first(sample_meta$rbc_detection_method) else "unknown",
     cell_cycle_s_feature_count = if ("cell_cycle_s_feature_count" %in% colnames(sample_meta)) dplyr::first(sample_meta$cell_cycle_s_feature_count) else NA_real_,
     cell_cycle_g2m_feature_count = if ("cell_cycle_g2m_feature_count" %in% colnames(sample_meta)) dplyr::first(sample_meta$cell_cycle_g2m_feature_count) else NA_real_,
     frac_below_nfeature_cutoff = mean(sample_meta$nFeature_RNA < thresholds$qc_min_nfeature),
@@ -128,7 +134,10 @@ sample_summary <- dplyr::bind_rows(lapply(unique(meta_df$sample_id), function(sa
     stringsAsFactors = FALSE
   )
 })) %>%
-  dplyr::left_join(sample_feature_contracts, by = "sample_id")
+  dplyr::left_join(
+    sample_feature_contracts[, setdiff(colnames(sample_feature_contracts), c("rbc_feature_count", "rbc_detection_method")), drop = FALSE],
+    by = "sample_id"
+  )
 
 triage_rows <- list()
 append_triage <- function(sample_id, severity, signal_id, evidence) {
@@ -207,9 +216,9 @@ triage_df <- if (length(triage_rows) > 0) {
 }
 
 qc_long <- meta_df %>%
-  dplyr::select(sample_id, nCount_RNA, nFeature_RNA, percent.mito, percent.ribo, log10GenesPerUMI) %>%
+  dplyr::select(sample_id, nCount_RNA, nFeature_RNA, percent.mito, percent.ribo, percent.rbc, log10GenesPerUMI) %>%
   tidyr::pivot_longer(
-    cols = c("nCount_RNA", "nFeature_RNA", "percent.mito", "percent.ribo", "log10GenesPerUMI"),
+    cols = c("nCount_RNA", "nFeature_RNA", "percent.mito", "percent.ribo", "percent.rbc", "log10GenesPerUMI"),
     names_to = "metric",
     values_to = "value"
   )

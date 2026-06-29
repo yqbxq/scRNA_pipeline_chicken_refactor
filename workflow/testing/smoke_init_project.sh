@@ -52,6 +52,8 @@ bash "${PIPELINE_ROOT}/workflow/03stages/standardize_inputs.sh" >/dev/null
 bash "${PIPELINE_ROOT}/workflow/03stages/input_summary.sh" >/dev/null
 
 [[ -s "${TMP_ROOT}/project/config/project_config.sh" ]]
+grep -q '^export RBC_GENE_LIST_FILE=' "${TMP_ROOT}/project/config/project_config.sh"
+grep -q 'RBC / hemoglobin marker gene list' "${TMP_ROOT}/project/config/rbc_gene_list.txt"
 [[ -s "${TMP_ROOT}/project/metadata/samples.canonical.tsv" ]]
 [[ -s "${TMP_ROOT}/project/reports/intake/input_inventory.tsv" ]]
 [[ -s "${TMP_ROOT}/project/reports/intake/branch_readiness.tsv" ]]
