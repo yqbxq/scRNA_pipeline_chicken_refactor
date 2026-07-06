@@ -373,7 +373,7 @@ refine_label <- function(candidate, confidence, marker_genes, core_genes, top_ge
     return(c("steroidogenic_rgGC_like", "类固醇合成/快速生长期颗粒细胞样细胞", "tentative_panel_or_module", "rgGC/steroidogenic panel evidence is present but should be reviewed."))
   }
   if (grepl("\\bHBA1\\b|\\bHBBA\\b|\\bACTA2\\b|\\bTMSB4X\\b", text, perl = TRUE)) {
-    return(c("mixed_GC_candidate_Hb_ACTA2_like", "混合型GC候选/Hb-ACTA2相关细胞", "review_mixed_signal", "Top markers include Hb/ACTA2-like mixed signals; review before treating as clean GC."))
+    return(c("GC_like_candidate_Hb_ACTA2_signal", "Hb/ACTA2 信号颗粒细胞样候选细胞", "marker_signal_review", "Top markers include Hb/ACTA2-like signals within the manually defined GC compartment; keep as a GC subcluster and review possible ambient or doublet contribution."))
   }
   if (grepl("\\bBMPR1B\\b|\\bESRRG\\b|\\bKCNQ1\\b|\\bNCAM2\\b", text, perl = TRUE)) {
     return(c("GC_like_BMPR1B_ESRRG_candidate", "BMPR1B/ESRRG 型颗粒细胞样候选细胞", "exploratory_marker_pattern", "Top markers define a GC-like exploratory pattern not covered by the small subtype panel."))
