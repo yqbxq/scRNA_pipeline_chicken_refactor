@@ -36,16 +36,31 @@ infer_marker_role <- function(marker_role, confidence_ceiling = "", evidence_not
   ceiling <- rep_len(trim_character(confidence_ceiling, ""), n)
   note <- tolower(rep_len(trim_character(evidence_note, ""), n))
 
+  review_like <- grepl(
+    "review|review only|review_only|复核|人工",
+    note
+  )
   risk_like <- grepl(
-    "risk|do not use|do_not_use|shared|review|review only|shared_risk|共享|易误导|复核|人工",
+    "risk|do not use|do_not_use|shared|shared_risk|共享|易误导",
     note
   )
 
+  role[!nzchar(role) & review_like] <- "review_only"
   role[!nzchar(role) & risk_like] <- "shared_risk"
   role[!nzchar(role) & ceiling == "暂定"] <- "supporting"
   role[!nzchar(role)] <- "core"
   role[!role %in% marker_role_levels()] <- "supporting"
   role
+}
+
+split_annotation_tokens <- function(x) {
+  x <- normalize_scalar_value(x, "")
+  if (!nzchar(x)) {
+    return(character(0))
+  }
+  tokens <- unlist(strsplit(x, "[,;|/]+", perl = TRUE), use.names = FALSE)
+  tokens <- trimws(tokens)
+  unique(tokens[nzchar(tokens)])
 }
 
 collapse_confidence_ceiling <- function(x) {
@@ -448,9 +463,23 @@ confidence_from_overlap_local <- function(best_row, second_row = NULL, panel_pre
     "暂定"
   }
 
+  source_value <- if ("evidence_source" %in% colnames(best_row)) best_row$evidence_source[[1]] else ""
+  source_tokens <- tolower(split_annotation_tokens(source_value))
+  indirect_only <- length(source_tokens) > 0 &&
+    all(grepl("ortholog|candidate|indirect|putative|cross", source_tokens))
+
+  if (indirect_only && confidence == "确定") {
+    confidence <- "暂定"
+  }
+
+  ceiling <- if ("confidence_ceiling" %in% colnames(best_row)) {
+    normalize_scalar_value(best_row$confidence_ceiling[[1]], "")
+  } else {
+    ""
+  }
   cap_annotation_confidence(
     confidence,
-    normalize_scalar_value(best_row$confidence_ceiling[[1]], "")
+    ceiling
   )
 }
 

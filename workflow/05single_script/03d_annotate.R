@@ -122,10 +122,17 @@ if (determined_fraction < 0.5) {
   )
 }
 if (nrow(evidence_table) > 0) {
-  conflict_clusters <- evidence_table %>%
-    dplyr::filter(annotation_score > 0) %>%
-    dplyr::count(cluster_id, name = "hit_panels") %>%
-    dplyr::filter(hit_panels >= 2)
+  if ("annotation_score" %in% colnames(evidence_table)) {
+    conflict_clusters <- evidence_table %>%
+      dplyr::filter(annotation_score > 0) %>%
+      dplyr::count(cluster_id, name = "hit_panels") %>%
+      dplyr::filter(hit_panels >= 2)
+  } else {
+    conflict_clusters <- evidence_table %>%
+      dplyr::filter(overlap_n > 0) %>%
+      dplyr::count(cluster_id, name = "hit_panels") %>%
+      dplyr::filter(hit_panels >= 2)
+  }
   if (nrow(conflict_clusters) > 0) {
     triage_rows[[length(triage_rows) + 1]] <- make_triage_row(
       sample_id = panorama_spec$layer_id,
