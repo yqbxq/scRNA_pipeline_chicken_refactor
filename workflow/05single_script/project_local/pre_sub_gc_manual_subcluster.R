@@ -25,15 +25,28 @@ gc_panel <- env_or(
 )
 parent_cluster_col <- env_or("PARENT_CLUSTER_COL", "seurat_clusters")
 gc_compartment <- env_or("GC_COMPARTMENT", "GC-like / follicular somatic compartment")
+layer_id <- env_or("GC_LAYER_ID", "GC_manual_subcluster")
+layer_label <- env_or("GC_LAYER_LABEL", "Manual GC Subcluster")
+output_prefix <- env_or("GC_OUTPUT_PREFIX", layer_id)
+parent_cluster_exclude <- trimws(unlist(strsplit(env_or("GC_PARENT_CLUSTER_EXCLUDE", ""), ",")))
+parent_cluster_exclude <- parent_cluster_exclude[nzchar(parent_cluster_exclude)]
 resolution <- as.numeric(env_or("GC_RESOLUTION", "0.35"))
 dims_max <- as.integer(env_or("GC_DIMS_MAX", "20"))
 
 checkpoint_dir <- file.path(project_root, "results", "checkpoints")
 table_dir <- file.path(project_root, "results", "tables")
-figure_dir <- file.path(project_root, "results", "figures", "GC_manual_subcluster")
-report_dir <- file.path(project_root, "reports", "eda", "GC_manual_subcluster")
-annotation_dir <- file.path(table_dir, "annotation", "layers", "GC_manual_subcluster")
-marker_dir <- file.path(table_dir, "marker_discovery", "layers", "GC_manual_subcluster")
+figure_dir <- file.path(project_root, "results", "figures", output_prefix)
+report_dir <- file.path(project_root, "reports", "eda", output_prefix)
+annotation_dir <- file.path(table_dir, "annotation", "layers", layer_id)
+marker_dir <- file.path(table_dir, "marker_discovery", "layers", layer_id)
+subcluster_checkpoint <- env_or(
+  "GC_SUBCLUSTER_CHECKPOINT",
+  file.path(checkpoint_dir, "06_GC_manual_subcluster_after_annotation.rds")
+)
+parent_checkpoint <- env_or(
+  "GC_PARENT_CHECKPOINT",
+  file.path(checkpoint_dir, "06_after_manual_GC_subcluster_annotation.rds")
+)
 
 dir.create(checkpoint_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(figure_dir, recursive = TRUE, showWarnings = FALSE)
@@ -184,7 +197,7 @@ annotate_gc_subclusters <- function(sub_obj, markers, panel_path) {
       core_overlap <- unique(overlap[overlap %in% core_features])
       score <- length(core_overlap) * 8 + length(setdiff(overlap, core_overlap)) * 2 + module_mean + pct_expr
       evidence[[length(evidence) + 1]] <- data.frame(
-        layer_id = "GC_manual_subcluster",
+        layer_id = layer_id,
         subcluster = cluster,
         candidate_celltype = celltype,
         n_cells = length(cells),
@@ -212,7 +225,7 @@ annotate_gc_subclusters <- function(sub_obj, markers, panel_path) {
   if (nrow(evidence_df) == 0) {
     annotation <- counts %>%
       transmute(
-        layer_id = "GC_manual_subcluster",
+        layer_id = layer_id,
         subcluster = GC_manual_subcluster_id,
         n_cells = n_cells,
         candidate_celltype = paste0("GC_manual_subcluster_", subcluster),
@@ -273,6 +286,10 @@ plot_if_umap <- function(obj, group_col, title, file_name, width = 8, height = 6
 log_msg("Project root: ", project_root)
 log_msg("Input checkpoint: ", input_checkpoint)
 log_msg("GC panel: ", gc_panel)
+log_msg("Layer id: ", layer_id)
+if (length(parent_cluster_exclude) > 0) {
+  log_msg("Excluding parent panorama clusters: ", paste(parent_cluster_exclude, collapse = ","))
+}
 
 if (!file.exists(input_checkpoint)) stop("Missing input checkpoint: ", input_checkpoint, call. = FALSE)
 if (!file.exists(gc_panel)) stop("Missing GC panel: ", gc_panel, call. = FALSE)
@@ -287,6 +304,12 @@ if (!"panorama_ovary_compartment" %in% colnames(obj@meta.data)) {
 
 obj$parent_panorama_cluster <- as.character(obj@meta.data[[parent_cluster_col]])
 gc_cells <- colnames(obj)[obj$panorama_ovary_compartment == gc_compartment]
+if (length(parent_cluster_exclude) > 0) {
+  parent_cluster_values <- as.character(obj@meta.data[gc_cells, parent_cluster_col, drop = TRUE])
+  before_exclude <- length(gc_cells)
+  gc_cells <- gc_cells[!parent_cluster_values %in% parent_cluster_exclude]
+  log_msg("Manual GC cells before exclusion: ", before_exclude)
+}
 if (length(gc_cells) < 50) stop("Too few manual GC cells: ", length(gc_cells), call. = FALSE)
 log_msg("Manual GC cells: ", length(gc_cells))
 
@@ -467,8 +490,8 @@ obj$GC_manual_refined_subtype <- obj_gc_refined
 obj$GC_manual_refined_subtype_zh <- obj_gc_refined_zh
 obj$GC_manual_refined_confidence <- obj_gc_refined_confidence
 
-saveRDS(sub_obj, file.path(checkpoint_dir, "06_GC_manual_subcluster_after_annotation.rds"))
-saveRDS(obj, file.path(checkpoint_dir, "06_after_manual_GC_subcluster_annotation.rds"))
+saveRDS(sub_obj, subcluster_checkpoint)
+saveRDS(obj, parent_checkpoint)
 
 plot_if_umap(sub_obj, "GC_manual_subcluster_id", "Manual GC subclusters", "GC_manual_subcluster_umap.png")
 plot_if_umap(sub_obj, "GC_manual_subcluster_label", "Manual GC subcluster labels", "GC_manual_subcluster_label_umap.png", width = 9, height = 6)
@@ -485,11 +508,14 @@ if (length(panel_features) > 0) {
 }
 
 report_lines <- c(
-  "# Manual GC Subcluster",
+  paste0("# ", layer_label),
   "",
   paste0("- project_root: ", project_root),
   paste0("- input_checkpoint: ", input_checkpoint),
   paste0("- parent GC compartment: ", gc_compartment),
+  paste0("- layer_id: ", layer_id),
+  paste0("- output_prefix: ", output_prefix),
+  paste0("- excluded parent panorama clusters: ", if (length(parent_cluster_exclude) > 0) paste(parent_cluster_exclude, collapse = ",") else "none"),
   paste0("- GC cells: ", length(gc_cells)),
   paste0("- resolution: ", resolution),
   paste0("- dimensions: ", dims_max),
@@ -512,8 +538,8 @@ report_lines <- c(
   paste0("- ", file.path(annotation_dir, "parent_panorama_cluster_composition.tsv")),
   paste0("- ", file.path(marker_dir, "cluster_markers.tsv")),
   paste0("- ", file.path(marker_dir, "top50_cluster_markers.tsv")),
-  paste0("- ", file.path(checkpoint_dir, "06_GC_manual_subcluster_after_annotation.rds")),
-  paste0("- ", file.path(checkpoint_dir, "06_after_manual_GC_subcluster_annotation.rds")),
+  paste0("- ", subcluster_checkpoint),
+  paste0("- ", parent_checkpoint),
   paste0("- ", file.path(figure_dir, "GC_manual_subcluster_umap.png")),
   paste0("- ", file.path(figure_dir, "GC_manual_subcluster_label_umap.png")),
   paste0("- ", file.path(figure_dir, "GC_manual_refined_subtype_umap.png")),
@@ -523,4 +549,4 @@ report_lines <- c(
 writeLines(report_lines, file.path(report_dir, "report.md"))
 
 log_msg("Done. GC manual subcluster table: ", file.path(annotation_dir, "annotation_table.tsv"))
-log_msg("Done. Parent checkpoint: ", file.path(checkpoint_dir, "06_after_manual_GC_subcluster_annotation.rds"))
+log_msg("Done. Parent checkpoint: ", parent_checkpoint)
