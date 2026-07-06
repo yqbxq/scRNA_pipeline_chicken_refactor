@@ -15,6 +15,49 @@ cap_annotation_confidence <- function(value, ceiling = "") {
   levels[min(match(value, levels), match(ceiling, levels))]
 }
 
+trim_character <- function(x, default = "") {
+  if (length(x) == 0) {
+    return(character(0))
+  }
+  out <- as.character(x)
+  out[is.na(out)] <- ""
+  out <- trimws(out)
+  out[!nzchar(out)] <- default
+  out
+}
+
+marker_role_levels <- function() {
+  c("core", "supporting", "shared_risk", "review_only", "exclude")
+}
+
+infer_marker_role <- function(marker_role, confidence_ceiling = "", evidence_note = "") {
+  n <- max(length(marker_role), length(confidence_ceiling), length(evidence_note), 1L)
+  role <- tolower(rep_len(trim_character(marker_role, ""), n))
+  ceiling <- rep_len(trim_character(confidence_ceiling, ""), n)
+  note <- tolower(rep_len(trim_character(evidence_note, ""), n))
+
+  risk_like <- grepl(
+    "risk|do not use|do_not_use|shared|review|review only|shared_risk|共享|易误导|复核|人工",
+    note
+  )
+
+  role[!nzchar(role) & risk_like] <- "shared_risk"
+  role[!nzchar(role) & ceiling == "暂定"] <- "supporting"
+  role[!nzchar(role)] <- "core"
+  role[!role %in% marker_role_levels()] <- "supporting"
+  role
+}
+
+collapse_confidence_ceiling <- function(x) {
+  levels <- annotation_confidence_levels()
+  x <- trim_character(x, "")
+  x <- x[nzchar(x) & x %in% levels]
+  if (length(x) == 0) {
+    return("")
+  }
+  levels[min(match(x, levels))]
+}
+
 read_marker_panel_rows <- function(cfg, layer_id = NULL, tissue = NULL) {
   if (!dir.exists(cfg$marker_panel_dir)) {
     return(data.frame(stringsAsFactors = FALSE))
@@ -37,7 +80,7 @@ read_marker_panel_rows <- function(cfg, layer_id = NULL, tissue = NULL) {
     if (!"evidence_source" %in% colnames(df)) {
       df$evidence_source <- "unspecified"
     }
-    for (col in c("tissue", "panel_name", "evidence_note", "confidence_ceiling")) {
+    for (col in c("tissue", "panel_name", "evidence_note", "confidence_ceiling", "marker_role")) {
       if (!col %in% colnames(df)) {
         df[[col]] <- ""
       }
@@ -47,10 +90,15 @@ read_marker_panel_rows <- function(cfg, layer_id = NULL, tissue = NULL) {
       warning(sprintf("跳过 marker panel（缺少必需列）: %s", path), call. = FALSE)
       return(NULL)
     }
-    df <- df[, c(required, "tissue", "panel_name", "evidence_note", "confidence_ceiling"), drop = FALSE]
+    df <- df[, c(required, "marker_role", "tissue", "panel_name", "evidence_note", "confidence_ceiling"), drop = FALSE]
     for (col in colnames(df)) {
       df[[col]] <- vapply(df[[col]], normalize_scalar_value, character(1))
     }
+    df$marker_role <- infer_marker_role(
+      marker_role = df$marker_role,
+      confidence_ceiling = df$confidence_ceiling,
+      evidence_note = df$evidence_note
+    )
     df$panel_file <- basename(path)
     df <- df[nzchar(df$celltype) & nzchar(df$gene), , drop = FALSE]
     if (nrow(df) == 0) {
@@ -199,28 +247,72 @@ panel_overlap_metrics <- function(cluster_marker_df, panel_df, top_n = 20) {
   if (nrow(panel_df) == 0) {
     return(data.frame(stringsAsFactors = FALSE))
   }
+  for (col in c("evidence_source", "confidence_ceiling", "evidence_note", "panel_file")) {
+    if (!col %in% colnames(panel_df)) {
+      panel_df[[col]] <- ""
+    }
+  }
+  panel_df$evidence_source[!nzchar(panel_df$evidence_source)] <- "unspecified"
+  if (!"marker_role" %in% colnames(panel_df)) {
+    panel_df$marker_role <- infer_marker_role(
+      marker_role = "",
+      confidence_ceiling = panel_df$confidence_ceiling,
+      evidence_note = panel_df$evidence_note
+    )
+  }
+
   top_genes <- unique(cluster_marker_df$gene[seq_len(min(top_n, nrow(cluster_marker_df)))])
   top_genes <- top_genes[nzchar(top_genes)]
   split_rows <- split(panel_df, panel_df$celltype)
   out <- lapply(names(split_rows), function(label) {
     df <- split_rows[[label]]
-    overlap_df <- df[df$gene %in% top_genes, , drop = FALSE]
-    overlap_genes <- unique(overlap_df$gene)
+    hit <- df[df$gene %in% top_genes & df$marker_role != "exclude", , drop = FALSE]
+
+    core_genes <- unique(hit$gene[hit$marker_role == "core"])
+    supporting_genes <- unique(hit$gene[hit$marker_role == "supporting"])
+    risk_genes <- unique(hit$gene[hit$marker_role == "shared_risk"])
+    review_genes <- unique(hit$gene[hit$marker_role == "review_only"])
+    scored_genes <- unique(c(core_genes, supporting_genes))
+    annotation_score <- 4L * length(core_genes) + length(supporting_genes)
+
+    scoring_rows <- hit[hit$marker_role %in% c("core", "supporting"), , drop = FALSE]
+    ceiling_basis <- if (length(core_genes) > 0) {
+      hit[hit$marker_role == "core", , drop = FALSE]
+    } else {
+      scoring_rows
+    }
+
     data.frame(
       celltype = label,
-      overlap_n = length(overlap_genes),
-      overlap_genes = paste(overlap_genes, collapse = ","),
-      evidence_source = paste(unique(overlap_df$evidence_source), collapse = ","),
-      confidence_ceiling = paste(unique(overlap_df$confidence_ceiling[nzchar(overlap_df$confidence_ceiling)]), collapse = ","),
+      overlap_n = length(scored_genes),
+      overlap_genes = paste(scored_genes, collapse = ","),
+      annotation_score = annotation_score,
+      core_overlap_n = length(core_genes),
+      core_overlap_genes = paste(core_genes, collapse = ","),
+      supporting_overlap_n = length(supporting_genes),
+      supporting_overlap_genes = paste(supporting_genes, collapse = ","),
+      shared_risk_overlap_n = length(risk_genes),
+      shared_risk_overlap_genes = paste(risk_genes, collapse = ","),
+      review_only_overlap_n = length(review_genes),
+      review_only_overlap_genes = paste(review_genes, collapse = ","),
+      evidence_source = paste(unique(hit$evidence_source), collapse = ","),
+      confidence_ceiling = collapse_confidence_ceiling(ceiling_basis$confidence_ceiling),
       panel_files = paste(unique(df$panel_file), collapse = ","),
       stringsAsFactors = FALSE
     )
   })
   out <- do.call(rbind, out)
-  out[order(-out$overlap_n, out$celltype), , drop = FALSE]
+  out[order(-out$annotation_score, -out$core_overlap_n, -out$supporting_overlap_n, out$celltype), , drop = FALSE]
 }
 
 panel_gene_sets_local <- function(panel_df) {
+  if (nrow(panel_df) == 0) {
+    return(list())
+  }
+  if (!"marker_role" %in% colnames(panel_df)) {
+    panel_df$marker_role <- "core"
+  }
+  panel_df <- panel_df[panel_df$marker_role %in% c("core", "supporting"), , drop = FALSE]
   if (nrow(panel_df) == 0) {
     return(list())
   }
@@ -284,39 +376,106 @@ compute_module_score_summary <- function(seu, cluster_var, panel_df, seed = 42) 
   list(object = seu, summary = do.call(rbind, summary_rows))
 }
 
-relation_from_overlap_local <- function(best_overlap, second_overlap, panel_present) {
-  if (!panel_present || best_overlap <= 0) {
-    return("无关")
+relation_from_overlap_local <- function(best_row, second_row = NULL, panel_present = TRUE, min_score_margin = 2) {
+  if (!panel_present) {
+    return("仅数据驱动")
   }
-  if (second_overlap >= best_overlap && best_overlap > 0) {
+  if (is.null(best_row) || nrow(best_row) == 0) {
+    return("无文献验证")
+  }
+
+  best_score <- suppressWarnings(as.numeric(best_row$annotation_score[[1]]))
+  if (!is.finite(best_score) || best_score <= 0) {
+    return("无文献验证")
+  }
+
+  second_score <- 0
+  if (!is.null(second_row) && nrow(second_row) > 0 && "annotation_score" %in% colnames(second_row)) {
+    second_score <- suppressWarnings(as.numeric(second_row$annotation_score[[1]]))
+    if (!is.finite(second_score)) {
+      second_score <- 0
+    }
+  }
+
+  margin <- best_score - second_score
+  core_n <- suppressWarnings(as.integer(best_row$core_overlap_n[[1]]))
+  scored_n <- suppressWarnings(as.integer(best_row$overlap_n[[1]]))
+
+  if (second_score > 0 && margin < min_score_margin) {
     return("冲突")
   }
-  "支持"
+  if (!is.finite(core_n) || core_n <= 0) {
+    return("仅辅助证据")
+  }
+  if (core_n >= 1 && scored_n >= 2 && margin >= min_score_margin) {
+    return("一致")
+  }
+  "部分一致"
 }
 
-confidence_from_overlap_local <- function(best_overlap, second_overlap, evidence_source, confidence_ceiling = "", panel_present = TRUE) {
-  if (!panel_present || best_overlap <= 0 || second_overlap >= best_overlap) {
+confidence_from_overlap_local <- function(best_row, second_row = NULL, panel_present = TRUE, min_score_margin = 2) {
+  if (!panel_present || is.null(best_row) || nrow(best_row) == 0) {
     return("未定")
   }
-  source_tokens <- tolower(split_csv_local(evidence_source))
-  indirect_only <- length(source_tokens) > 0 && all(grepl("ortholog|candidate|indirect|putative", source_tokens))
-  confidence <- if (best_overlap >= 2 && !indirect_only && second_overlap == 0) "确定" else "暂定"
-  cap_annotation_confidence(confidence, confidence_ceiling)
+
+  best_score <- suppressWarnings(as.numeric(best_row$annotation_score[[1]]))
+  core_n <- suppressWarnings(as.integer(best_row$core_overlap_n[[1]]))
+  scored_n <- suppressWarnings(as.integer(best_row$overlap_n[[1]]))
+
+  if (!is.finite(best_score) || best_score <= 0) {
+    return("未定")
+  }
+  if (!is.finite(core_n) || core_n <= 0) {
+    return("未定")
+  }
+
+  second_score <- 0
+  if (!is.null(second_row) && nrow(second_row) > 0 && "annotation_score" %in% colnames(second_row)) {
+    second_score <- suppressWarnings(as.numeric(second_row$annotation_score[[1]]))
+    if (!is.finite(second_score)) {
+      second_score <- 0
+    }
+  }
+
+  margin <- best_score - second_score
+  if (second_score > 0 && margin < min_score_margin) {
+    return("未定")
+  }
+
+  confidence <- if (core_n >= 1 && scored_n >= 2 && margin >= min_score_margin) {
+    "确定"
+  } else {
+    "暂定"
+  }
+
+  cap_annotation_confidence(
+    confidence,
+    normalize_scalar_value(best_row$confidence_ceiling[[1]], "")
+  )
 }
 
 build_annotation_decision <- function(cluster_id, cluster_markers, overlap_df, module_df, panel_present) {
   best_row <- if (nrow(overlap_df) > 0) overlap_df[1, , drop = FALSE] else NULL
-  best_overlap <- if (!is.null(best_row)) best_row$overlap_n[[1]] else 0L
-  second_overlap <- if (nrow(overlap_df) >= 2) overlap_df$overlap_n[[2]] else 0L
-  literature_candidate <- if (!is.null(best_row) && best_overlap > 0) best_row$celltype[[1]] else ""
+  second_row <- if (nrow(overlap_df) >= 2) overlap_df[2, , drop = FALSE] else NULL
+  best_score <- if (!is.null(best_row) && "annotation_score" %in% colnames(best_row)) {
+    suppressWarnings(as.numeric(best_row$annotation_score[[1]]))
+  } else {
+    0
+  }
+  if (!is.finite(best_score)) {
+    best_score <- 0
+  }
+  literature_candidate <- if (!is.null(best_row) && best_score > 0) best_row$celltype[[1]] else ""
   confidence <- confidence_from_overlap_local(
-    best_overlap,
-    second_overlap,
-    if (!is.null(best_row)) best_row$evidence_source[[1]] else "",
-    if (!is.null(best_row)) best_row$confidence_ceiling[[1]] else "",
+    best_row = best_row,
+    second_row = second_row,
     panel_present = panel_present
   )
-  relation <- relation_from_overlap_local(best_overlap, second_overlap, panel_present)
+  relation <- relation_from_overlap_local(
+    best_row = best_row,
+    second_row = second_row,
+    panel_present = panel_present
+  )
   final_annotation <- if (confidence == "未定" || !nzchar(literature_candidate)) {
     sprintf("Uncertain-%s", cluster_id)
   } else {
@@ -345,8 +504,16 @@ build_annotation_decision <- function(cluster_id, cluster_markers, overlap_df, m
     confidence = confidence,
     relation = relation,
     data_evidence = format_data_evidence_local(cluster_markers, top_n = 5),
-    literature_evidence = if (!is.null(best_row) && best_overlap > 0) {
-      sprintf("%s: %s [%s]", best_row$celltype[[1]], normalize_scalar_value(best_row$overlap_genes[[1]], "none"), normalize_scalar_value(best_row$evidence_source[[1]], "unspecified"))
+    literature_evidence = if (!is.null(best_row) && best_score > 0) {
+      sprintf(
+        "%s: score=%s; core=%s; supporting=%s; risk=%s [%s]",
+        best_row$celltype[[1]],
+        normalize_scalar_value(best_row$annotation_score[[1]], "0"),
+        normalize_scalar_value(best_row$core_overlap_genes[[1]], "none"),
+        normalize_scalar_value(best_row$supporting_overlap_genes[[1]], "none"),
+        normalize_scalar_value(best_row$shared_risk_overlap_genes[[1]], "none"),
+        normalize_scalar_value(best_row$evidence_source[[1]], "unspecified")
+      )
     } else if (panel_present) {
       "panel_present_no_overlap"
     } else {
@@ -475,6 +642,15 @@ annotate_one_layer <- function(seu, layer_id, marker_panels_df, cfg, paths_modul
         celltype = "",
         overlap_n = 0,
         overlap_genes = "",
+        annotation_score = 0,
+        core_overlap_n = 0,
+        core_overlap_genes = "",
+        supporting_overlap_n = 0,
+        supporting_overlap_genes = "",
+        shared_risk_overlap_n = 0,
+        shared_risk_overlap_genes = "",
+        review_only_overlap_n = 0,
+        review_only_overlap_genes = "",
         evidence_source = ifelse(nrow(marker_panels_df) > 0, "panel_present_no_overlap", "panel_absent"),
         confidence_ceiling = "",
         panel_files = ifelse(nrow(marker_panels_df) > 0, paste(sort(unique(marker_panels_df$panel_file)), collapse = ","), ""),
@@ -487,7 +663,18 @@ annotate_one_layer <- function(seu, layer_id, marker_panels_df, cfg, paths_modul
       overlap_df$analysis_mode <- analysis_mode
       overlap_df$gene_program_role <- gene_program_role
       overlap_df$annotation_only <- annotation_only
-      evidence_rows[[length(evidence_rows) + 1]] <- overlap_df[, c("layer_id", "target_id", "cluster_id", "analysis_mode", "gene_program_role", "annotation_only", "celltype", "overlap_n", "overlap_genes", "evidence_source", "confidence_ceiling", "panel_files")]
+      evidence_cols <- c(
+        "layer_id", "target_id", "cluster_id", "analysis_mode",
+        "gene_program_role", "annotation_only", "celltype",
+        "overlap_n", "overlap_genes",
+        "annotation_score",
+        "core_overlap_n", "core_overlap_genes",
+        "supporting_overlap_n", "supporting_overlap_genes",
+        "shared_risk_overlap_n", "shared_risk_overlap_genes",
+        "review_only_overlap_n", "review_only_overlap_genes",
+        "evidence_source", "confidence_ceiling", "panel_files"
+      )
+      evidence_rows[[length(evidence_rows) + 1]] <- overlap_df[, intersect(evidence_cols, colnames(overlap_df)), drop = FALSE]
     }
   }
 
