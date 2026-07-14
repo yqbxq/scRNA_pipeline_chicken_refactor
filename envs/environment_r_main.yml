@@ -26,6 +26,8 @@ dependencies:
   - r-data.table
   - r-future
   - r-future.apply
+  - r-mclust
+  - r-cluster
   - r-aricode
   - r-clue
   - r-fields

@@ -30,6 +30,7 @@ source_utf8(file.path(.script_dir, "helpers", "triage_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "layer_config_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "reduction_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "integration_dispatch.R"))
+source_utf8(file.path(.script_dir, "helpers", "clustering_validation_helpers.R"))
 source_utf8(file.path(.script_dir, "helpers", "clustering_utils.R"))
 
 load_required_packages(c("Seurat", "dplyr", "ggplot2", "tibble", "jsonlite"))
@@ -200,7 +201,8 @@ finalize_subcluster_candidate <- function(seu, layer_spec, candidate_row, select
     reduction_name = candidate_row$reduction_name[[1]],
     layer_spec = layer_spec,
     seed = cfg$random_seed,
-    log_path = resolution_search_tsv
+    log_path = resolution_search_tsv,
+    decision_path = cfg$cluster_resolution_decision_file
   )
   seu <- finalize_layer_object(
     cluster_result$seu,
@@ -227,6 +229,7 @@ finalize_subcluster_candidate <- function(seu, layer_spec, candidate_row, select
       sprintf("selected_resolution=%s", cluster_result$selected_resolution),
       sprintf("selected_cluster_count=%s", cluster_result$selected_cluster_count),
       sprintf("target_clusters=%s", layer_spec$target_clusters),
+      sprintf("cluster_selection_mode=%s", cluster_result$selection_mode %||% layer_spec$cluster_selection_mode),
       sprintf("fallback_used=%s", ifelse(cluster_result$fallback_used, "true", "false")),
       sprintf("selected_integration=%s", selected_value)
     ),
@@ -277,7 +280,8 @@ finalize_subcluster_candidate <- function(seu, layer_spec, candidate_row, select
     cluster_summary_csv = cluster_summary_csv,
     selected_resolution_txt = selected_resolution_txt,
     report_path = report_path,
-    cluster_result = cluster_result
+    cluster_result = cluster_result,
+    cluster_selection_outputs = cluster_result$output_paths %||% list()
   )
 }
 
@@ -308,7 +312,7 @@ output_entries <- list()
 
 if (nrow(sub_rows) > 0) {
   for (idx in seq_len(nrow(sub_rows))) {
-    layer_spec <- layer_config_row_to_spec(sub_rows[idx, , drop = FALSE])
+    layer_spec <- layer_config_row_to_spec(sub_rows[idx, , drop = FALSE], cfg = cfg)
     layer_id <- layer_spec$layer_id
     selected_file <- selected_integration_file_04(cfg, layer_id)
     clustered_key <- paste0("clustered_", layer_id)
@@ -498,6 +502,25 @@ if (nrow(sub_rows) > 0) {
       output_entries[[paste0("cluster_summary_csv_", layer_id)]] <- build_output_entry(finalized$cluster_summary_csv, "csv", module_name, sprintf("cluster summary for %s", layer_id), base_dir = cfg$project_root)
       output_entries[[paste0("selected_resolution_txt_", layer_id)]] <- build_output_entry(finalized$selected_resolution_txt, "txt", module_name, sprintf("selected resolution for %s", layer_id), base_dir = cfg$project_root)
       output_entries[[paste0("report_md_", layer_id)]] <- build_output_entry(finalized$report_path, "md", module_name, sprintf("04a report for %s", layer_id), base_dir = cfg$project_root)
+      cluster_path_descriptions <- c(
+        resolution_metrics_tsv = "per-resolution clustering validation metrics",
+        adjacent_ari_tsv = "adjacent-resolution ARI stability",
+        seed_stability_tsv = "same-resolution seed ARI stability",
+        seed_ari_pairs_tsv = "pairwise seed ARI values",
+        cluster_size_metrics_tsv = "cluster size and small-cluster metrics",
+        silhouette_metrics_tsv = "silhouette metrics by resolution",
+        ch_metrics_tsv = "Calinski-Harabasz metrics by resolution",
+        stability_plateaus_tsv = "detected stable resolution plateaus",
+        resolution_ranking_tsv = "ranked cluster resolution candidates",
+        cluster_resolution_recommendation_tsv = "recommended cluster resolution",
+        cluster_resolution_decision_tsv = "manual cluster resolution decision table"
+      )
+      for (entry_name in names(cluster_path_descriptions)) {
+        out_path <- finalized$cluster_selection_outputs[[entry_name]] %||% ""
+        if (nzchar(out_path) && file.exists(out_path)) {
+          output_entries[[paste(entry_name, layer_id, sep = "_")]] <- build_output_entry(out_path, "tsv", module_name, sprintf("%s for %s", cluster_path_descriptions[[entry_name]], layer_id), base_dir = cfg$project_root)
+        }
+      }
 
       if (isTRUE(finalized$cluster_result$fallback_used)) {
         triage_rows <- append_triage(

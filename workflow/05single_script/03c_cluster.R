@@ -27,6 +27,7 @@ source_utf8(file.path(.script_dir, "helpers", "qc_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "triage_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "layer_config_utils.R"))
 source_utf8(file.path(.script_dir, "helpers", "reduction_utils.R"))
+source_utf8(file.path(.script_dir, "helpers", "clustering_validation_helpers.R"))
 source_utf8(file.path(.script_dir, "helpers", "clustering_utils.R"))
 
 load_required_packages(c("Seurat", "dplyr", "ggplot2", "tibble", "jsonlite"))
@@ -75,7 +76,8 @@ cluster_result <- run_resolution_search(
   reduction_name = candidate_row$reduction_name[[1]],
   layer_spec = panorama_spec,
   seed = cfg$random_seed,
-  log_path = resolution_search_tsv
+  log_path = resolution_search_tsv,
+  decision_path = cfg$cluster_resolution_decision_file
 )
 selected_umap <- if ("umap_name" %in% colnames(candidate_row)) normalize_scalar_value(candidate_row$umap_name[[1]], "") else ""
 seu <- finalize_layer_object(
@@ -108,6 +110,7 @@ writeLines(
     sprintf("selected_resolution=%s", cluster_result$selected_resolution),
     sprintf("selected_cluster_count=%s", cluster_result$selected_cluster_count),
     sprintf("target_clusters=%s", panorama_spec$target_clusters),
+    sprintf("cluster_selection_mode=%s", cluster_result$selection_mode %||% panorama_spec$cluster_selection_mode),
     sprintf("fallback_used=%s", ifelse(cluster_result$fallback_used, "true", "false")),
     sprintf("selected_integration=%s", selected_value)
   ),
@@ -146,9 +149,32 @@ triage_df <- if (isTRUE(cluster_result$fallback_used)) {
 triage_tsv <- file.path(cfg$integration_table_dir_layer, "resolution_triage.tsv")
 write_tsv_local(triage_df, triage_tsv)
 
+cluster_selection_outputs <- list()
+if (!is.null(cluster_result$output_paths)) {
+  path_descriptions <- c(
+    resolution_metrics_tsv = "per-resolution clustering validation metrics",
+    adjacent_ari_tsv = "adjacent-resolution ARI stability",
+    seed_stability_tsv = "same-resolution seed ARI stability",
+    seed_ari_pairs_tsv = "pairwise seed ARI values",
+    cluster_size_metrics_tsv = "cluster size and small-cluster metrics",
+    silhouette_metrics_tsv = "silhouette metrics by resolution",
+    ch_metrics_tsv = "Calinski-Harabasz metrics by resolution",
+    stability_plateaus_tsv = "detected stable resolution plateaus",
+    resolution_ranking_tsv = "ranked cluster resolution candidates",
+    cluster_resolution_recommendation_tsv = "recommended cluster resolution",
+    cluster_resolution_decision_tsv = "manual cluster resolution decision table"
+  )
+  for (entry_name in names(path_descriptions)) {
+    out_path <- cluster_result$output_paths[[entry_name]] %||% ""
+    if (nzchar(out_path) && file.exists(out_path)) {
+      cluster_selection_outputs[[entry_name]] <- build_output_entry(out_path, "tsv", module_name, path_descriptions[[entry_name]], base_dir = cfg$project_root)
+    }
+  }
+}
+
 write_manifest_local(
   manifest_path = cfg$module_03c_manifest_path,
-  new_outputs = list(
+  new_outputs = c(list(
     clustered_object = build_output_entry(cfg$panorama_clustered_rds, "rds", module_name, "panorama clustered Seurat object", base_dir = cfg$project_root),
     compatibility_clustered_object = build_output_entry(cfg$compat_clustered_rds, "rds", module_name, "compatibility checkpoint for downstream legacy modules", base_dir = cfg$project_root),
     resolution_search_tsv = build_output_entry(resolution_search_tsv, "tsv", module_name, "resolution search records", base_dir = cfg$project_root, schema = infer_schema_from_df(cluster_result$search_table)),
@@ -156,7 +182,7 @@ write_manifest_local(
     selected_resolution_txt = build_output_entry(selected_resolution_txt, "txt", module_name, "selected resolution summary", base_dir = cfg$project_root),
     layer_status_tsv = build_output_entry(cfg$layer_status_file, "tsv", module_name, "one row per built/annotated object layer", base_dir = cfg$project_root),
     resolution_triage_tsv = build_output_entry(triage_tsv, "tsv", module_name, "resolution triage signals", base_dir = cfg$project_root, schema = infer_schema_from_df(triage_df))
-  ),
+  ), cluster_selection_outputs),
   module_name = module_name,
   base_dir = cfg$project_root,
   inputs = list(

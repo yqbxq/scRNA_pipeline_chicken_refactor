@@ -1,5 +1,6 @@
 LAYER_NORMALIZATION_METHODS <- c("lognorm", "sct")
 LAYER_INTEGRATION_METHODS <- c("none", "harmony", "seurat_cca", "seurat_rpca", "scanorama")
+LAYER_CLUSTER_SELECTION_MODES <- c("target_clusters", "auto_recommend", "fixed_resolution")
 
 sanitize_layer_id_local <- function(x) {
   value <- normalize_scalar_value(x)
@@ -71,6 +72,20 @@ parse_yes_no_local <- function(value, default = "yes") {
   out
 }
 
+parse_cluster_selection_mode_local <- function(value, default = "target_clusters") {
+  out <- tolower(normalize_scalar_value(value, default))
+  if (out %in% c("auto", "recommend")) {
+    out <- "auto_recommend"
+  }
+  if (out %in% c("fixed", "approved_resolution")) {
+    out <- "fixed_resolution"
+  }
+  if (!out %in% LAYER_CLUSTER_SELECTION_MODES) {
+    out <- default
+  }
+  out
+}
+
 default_object_layer_config_df <- function(cfg) {
   data.frame(
     layer_id = c(cfg$panorama_layer_id, "subcluster_1", "subcluster_2"),
@@ -91,6 +106,11 @@ default_object_layer_config_df <- function(cfg) {
       "0.10,0.15,0.20,0.25,0.30,0.35,0.40"
     ),
     res_fine_step = c(cfg$res_fine_step_default, cfg$res_fine_step_default, cfg$res_fine_step_default),
+    cluster_selection_mode = c(cfg$cluster_selection_mode, cfg$cluster_selection_mode, cfg$cluster_selection_mode),
+    approved_resolution = c("", "", ""),
+    min_expected_clusters = c(cfg$cluster_min_expected, 3L, 3L),
+    max_expected_clusters = c(cfg$cluster_max_expected, 15L, 15L),
+    validation_depth = c(cfg$cluster_validation_depth, cfg$cluster_validation_depth, cfg$cluster_validation_depth),
     normalization_methods = c(cfg$normalization_methods_default, "", ""),
     integration_mode = c(cfg$integration_modes_default, "", ""),
     vars_to_regress = c(cfg$vars_to_regress_default, "", ""),
@@ -116,6 +136,8 @@ read_object_layer_config <- function(cfg) {
     "rebuild_normalization",
     "hvg_nfeatures", "pca_dims", "target_clusters",
     "res_range", "res_fine_step",
+    "cluster_selection_mode", "approved_resolution",
+    "min_expected_clusters", "max_expected_clusters", "validation_depth",
     "normalization_methods", "integration_mode", "vars_to_regress",
     "description"
   )
@@ -133,6 +155,10 @@ read_object_layer_config <- function(cfg) {
   df$integration_mode[role_raw == "panorama" & !nzchar(trimws(df$integration_mode))] <- cfg$integration_modes_default
   df$vars_to_regress[role_raw == "panorama" & !nzchar(trimws(df$vars_to_regress))] <- cfg$vars_to_regress_default
   df$res_fine_step[!nzchar(trimws(df$res_fine_step))] <- as.character(cfg$res_fine_step_default)
+  df$cluster_selection_mode[!nzchar(trimws(df$cluster_selection_mode))] <- cfg$cluster_selection_mode
+  df$min_expected_clusters[!nzchar(trimws(df$min_expected_clusters))] <- as.character(cfg$cluster_min_expected)
+  df$max_expected_clusters[!nzchar(trimws(df$max_expected_clusters))] <- as.character(cfg$cluster_max_expected)
+  df$validation_depth[!nzchar(trimws(df$validation_depth))] <- cfg$cluster_validation_depth
 
   df <- df[, expected_cols, drop = FALSE]
   df$layer_id <- vapply(df$layer_id, sanitize_layer_id_local, character(1))
@@ -140,6 +166,8 @@ read_object_layer_config <- function(cfg) {
   df$layer_role <- tolower(vapply(df$layer_role, normalize_scalar_value, character(1), default = "subcluster"))
   df$enabled <- vapply(df$enabled, parse_yes_no_local, character(1), default = "yes")
   df$rebuild_normalization <- vapply(df$rebuild_normalization, parse_yes_no_local, character(1), default = "yes")
+  df$cluster_selection_mode <- vapply(df$cluster_selection_mode, parse_cluster_selection_mode_local, character(1), default = cfg$cluster_selection_mode)
+  df$validation_depth <- tolower(vapply(df$validation_depth, normalize_scalar_value, character(1), default = cfg$cluster_validation_depth))
   df$description <- vapply(df$description, normalize_scalar_value, character(1))
   df <- df[nzchar(df$layer_id), , drop = FALSE]
 
@@ -158,6 +186,9 @@ read_object_layer_config <- function(cfg) {
   df$hvg_nfeatures <- vapply(df$hvg_nfeatures, parse_int_scalar_local, integer(1), default = cfg$hvg_nfeatures)
   df$target_clusters <- vapply(df$target_clusters, parse_int_scalar_local, integer(1), default = cfg$target_clusters)
   df$res_fine_step <- vapply(df$res_fine_step, parse_num_scalar_local, numeric(1), default = cfg$res_fine_step_default)
+  df$approved_resolution <- vapply(df$approved_resolution, parse_num_scalar_local, numeric(1), default = NA_real_)
+  df$min_expected_clusters <- vapply(df$min_expected_clusters, parse_int_scalar_local, integer(1), default = cfg$cluster_min_expected)
+  df$max_expected_clusters <- vapply(df$max_expected_clusters, parse_int_scalar_local, integer(1), default = cfg$cluster_max_expected)
 
   df
 }
@@ -187,6 +218,12 @@ validate_layer_config <- function(df) {
         stop(sprintf("subcluster layer `%s` 必须设置 parent_layer。", row$layer_id), call. = FALSE)
       }
     }
+    if (row$min_expected_clusters > row$max_expected_clusters) {
+      stop(sprintf("layer `%s` min_expected_clusters 不能大于 max_expected_clusters。", row$layer_id), call. = FALSE)
+    }
+    if (row$cluster_selection_mode == "fixed_resolution" && !is.finite(row$approved_resolution)) {
+      stop(sprintf("layer `%s` 使用 fixed_resolution 时必须设置 approved_resolution。", row$layer_id), call. = FALSE)
+    }
   }
   df
 }
@@ -206,7 +243,7 @@ topo_order_layers <- function(df) {
   ordered
 }
 
-layer_config_row_to_spec <- function(row) {
+layer_config_row_to_spec <- function(row, cfg = get("cfg", envir = .GlobalEnv)) {
   if (nrow(row) != 1) {
     stop("layer_config_row_to_spec 需要单行 data.frame。", call. = FALSE)
   }
@@ -225,6 +262,21 @@ layer_config_row_to_spec <- function(row) {
     target_clusters = row$target_clusters[[1]],
     res_range = row$res_range[[1]],
     res_fine_step = row$res_fine_step[[1]],
+    cluster_selection_mode = row$cluster_selection_mode[[1]],
+    approved_resolution = row$approved_resolution[[1]],
+    min_expected_clusters = row$min_expected_clusters[[1]],
+    max_expected_clusters = row$max_expected_clusters[[1]],
+    validation_depth = row$validation_depth[[1]],
+    cluster_seeds = cfg$cluster_seeds,
+    cluster_silhouette_max_cells = cfg$cluster_silhouette_max_cells,
+    cluster_marker_shortlist_n = cfg$cluster_marker_shortlist_n,
+    cluster_min_cells_abs = cfg$cluster_min_cells_abs,
+    cluster_min_cell_fraction = cfg$cluster_min_cell_fraction,
+    min_seed_ari = cfg$cluster_min_seed_ari,
+    min_subsample_ari = cfg$cluster_min_subsample_ari,
+    stable_local_ari = cfg$cluster_stable_local_ari,
+    plateau_min_points = cfg$cluster_plateau_min_points,
+    score_tie_delta = cfg$cluster_score_tie_delta,
     integration_mode = row$integration_mode[[1]],
     normalization_methods = row$normalization_methods[[1]],
     vars_to_regress = row$vars_to_regress[[1]],
@@ -236,7 +288,7 @@ panorama_layer_spec <- function(cfg) {
   df <- validate_layer_config(read_object_layer_config(cfg))
   enabled <- filter_enabled_layers(df)
   row <- enabled[enabled$layer_role == "panorama", , drop = FALSE]
-  layer_config_row_to_spec(row)
+  layer_config_row_to_spec(row, cfg = cfg)
 }
 
 layer_spec_has_filter <- function(layer_spec) {

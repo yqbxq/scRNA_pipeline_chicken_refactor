@@ -59,9 +59,11 @@ bash "${PIPELINE_ROOT}/workflow/03stages/input_summary.sh" >/dev/null
 [[ -s "${TMP_ROOT}/project/reports/intake/intake_summary.md" ]]
 [[ -s "${TMP_ROOT}/project/config/spatial_clustering_override.tsv" ]]
 [[ -s "${TMP_ROOT}/project/config/spatial_region_annotation_override.tsv" ]]
+[[ -s "${TMP_ROOT}/project/config/cluster_resolution_decisions.tsv" ]]
 grep -q $'^trajectory_methods\tpending' "${TMP_ROOT}/project/config/eda_gates.tsv"
 grep -q $'^scdesign3_targets\tpending' "${TMP_ROOT}/project/config/eda_gates.tsv"
 grep -q $'^panorama\tpanorama\tyes' "${TMP_ROOT}/project/config/object_layers.tsv"
+grep -q '^export CLUSTER_RESOLUTION_DECISION_FILE=' "${TMP_ROOT}/project/config/project_config.sh"
 grep -q '^export SPATIAL_CLUSTERING_OVERRIDE_FILE=' "${TMP_ROOT}/project/config/project_config.sh"
 grep -q '^export SPATIAL_REGION_ANNOTATION_OVERRIDE_FILE=' "${TMP_ROOT}/project/config/project_config.sh"
 grep -q '^export H5AD_CONTRACT_FILE=' "${TMP_ROOT}/project/config/project_config.sh"

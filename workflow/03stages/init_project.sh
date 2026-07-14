@@ -201,6 +201,25 @@ write_project_config() {
     shell_export SPATIAL_QC_THRESHOLD_FILE "${SPATIAL_QC_THRESHOLD_FILE}"
     shell_export EDA_GATE_FILE "${EDA_GATE_FILE}"
     shell_export OBJECT_LAYER_CONFIG_FILE "${OBJECT_LAYER_CONFIG_FILE}"
+    shell_export CLUSTER_RESOLUTION_DECISION_FILE "${CLUSTER_RESOLUTION_DECISION_FILE}"
+    shell_export CLUSTER_SELECTION_MODE "${CLUSTER_SELECTION_MODE}"
+    shell_export CLUSTER_RESOLUTIONS "${CLUSTER_RESOLUTIONS}"
+    shell_export CLUSTER_SEEDS "${CLUSTER_SEEDS}"
+    shell_export CLUSTER_SUBSAMPLE_REPS "${CLUSTER_SUBSAMPLE_REPS}"
+    shell_export CLUSTER_SUBSAMPLE_FRACTION "${CLUSTER_SUBSAMPLE_FRACTION}"
+    shell_export CLUSTER_SILHOUETTE_MAX_CELLS "${CLUSTER_SILHOUETTE_MAX_CELLS}"
+    shell_export CLUSTER_MARKER_SHORTLIST_N "${CLUSTER_MARKER_SHORTLIST_N}"
+    shell_export CLUSTER_MIN_EXPECTED "${CLUSTER_MIN_EXPECTED}"
+    shell_export CLUSTER_MAX_EXPECTED "${CLUSTER_MAX_EXPECTED}"
+    shell_export CLUSTER_MIN_CELLS_ABS "${CLUSTER_MIN_CELLS_ABS}"
+    shell_export CLUSTER_MIN_CELL_FRACTION "${CLUSTER_MIN_CELL_FRACTION}"
+    shell_export CLUSTER_MIN_SEED_ARI "${CLUSTER_MIN_SEED_ARI}"
+    shell_export CLUSTER_MIN_SUBSAMPLE_ARI "${CLUSTER_MIN_SUBSAMPLE_ARI}"
+    shell_export CLUSTER_STABLE_LOCAL_ARI "${CLUSTER_STABLE_LOCAL_ARI}"
+    shell_export CLUSTER_PLATEAU_MIN_POINTS "${CLUSTER_PLATEAU_MIN_POINTS}"
+    shell_export CLUSTER_SCORE_TIE_DELTA "${CLUSTER_SCORE_TIE_DELTA}"
+    shell_export CLUSTER_GAP_ENABLED "${CLUSTER_GAP_ENABLED}"
+    shell_export CLUSTER_VALIDATION_DEPTH "${CLUSTER_VALIDATION_DEPTH}"
     shell_export SPATIAL_OBJECT_LAYER_FILE "${SPATIAL_OBJECT_LAYER_FILE}"
     shell_export SPATIAL_INTAKE_CONTRACT_FILE "${SPATIAL_INTAKE_CONTRACT_FILE}"
     shell_export MARKER_PANEL_DIR "${MARKER_PANEL_DIR}"
@@ -459,9 +478,12 @@ sample_id	qc_min_nfeature	qc_min_ncount	qc_min_log10umi	qc_max_mito_pct
 __DEFAULT__	200	1000	0.7	20
 EOF
   cat > "${OBJECT_LAYER_CONFIG_FILE}" <<'EOF'
-layer_id	layer_role	enabled	parent_layer	sample_include	sample_exclude	selection_column	selection_values	rebuild_normalization	hvg_nfeatures	pca_dims	target_clusters	res_range	res_fine_step	normalization_methods	integration_mode	vars_to_regress	description
-panorama	panorama	yes					yes	2000	1:30	10	0.10,0.20,0.30,0.40,0.50,0.60,0.80,1.00,1.20	0.005	lognorm	harmony		Root panorama object built from all post-QC cells.
-subcluster_1	subcluster	no	panorama					yes	2000	1:20	8	0.10,0.15,0.20,0.25,0.30,0.35,0.40	0.005				Template subcluster row; set sample_include or selection_column/selection_values before enabling.
+layer_id	layer_role	enabled	parent_layer	sample_include	sample_exclude	selection_column	selection_values	rebuild_normalization	hvg_nfeatures	pca_dims	target_clusters	res_range	res_fine_step	cluster_selection_mode	approved_resolution	min_expected_clusters	max_expected_clusters	validation_depth	normalization_methods	integration_mode	vars_to_regress	description
+panorama	panorama	yes					yes	2000	1:30	10	0.15,0.175,0.20,0.225,0.25,0.275,0.30,0.325,0.35,0.375,0.40,0.425,0.45,0.475,0.50,0.525,0.55,0.575,0.60	0.005	auto_recommend		5	30	standard	lognorm	harmony		Root panorama object built from all post-QC cells.
+subcluster_1	subcluster	no	panorama					yes	2000	1:20	8	0.10,0.15,0.20,0.25,0.30,0.35,0.40	0.005	auto_recommend		3	15	standard				Template subcluster row; set sample_include or selection_column/selection_values before enabling.
+EOF
+  cat > "${CLUSTER_RESOLUTION_DECISION_FILE}" <<'EOF'
+layer_id	recommended_resolution	approved_resolution	status	note	recommended_clusters	score	plateau_start	plateau_end	updated_at
 EOF
   cp -f "${PIPELINE_ROOT}/config/spatial_qc_thresholds.tsv.template" "${SPATIAL_QC_THRESHOLD_FILE}"
   cp -f "${PIPELINE_ROOT}/config/spatial_object_layers.tsv.template" "${SPATIAL_OBJECT_LAYER_FILE}"
@@ -701,6 +723,25 @@ QC_THRESHOLD_FILE="${PROJECT_CONFIG_DIR}/qc_thresholds.tsv"
 SPATIAL_QC_THRESHOLD_FILE="${PROJECT_CONFIG_DIR}/spatial_qc_thresholds.tsv"
 EDA_GATE_FILE="${PROJECT_CONFIG_DIR}/eda_gates.tsv"
 OBJECT_LAYER_CONFIG_FILE="${PROJECT_CONFIG_DIR}/object_layers.tsv"
+CLUSTER_RESOLUTION_DECISION_FILE="${PROJECT_CONFIG_DIR}/cluster_resolution_decisions.tsv"
+CLUSTER_SELECTION_MODE="${CLUSTER_SELECTION_MODE:-auto_recommend}"
+CLUSTER_RESOLUTIONS="${CLUSTER_RESOLUTIONS:-0.15,0.175,0.20,0.225,0.25,0.275,0.30,0.325,0.35,0.375,0.40,0.425,0.45,0.475,0.50,0.525,0.55,0.575,0.60}"
+CLUSTER_SEEDS="${CLUSTER_SEEDS:-1,11,21,31,41}"
+CLUSTER_SUBSAMPLE_REPS="${CLUSTER_SUBSAMPLE_REPS:-5}"
+CLUSTER_SUBSAMPLE_FRACTION="${CLUSTER_SUBSAMPLE_FRACTION:-0.80}"
+CLUSTER_SILHOUETTE_MAX_CELLS="${CLUSTER_SILHOUETTE_MAX_CELLS:-5000}"
+CLUSTER_MARKER_SHORTLIST_N="${CLUSTER_MARKER_SHORTLIST_N:-5}"
+CLUSTER_MIN_EXPECTED="${CLUSTER_MIN_EXPECTED:-5}"
+CLUSTER_MAX_EXPECTED="${CLUSTER_MAX_EXPECTED:-30}"
+CLUSTER_MIN_CELLS_ABS="${CLUSTER_MIN_CELLS_ABS:-30}"
+CLUSTER_MIN_CELL_FRACTION="${CLUSTER_MIN_CELL_FRACTION:-0.001}"
+CLUSTER_MIN_SEED_ARI="${CLUSTER_MIN_SEED_ARI:-0.80}"
+CLUSTER_MIN_SUBSAMPLE_ARI="${CLUSTER_MIN_SUBSAMPLE_ARI:-0.65}"
+CLUSTER_STABLE_LOCAL_ARI="${CLUSTER_STABLE_LOCAL_ARI:-0.90}"
+CLUSTER_PLATEAU_MIN_POINTS="${CLUSTER_PLATEAU_MIN_POINTS:-3}"
+CLUSTER_SCORE_TIE_DELTA="${CLUSTER_SCORE_TIE_DELTA:-0.02}"
+CLUSTER_GAP_ENABLED="${CLUSTER_GAP_ENABLED:-no}"
+CLUSTER_VALIDATION_DEPTH="${CLUSTER_VALIDATION_DEPTH:-standard}"
 SPATIAL_OBJECT_LAYER_FILE="${PROJECT_CONFIG_DIR}/spatial_object_layers.tsv"
 SPATIAL_INTAKE_CONTRACT_FILE="${PROJECT_CONFIG_DIR}/spatial_intake_contract.tsv"
 MARKER_PANEL_DIR="${PROJECT_CONFIG_DIR}/marker_panels"

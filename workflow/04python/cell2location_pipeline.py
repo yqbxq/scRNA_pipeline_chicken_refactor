@@ -10,13 +10,14 @@ from helpers.spatial_io import resolve_spatial_h5ad_path
 
 
 def check_environment(use_gpu: bool) -> tuple[str, str]:
-    try:
-        import cell2location  # noqa: F401
-        import anndata  # noqa: F401
-        import scanpy  # noqa: F401
+    import importlib.util
+
+    required = ["cell2location", "anndata", "scanpy", "scvi", "torch", "pyro"]
+    missing = [name for name in required if importlib.util.find_spec(name) is None]
+    if missing:
+        return "skipped_no_python_env", f"cell2location Python stack missing packages: {','.join(missing)}"
+    if use_gpu:
         import torch
-    except Exception as exc:
-        return "skipped_no_python_env", f"cell2location Python stack import failed: {exc}"
     if use_gpu and not torch.cuda.is_available():
         return "skipped_no_gpu", "SPATIAL_C2L_USE_GPU requested but torch.cuda.is_available() is false"
     return "ok", ""
@@ -140,8 +141,9 @@ def _write_outputs(prop: pd.DataFrame, adata_st, out_dir: str | Path, abundance_
 
 
 def run_cell2location(args) -> tuple[int, str]:
+    from cell2location.models._cell2location_model import Cell2location
+    from cell2location.models.reference._reference_model import RegressionModel
     import anndata as ad
-    from cell2location.models import Cell2location, RegressionModel
 
     ref_h5ad = resolve_scrna_h5ad_path(module=args.ref_module, fallback_path=args.ref_h5ad)
     st_h5ad = resolve_spatial_h5ad_path(module=args.st_module, section_id=args.section_id or None, fallback_path=args.st_h5ad)
