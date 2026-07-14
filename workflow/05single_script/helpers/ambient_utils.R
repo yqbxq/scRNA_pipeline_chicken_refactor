@@ -219,10 +219,15 @@ choose_ambient_method <- function(readiness_row, cfg) {
   } else {
     cfg$ambient_fallback_method
   }
-  apply_policy <- if ("ambient_apply_default" %in% colnames(readiness_row)) {
+  readiness_apply_policy <- if ("ambient_apply_default" %in% colnames(readiness_row)) {
     normalize_scalar_value(readiness_row$ambient_apply_default[1], cfg$ambient_apply_policy)
   } else {
     cfg$ambient_apply_policy
+  }
+  apply_policy <- if (isTRUE(cfg$ambient_apply_policy_explicit)) {
+    cfg$ambient_apply_policy
+  } else {
+    readiness_apply_policy
   }
 
   list(

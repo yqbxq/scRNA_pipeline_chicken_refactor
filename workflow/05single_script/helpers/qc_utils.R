@@ -456,10 +456,43 @@ add_basic_qc_metrics <- function(seu, cfg, declared_gene_id_type = "auto") {
 }
 
 maybe_join_layers <- function(seu) {
-  if (exists("JoinLayers", mode = "function")) {
-    seu <- JoinLayers(seu)
+  if (!exists("JoinLayers", mode = "function")) {
+    return(seu)
   }
-  seu
+
+  assay_names <- tryCatch(names(seu@assays), error = function(e) character(0))
+  has_joinable_layers <- FALSE
+  for (assay_name in assay_names) {
+    assay_obj <- tryCatch(seu[[assay_name]], error = function(e) NULL)
+    if (is.null(assay_obj) || !inherits(assay_obj, c("Assay5", "StdAssay"))) {
+      next
+    }
+    layer_names <- tryCatch(
+      {
+        if (exists("Layers", mode = "function")) {
+          Layers(assay_obj)
+        } else {
+          character(0)
+        }
+      },
+      error = function(e) character(0)
+    )
+    if (length(layer_names) > 1) {
+      has_joinable_layers <- TRUE
+      break
+    }
+  }
+  if (!has_joinable_layers) {
+    return(seu)
+  }
+
+  tryCatch(
+    JoinLayers(seu),
+    error = function(e) {
+      warning(sprintf("JoinLayers skipped: %s", conditionMessage(e)), call. = FALSE)
+      seu
+    }
+  )
 }
 
 density_peaks <- function(x) {

@@ -108,6 +108,7 @@ get_single_script_config_02 <- function() {
     ambient_primary_method = tolower(env_or_default_02("AMBIENT_PRIMARY_METHOD", "soupx")),
     ambient_fallback_method = tolower(env_or_default_02("AMBIENT_FALLBACK_METHOD", "decontx")),
     ambient_apply_policy = tolower(env_or_default_02("AMBIENT_APPLY_POLICY", "manual")),
+    ambient_apply_policy_explicit = nzchar(Sys.getenv("AMBIENT_APPLY_POLICY", unset = "")),
     ambient_min_cells = env_integer_02("AMBIENT_MIN_CELLS", 50L),
     ambient_cluster_dims = parse_index_spec_02(env_or_default_02("AMBIENT_CLUSTER_DIMS", "1:20")),
     ambient_cluster_resolution = env_numeric_02("AMBIENT_CLUSTER_RESOLUTION", 0.4),
