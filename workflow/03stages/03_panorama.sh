@@ -19,8 +19,12 @@ MODULE_03A1_MANIFEST="${MANIFEST_DIR}/03a1_normalize_hvg/_manifest.json"
 MODULE_03A2_MANIFEST="${MANIFEST_DIR}/03a2_reduce_integrate/_manifest.json"
 MODULE_03B_MANIFEST="${MANIFEST_DIR}/03b_integration_eda/_manifest.json"
 MODULE_03C_MANIFEST="${MANIFEST_DIR}/03c_cluster/_manifest.json"
-MODULE_03D_MANIFEST="${MANIFEST_DIR}/03d_annotate/_manifest.json"
-MODULE_03E_MANIFEST="${MANIFEST_DIR}/03e_annotation_eda/_manifest.json"
+MODULE_03C2_MANIFEST="${MANIFEST_DIR}/03c2_cluster_marker_audit/_manifest.json"
+MODULE_03C3_MANIFEST="${MANIFEST_DIR}/03c3_cluster_selection_report/_manifest.json"
+MODULE_03D_MANIFEST="${MANIFEST_DIR}/03d_marker_risk/_manifest.json"
+MODULE_03E_MANIFEST="${MANIFEST_DIR}/03e_panel_evidence/_manifest.json"
+MODULE_03F_MANIFEST="${MANIFEST_DIR}/03f_apply_manual_annotation/_manifest.json"
+MODULE_03G_MANIFEST="${MANIFEST_DIR}/03g_annotation_eda/_manifest.json"
 
 ensure_eda_control_files
 ensure_object_layer_config_file
@@ -65,26 +69,62 @@ run_stage_if_stale \
   "${OBJECT_LAYER_CONFIG_FILE}"
 
 run_stage_if_stale \
-  "${WORKFLOW_ROOT}/05single_script/03d_annotate.R" \
-  "${MODULE_03D_MANIFEST}" \
+  "${WORKFLOW_ROOT}/05single_script/03c2_cluster_marker_audit.R" \
+  "${MODULE_03C2_MANIFEST}" \
+  "${MODULE_03C_MANIFEST}"
+
+run_stage_if_stale \
+  "${WORKFLOW_ROOT}/05single_script/03c3_cluster_selection_report.R" \
+  "${MODULE_03C3_MANIFEST}" \
   "${MODULE_03C_MANIFEST}" \
+  "${MODULE_03C2_MANIFEST}"
+
+require_manifest_output "${MODULE_03C3_MANIFEST}" "report" >/dev/null
+if ! eda_gate_passed clustering; then
+  set_eda_gate_status \
+    "clustering" \
+    "pending" \
+    "" \
+    "03c3 clustering selection and marker audit completed; review clustering report, then approve clustering"
+fi
+
+hold_for_gate clustering
+
+run_stage_if_stale \
+  "${WORKFLOW_ROOT}/05single_script/03d_marker_risk.R" \
+  "${MODULE_03D_MANIFEST}" \
+  "${MODULE_03C3_MANIFEST}"
+
+run_stage_if_stale \
+  "${WORKFLOW_ROOT}/05single_script/03e_panel_evidence.R" \
+  "${MODULE_03E_MANIFEST}" \
+  "${MODULE_03C3_MANIFEST}" \
+  "${MODULE_03D_MANIFEST}" \
   "${MARKER_PANEL_DIR}"
 
 run_stage_if_stale \
-  "${WORKFLOW_ROOT}/05single_script/03e_annotation_eda.R" \
+  "${WORKFLOW_ROOT}/05single_script/03f_apply_manual_annotation.R" \
+  "${MODULE_03F_MANIFEST}" \
+  "${MODULE_03C3_MANIFEST}" \
+  "${MODULE_03D_MANIFEST}" \
   "${MODULE_03E_MANIFEST}" \
-  "${MODULE_03D_MANIFEST}"
+  "${MANUAL_ANNOTATION_FILE}"
 
-require_manifest_output "${MODULE_03C_MANIFEST}" "clustered_object" >/dev/null
-require_manifest_output "${MODULE_03D_MANIFEST}" "annotated_object" >/dev/null
-require_manifest_output "${MODULE_03E_MANIFEST}" "report" >/dev/null
+run_stage_if_stale \
+  "${WORKFLOW_ROOT}/05single_script/03g_annotation_eda.R" \
+  "${MODULE_03G_MANIFEST}" \
+  "${MODULE_03F_MANIFEST}"
+
+require_manifest_output "${MODULE_03C3_MANIFEST}" "clustered_object" >/dev/null
+require_manifest_output "${MODULE_03F_MANIFEST}" "annotated_object" >/dev/null
+require_manifest_output "${MODULE_03G_MANIFEST}" "report" >/dev/null
 
 if ! eda_gate_passed annotation; then
   set_eda_gate_status \
     "annotation" \
     "pending" \
     "" \
-    "03e annotation EDA completed; manual review required before 04_subcluster"
+    "03g annotation EDA completed; manual review required before 04_subcluster"
 fi
 
 update_workflow_status \
@@ -94,6 +134,12 @@ update_workflow_status \
   "status.03a2_reduce_integrate_completed=true" \
   "status.03b_integration_eda_completed=true" \
   "status.03c_cluster_completed=true" \
+  "status.03c2_cluster_marker_audit_completed=true" \
+  "status.03c3_cluster_selection_completed=true" \
+  "status.03d_marker_risk_completed=true" \
+  "status.03e_panel_evidence_completed=true" \
+  "status.03f_manual_annotation_applied=true" \
+  "status.03g_annotation_eda_completed=true" \
   "status.03d_annotate_completed=true" \
   "status.03e_annotation_eda_completed=true" \
   "status.03_panorama_completed=true" \

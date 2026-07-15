@@ -178,6 +178,10 @@ export QC_THRESHOLD_FILE="${QC_THRESHOLD_FILE:-${PROJECT_CONFIG_DIR}/qc_threshol
 export EDA_GATE_FILE="${EDA_GATE_FILE:-${PROJECT_CONFIG_DIR}/eda_gates.tsv}"
 export OBJECT_LAYER_CONFIG_FILE="${OBJECT_LAYER_CONFIG_FILE:-${PROJECT_CONFIG_DIR}/object_layers.tsv}"
 export MARKER_PANEL_DIR="${MARKER_PANEL_DIR:-${PROJECT_CONFIG_DIR}/marker_panels}"
+export MANUAL_ANNOTATION_FILE="${MANUAL_ANNOTATION_FILE:-${PROJECT_CONFIG_DIR}/manual_annotation.tsv}"
+export PANEL_EVIDENCE_MODE="${PANEL_EVIDENCE_MODE:-off}"
+export ANNOTATION_MODE="${ANNOTATION_MODE:-manual}"
+export AUTO_APPLY_ANNOTATION="${AUTO_APPLY_ANNOTATION:-no}"
 export MITO_GENE_LIST_FILE="${MITO_GENE_LIST_FILE:-${PROJECT_CONFIG_DIR}/mito_gene_list.txt}"
 export RBC_GENE_LIST_FILE="${RBC_GENE_LIST_FILE:-${PROJECT_CONFIG_DIR}/rbc_gene_list.txt}"
 export AMBIENT_REPORT_DIR="${AMBIENT_REPORT_DIR:-${EDA_REPORT_DIR}/ambient}"
@@ -325,6 +329,7 @@ ensure_eda_control_files() {
       printf 'pre_qc\tpending\t\t\n'
       printf 'post_qc\tpending\t\t\n'
       printf 'integration\tpending\t\t\n'
+      printf 'clustering\tpending\t\t\n'
       printf 'annotation\tpending\t\t\n'
       printf 'subcluster\tpending\t\t\n'
       printf 'deg\tpending\t\t\n'
@@ -341,7 +346,7 @@ ensure_eda_control_files() {
   fi
 
   local gate_id
-  for gate_id in pre_qc post_qc integration annotation subcluster deg communication regulation trajectory_inputs trajectory_methods trajectory_finalize velocity_inputs velocity_finalize scdesign3_targets scdesign3_validated; do
+  for gate_id in pre_qc post_qc integration clustering annotation subcluster deg communication regulation trajectory_inputs trajectory_methods trajectory_finalize velocity_inputs velocity_finalize scdesign3_targets scdesign3_validated; do
     if ! awk -F '\t' -v gate="${gate_id}" 'NR > 1 && $1 == gate { found = 1 } END { exit(found ? 0 : 1) }' "${EDA_GATE_FILE}" >/dev/null 2>&1; then
       printf '%s\tpending\t\t\n' "${gate_id}" >> "${EDA_GATE_FILE}"
     fi

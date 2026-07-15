@@ -309,6 +309,7 @@ ambient	pending
 pre_qc	pending
 post_qc	pending
 integration	pending
+clustering	pending
 annotation	pending
 subcluster	pending
 deg	pending
@@ -357,6 +358,7 @@ write_status_json() {
     "pre_qc": "pending",
     "post_qc": "pending",
     "integration": "pending",
+    "clustering": "pending",
     "annotation": "pending",
     "subcluster": "pending",
     "deg": "pending",
@@ -519,6 +521,10 @@ QC_THRESHOLD_FILE="${PROJECT_CONFIG_DIR}/qc_thresholds.tsv"
 EDA_GATE_FILE="${PROJECT_CONFIG_DIR}/eda_gates.tsv"
 OBJECT_LAYER_CONFIG_FILE="${PROJECT_CONFIG_DIR}/object_layers.tsv"
 MARKER_PANEL_DIR="${PROJECT_CONFIG_DIR}/marker_panels"
+MANUAL_ANNOTATION_FILE="${PROJECT_CONFIG_DIR}/manual_annotation.tsv"
+PANEL_EVIDENCE_MODE="off"
+ANNOTATION_MODE="manual"
+AUTO_APPLY_ANNOTATION="no"
 MITO_GENE_LIST_FILE="${PROJECT_CONFIG_DIR}/mito_gene_list.txt"
 RBC_GENE_LIST_FILE="${PROJECT_CONFIG_DIR}/rbc_gene_list.txt"
 AMBIENT_REPORT_DIR="${EDA_REPORT_DIR}/ambient"

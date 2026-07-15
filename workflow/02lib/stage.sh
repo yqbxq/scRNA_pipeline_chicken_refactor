@@ -327,6 +327,7 @@ sync_workflow_gate_statuses() {
     "status.pre_qc_gate_passed=$(eda_gate_passed pre_qc && echo true || echo false)" \
     "status.post_qc_gate_passed=$(eda_gate_passed post_qc && echo true || echo false)" \
     "status.integration_gate_passed=$(eda_gate_passed integration && echo true || echo false)" \
+    "status.clustering_gate_passed=$(eda_gate_passed clustering && echo true || echo false)" \
     "status.annotation_gate_passed=$(eda_gate_passed annotation && echo true || echo false)" \
     "status.subcluster_gate_passed=$(eda_gate_passed subcluster && echo true || echo false)" \
     "status.deg_gate_passed=$(eda_gate_passed deg && echo true || echo false)" \
@@ -479,6 +480,7 @@ for key in (
     "post_qc_gate_passed",
     "integration_eda_complete",
     "integration_gate_passed",
+    "clustering_gate_passed",
     "annotation_eda_complete",
     "annotation_gate_passed",
     "subcluster_gate_passed",

@@ -255,10 +255,25 @@ Tier 2 表为自动生成文件，不应手工编辑。后续新增 ST 或联合
     - `workflow/01run.sh 06_enrichment`
     - `workflow/01run.sh 07_communication`
     - `workflow/01run.sh 08_regulation`
-  - 会在 `pre_qc / post_qc / integration / annotation` 四个 gate 自动停住
+  - 会在 `pre_qc / post_qc / integration / clustering / annotation` gate 自动停住
   - 审阅对应 `reports/eda/<stage>/report.md` 后，在 `config/eda_gates.tsv` 中把该 gate 设为 `approved`，再重跑对应 stage
 
-### 5.10 04 子聚类模块（v04 分支）
+### 5.10 03 panorama 聚类与人工注释
+
+`03_panorama` 现在把分群、marker 审核、panel 证据和人工注释写回分开：
+
+- `03a1_normalize_hvg.R` / `03a2_reduce_integrate.R` / `03b_integration_eda.R`：QC 后 singlets 的标准化、HVG、降维/整合和 integration EDA。
+- `03c_cluster.R`：扫描候选 resolution，输出稳定性、相邻 ARI、subsample ARI、silhouette/CH、碎群和 QC nuisance 指标；不读取 marker panel。
+- `03c2_cluster_marker_audit.R`：只对前几个候选 resolution 做 panel-free `FindAllMarkers` marker 审核。
+- `03c3_cluster_selection_report.R`：按稳定性 50%、分离度 20%、marker 可解释性 20%、碎群 10% 选择最终 clustering，并输出正式 `markers_raw.tsv`、`markers_strict.tsv`、`cluster_marker_qc.tsv`。
+- `03d_marker_risk.R`：输出 `gene_risk.tsv`、`cluster_marker_risk.tsv`、`ambient_marker_risk.tsv`，只做风险复核，不自动注释。
+- `03e_panel_evidence.R`：可选 panel 复核；默认 `PANEL_EVIDENCE_MODE=off`，`audit_only` 或 `validate_manual` 只输出证据表，不写回对象。
+- `03f_apply_manual_annotation.R`：读取 `config/manual_annotation.tsv`，只有人工表完整时才写 `cell_type` / `annotation_label`。
+- `03g_annotation_eda.R`：生成 annotation gate 报告。
+
+第一次跑到 `03f` 时如果没有 `config/manual_annotation.tsv`，脚本会生成模板并停止。填好 `manual_annotation` 后重跑 `03_panorama`。
+
+### 5.11 04 子聚类模块（v04 分支）
 
 04 子聚类模块走 workflow stage 入口：
 
@@ -543,18 +558,23 @@ bash workflow/01run.sh <stage>
 
 ### 7.2 聚类
 
-- 标准化、高变基因、PCA、Harmony、UMAP、聚类
+- 标准化、高变基因、PCA、Harmony/其他 integration、UMAP、候选 resolution 质量扫描、panel-free marker 审核、最终聚类选择
 - 输出：
   - `results/checkpoints/02_after_clustering.rds`
-  - `results/tables/cluster_summary.csv`
+  - `results/tables/integration/<layer>/resolution_metrics.tsv`
+  - `results/tables/integration/<layer>/cluster_selection_ranking.tsv`
+  - `results/tables/cluster_marker_audit/layers/<layer>/markers_raw.tsv`
+  - `results/tables/cluster_marker_audit/layers/<layer>/markers_strict.tsv`
+  - `results/tables/cluster_marker_audit/layers/<layer>/cluster_marker_qc.tsv`
 
 ### 7.3 注释
 
-- 按论文里的颗粒细胞 marker 做注释
+- 默认人工注释。可选 marker panel 只作为 audit evidence，不自动覆盖人工结果。
 - 输出：
   - `results/checkpoints/03_after_annotation.rds`
-  - marker 表
-  - cluster 到 cell type 的映射表
+  - `config/manual_annotation.tsv`
+  - `results/tables/annotation/layers/<layer>/manual_annotation_table.tsv`
+  - `results/tables/panel_evidence/layers/<layer>/panel_candidate_evidence.tsv`
 
 ### 7.4 差异分析和富集
 
