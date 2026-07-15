@@ -58,6 +58,15 @@ if ! eda_gate_passed integration; then
     "03b integration EDA completed; review ${SELECTED_INTEGRATION_FILE}, then approve integration"
 fi
 
+update_workflow_status \
+  "03b_integration_eda_completed" \
+  "review ${SELECTED_INTEGRATION_FILE}, approve integration in ${EDA_GATE_FILE}, then rerun 03_panorama" \
+  "status.03a1_normalize_hvg_completed=true" \
+  "status.03a2_reduce_integrate_completed=true" \
+  "status.03b_integration_eda_completed=true" \
+  "status.integration_eda_complete=true" \
+  "status.integration_gate_passed=$(eda_gate_passed integration && echo true || echo false)"
+
 hold_for_gate integration
 
 run_stage_if_stale \
@@ -87,6 +96,19 @@ if ! eda_gate_passed clustering; then
     "" \
     "03c3 clustering selection and marker audit completed; review clustering report, then approve clustering"
 fi
+
+update_workflow_status \
+  "03c3_cluster_selection_completed" \
+  "review clustering reports, approve clustering in ${EDA_GATE_FILE}, then rerun 03_panorama" \
+  "status.03a1_normalize_hvg_completed=true" \
+  "status.03a2_reduce_integrate_completed=true" \
+  "status.03b_integration_eda_completed=true" \
+  "status.03c_cluster_completed=true" \
+  "status.03c2_cluster_marker_audit_completed=true" \
+  "status.03c3_cluster_selection_completed=true" \
+  "status.integration_eda_complete=true" \
+  "status.integration_gate_passed=$(eda_gate_passed integration && echo true || echo false)" \
+  "status.clustering_gate_passed=$(eda_gate_passed clustering && echo true || echo false)"
 
 hold_for_gate clustering
 
