@@ -80,10 +80,17 @@ safe_minmax_score_local <- function(x, higher_is_better = TRUE, default = 0.5) {
 }
 
 score_near_target_local <- function(n_clusters, target_clusters) {
-  if (!is.finite(target_clusters) || target_clusters <= 0) {
-    return(rep(0.5, length(n_clusters)))
+  n_clusters <- suppressWarnings(as.numeric(n_clusters))
+  target_clusters <- suppressWarnings(as.numeric(target_clusters))
+  if (length(target_clusters) == 1L) {
+    target_clusters <- rep(target_clusters, length(n_clusters))
   }
-  score <- 1 - abs(n_clusters - target_clusters) / pmax(target_clusters, n_clusters, 1)
+  if (length(target_clusters) != length(n_clusters)) {
+    target_clusters <- rep(NA_real_, length(n_clusters))
+  }
+  valid <- is.finite(target_clusters) & target_clusters > 0 & is.finite(n_clusters)
+  score <- rep(0.5, length(n_clusters))
+  score[valid] <- 1 - abs(n_clusters[valid] - target_clusters[valid]) / pmax(target_clusters[valid], n_clusters[valid], 1)
   pmax(0, pmin(1, score))
 }
 
