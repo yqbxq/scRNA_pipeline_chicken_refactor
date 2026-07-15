@@ -65,14 +65,105 @@ for (score_col in c("stability_score", "separation_score", "fragmentation_score"
   selection_df[[score_col]] <- suppressWarnings(as.numeric(selection_df[[score_col]]))
   selection_df[[score_col]][!is.finite(selection_df[[score_col]])] <- 0.5
 }
+if (!"eligible" %in% colnames(selection_df)) {
+  selection_df$eligible <- TRUE
+}
+if (!"ineligible_reason" %in% colnames(selection_df)) {
+  selection_df$ineligible_reason <- ""
+}
+marker_supported <- suppressWarnings(as.numeric(selection_df$marker_supported_cluster_fraction))
+low_marker_support <- is.finite(marker_supported) & marker_supported < 0.50
+selection_df$ineligible_reason[low_marker_support] <- ifelse(
+  nzchar(selection_df$ineligible_reason[low_marker_support]),
+  paste(selection_df$ineligible_reason[low_marker_support], "marker_supported_clusters_lt_50pct", sep = ";"),
+  "marker_supported_clusters_lt_50pct"
+)
+selection_df$eligible <- as.logical(selection_df$eligible) & !low_marker_support
 selection_df$final_selection_score <- 0.50 * selection_df$stability_score +
   0.20 * selection_df$separation_score +
   0.20 * selection_df$marker_quality_score +
   0.10 * selection_df$fragmentation_score
-selection_df <- selection_df %>%
-  dplyr::arrange(dplyr::desc(final_selection_score), dplyr::desc(stability_score), resolution)
+if (any(selection_df$eligible)) {
+  selection_df <- selection_df %>%
+    dplyr::arrange(dplyr::desc(eligible), dplyr::desc(final_selection_score), dplyr::desc(stability_score), resolution)
+} else {
+  selection_df <- selection_df %>%
+    dplyr::arrange(dplyr::desc(final_selection_score), dplyr::desc(stability_score), resolution)
+}
 selection_df$final_rank <- seq_len(nrow(selection_df))
-selection_df$selected_final <- selection_df$final_rank == 1L
+selection_df$recommended_auto <- selection_df$final_rank == 1L
+
+recommended_candidate_id <- selection_df$candidate_id[[which(selection_df$recommended_auto)[[1]]]]
+decision_cols <- c("layer_id", "recommended_candidate_id", "approved_candidate_id", "status", "note")
+selection_control <- read_tsv_optional(cfg$cluster_selection_file)
+if (nrow(selection_control) == 0) {
+  selection_control <- data.frame(
+    layer_id = character(0),
+    recommended_candidate_id = character(0),
+    approved_candidate_id = character(0),
+    status = character(0),
+    note = character(0),
+    stringsAsFactors = FALSE
+  )
+}
+for (col in decision_cols) {
+  if (!col %in% colnames(selection_control)) {
+    selection_control[[col]] <- ""
+  }
+}
+selection_control <- selection_control[, decision_cols, drop = FALSE]
+row_idx <- which(selection_control$layer_id == panorama_spec$layer_id)
+if (length(row_idx) == 0L) {
+  selection_control <- rbind(
+    selection_control,
+    data.frame(
+      layer_id = panorama_spec$layer_id,
+      recommended_candidate_id = recommended_candidate_id,
+      approved_candidate_id = "",
+      status = "pending",
+      note = "",
+      stringsAsFactors = FALSE
+    )
+  )
+  row_idx <- nrow(selection_control)
+} else {
+  row_idx <- row_idx[[1]]
+  selection_control$recommended_candidate_id[[row_idx]] <- recommended_candidate_id
+  if (!nzchar(normalize_scalar_value(selection_control$status[[row_idx]]))) {
+    selection_control$status[[row_idx]] <- "pending"
+  }
+}
+
+approved_candidate_id <- normalize_scalar_value(selection_control$approved_candidate_id[[row_idx]])
+approval_status <- tolower(normalize_scalar_value(selection_control$status[[row_idx]], "pending"))
+selected_candidate_id <- recommended_candidate_id
+selection_source <- "automatic_provisional"
+selection_status <- approval_status
+if (identical(approval_status, "approved")) {
+  if (nzchar(approved_candidate_id)) {
+    if (!approved_candidate_id %in% selection_df$candidate_id) {
+      stop(
+        sprintf(
+          "cluster_selection.tsv approved_candidate_id `%s` is not in current candidates: %s",
+          approved_candidate_id,
+          paste(selection_df$candidate_id, collapse = ",")
+        ),
+        call. = FALSE
+      )
+    }
+    selected_candidate_id <- approved_candidate_id
+    selection_source <- "manual_approved"
+  } else {
+    selection_source <- "manual_approved_recommended"
+  }
+} else if (nzchar(approved_candidate_id)) {
+  selection_status <- paste0(approval_status, "_candidate_not_approved")
+}
+write_tsv_local(selection_control, cfg$cluster_selection_file)
+
+selection_df$selected_final <- selection_df$candidate_id == selected_candidate_id
+selection_df$selection_source <- ifelse(selection_df$selected_final, selection_source, "")
+selection_df$selection_status <- ifelse(selection_df$selected_final, selection_status, "")
 
 selected <- selection_df[selection_df$selected_final, , drop = FALSE]
 source_cluster_col <- selected$candidate_cluster_col[[1]]
@@ -115,6 +206,8 @@ seu@misc$selected_resolution <- selected$resolution[[1]]
 seu@misc$selected_cluster_col <- cluster_col
 seu@misc$selected_candidate_cluster_col <- source_cluster_col
 seu@misc$cluster_selection_score <- selected$final_selection_score[[1]]
+seu@misc$cluster_selection_source <- selection_source
+seu@misc$cluster_selection_status <- selection_status
 
 ensure_dir(dirname(cfg$panorama_clustered_rds))
 saveRDS(seu, cfg$panorama_clustered_rds)
@@ -145,6 +238,10 @@ writeLines(
     sprintf("selected_resolution=%s", selected$resolution[[1]]),
     sprintf("selected_cluster_count=%s", selected$n_clusters[[1]]),
     sprintf("selected_candidate_id=%s", selected$candidate_id[[1]]),
+    sprintf("recommended_candidate_id=%s", recommended_candidate_id),
+    sprintf("approved_candidate_id=%s", approved_candidate_id),
+    sprintf("selection_source=%s", selection_source),
+    sprintf("selection_status=%s", selection_status),
     sprintf("selected_cluster_column=%s", cluster_col),
     sprintf("source_candidate_cluster_column=%s", source_cluster_col),
     sprintf("final_selection_score=%s", selected$final_selection_score[[1]])
@@ -163,6 +260,8 @@ status_row$status <- "clustered"
 status_row$cluster_column <- cluster_col
 status_row$selected_resolution <- as.character(selected$resolution[[1]])
 status_row$selected_cluster_count <- as.character(selected$n_clusters[[1]])
+status_row$cluster_selection_status <- selection_status
+status_row$cluster_selection_source <- selection_source
 status_row$clustered_rds <- normalizePath(cfg$panorama_clustered_rds, winslash = "/", mustWork = FALSE)
 status_row$annotated_rds <- ""
 invisible(upsert_layer_status(cfg$layer_status_file, status_row))
@@ -173,13 +272,18 @@ report_lines <- c(
   sprintf("- layer_id: `%s`", panorama_spec$layer_id),
   sprintf("- selected_resolution: `%s`", selected$resolution[[1]]),
   sprintf("- selected_cluster_count: `%s`", selected$n_clusters[[1]]),
+  sprintf("- recommended_candidate_id: `%s`", recommended_candidate_id),
+  sprintf("- approved_candidate_id: `%s`", ifelse(nzchar(approved_candidate_id), approved_candidate_id, "")),
+  sprintf("- selection_source: `%s`", selection_source),
+  sprintf("- cluster_selection_file: `%s`", cfg$cluster_selection_file),
   sprintf("- final_selection_score: `%s`", fmt_num(selected$final_selection_score[[1]], 3)),
   sprintf("- marker assay: `%s`", cfg$cluster_marker_assay),
   "",
   "## Selection Ranking",
   render_markdown_table_local(selection_df[, intersect(c(
     "candidate_id", "resolution", "n_clusters", "stability_score", "separation_score",
-    "marker_quality_score", "fragmentation_score", "final_selection_score", "selected_final"
+    "marker_quality_score", "fragmentation_score", "eligible", "ineligible_reason",
+    "final_selection_score", "recommended_auto", "selected_final", "selection_source", "selection_status"
   ), colnames(selection_df)), drop = FALSE]),
   "",
   "## Final Cluster Marker QC",
@@ -206,6 +310,7 @@ write_manifest_local(
     cluster_selection_ranking_tsv = build_output_entry(selection_ranking_tsv, "tsv", module_name, "marker-assisted final resolution ranking", base_dir = cfg$project_root, schema = infer_schema_from_df(selection_df)),
     selected_resolution_tsv = build_output_entry(selection_tsv, "tsv", module_name, "selected final resolution row", base_dir = cfg$project_root, schema = infer_schema_from_df(selected)),
     selected_resolution_txt = build_output_entry(selected_resolution_txt, "txt", module_name, "selected final resolution summary", base_dir = cfg$project_root),
+    cluster_selection_tsv = build_output_entry(cfg$cluster_selection_file, "tsv", module_name, "manual clustering selection control table", base_dir = cfg$project_root, schema = infer_schema_from_df(selection_control)),
     cluster_summary_csv = build_output_entry(cluster_summary_csv, "csv", module_name, "final cluster composition summary by sample/group", base_dir = cfg$project_root, schema = infer_schema_from_df(cluster_summary)),
     markers_raw_tsv = build_output_entry(marker_paths$markers_raw, "tsv", module_name, "panel-free FindAllMarkers output for final clustering", base_dir = cfg$project_root, schema = infer_schema_from_df(final_audit$markers_raw)),
     markers_scored_tsv = build_output_entry(marker_paths$markers_scored, "tsv", module_name, "scored final cluster markers", base_dir = cfg$project_root, schema = infer_schema_from_df(final_audit$markers_scored)),
@@ -222,6 +327,7 @@ write_manifest_local(
   inputs = list(
     module_03c_manifest = cfg$module_03c_manifest_path,
     module_03c2_manifest = cfg$module_03c2_manifest_path,
+    cluster_selection_file = cfg$cluster_selection_file,
     candidate_clustered_object = candidate_rds,
     resolution_ranking_tsv = ranking_path,
     candidate_marker_quality_tsv = quality_path

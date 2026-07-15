@@ -28,6 +28,7 @@ get_single_script_config_03 <- function() {
   base$comparison_sheet <- env_or_default_03("COMPARISON_SHEET", file.path(base$metadata_dir, "comparisons.tsv"))
   base$annotation_marker_targets_sheet <- env_or_default_03("ANNOTATION_MARKER_TARGETS_SHEET", file.path(base$metadata_dir, "annotation_marker_targets.tsv"))
   base$marker_panel_dir <- env_or_default_03("MARKER_PANEL_DIR", file.path(base$config_dir, "marker_panels"))
+  base$cluster_selection_file <- env_or_default_03("CLUSTER_SELECTION_FILE", file.path(base$config_dir, "cluster_selection.tsv"))
 
   base$module_03a1_manifest_path <- file.path(base$manifest_dir, "03a1_normalize_hvg", "_manifest.json")
   base$module_03a2_manifest_path <- file.path(base$manifest_dir, "03a2_reduce_integrate", "_manifest.json")
@@ -142,6 +143,7 @@ prepare_dirs_03 <- function(cfg) {
     dirname(cfg$layer_status_file),
     dirname(cfg$selected_integration_file),
     dirname(cfg$manual_annotation_file),
+    dirname(cfg$cluster_selection_file),
     dirname(cfg$module_03a1_manifest_path),
     dirname(cfg$module_03a2_manifest_path),
     dirname(cfg$module_03b_manifest_path),

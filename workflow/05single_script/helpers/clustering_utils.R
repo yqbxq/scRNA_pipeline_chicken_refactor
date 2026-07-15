@@ -33,6 +33,26 @@ adjusted_rand_index_local <- function(x, y) {
   (sum_nij - expected) / denom
 }
 
+aligned_adjusted_rand_index_local <- function(x, y) {
+  if (is.null(names(x)) || is.null(names(y))) {
+    return(adjusted_rand_index_local(x, y))
+  }
+  common <- intersect(names(x), names(y))
+  if (length(common) < 2L) {
+    return(NA_real_)
+  }
+  adjusted_rand_index_local(x[common], y[common])
+}
+
+finite_stat_local <- function(x, fun, default = NA_real_) {
+  x <- suppressWarnings(as.numeric(x))
+  x <- x[is.finite(x)]
+  if (length(x) == 0) {
+    return(default)
+  }
+  fun(x)
+}
+
 res_label_local <- function(res) {
   paste0("res_", gsub("\\.", "p", format(res, trim = TRUE, scientific = FALSE)))
 }
@@ -193,6 +213,8 @@ run_quality_resolution_search <- function(
     sizes <- table(labels)
     small_cutoff <- max(20L, ceiling(0.005 * length(labels)))
     small_clusters <- sum(sizes < small_cutoff)
+    small_cluster_cell_n <- sum(as.integer(sizes[sizes < small_cutoff]))
+    small_cluster_cell_fraction <- small_cluster_cell_n / length(labels)
     metric_labels <- labels[metric_cells]
 
     seed_ari <- numeric(0)
@@ -200,7 +222,9 @@ run_quality_resolution_search <- function(
       repeat_seeds <- seed + seq_len(seed_repeats)
       for (seed_i in repeat_seeds) {
         repeat_eval <- evaluate_resolution_local(seu, res, seed_i)
-        seed_ari <- c(seed_ari, adjusted_rand_index_local(labels, as.character(repeat_eval$object$seurat_clusters)))
+        repeat_labels <- as.character(repeat_eval$object$seurat_clusters)
+        names(repeat_labels) <- colnames(repeat_eval$object)
+        seed_ari <- c(seed_ari, aligned_adjusted_rand_index_local(labels, repeat_labels))
       }
     }
 
@@ -215,10 +239,9 @@ run_quality_resolution_search <- function(
         sub_dims <- usable_reduction_dims(sub_obj, dims, reduction_name)
         sub_obj <- FindNeighbors(sub_obj, reduction = reduction_name, dims = sub_dims, verbose = FALSE)
         sub_eval <- evaluate_resolution_local(sub_obj, res, seed + 2000L + rep_i)
-        subsample_ari <- c(
-          subsample_ari,
-          adjusted_rand_index_local(labels[sub_cells], as.character(sub_eval$object$seurat_clusters))
-        )
+        sub_labels <- as.character(sub_eval$object$seurat_clusters)
+        names(sub_labels) <- colnames(sub_eval$object)
+        subsample_ari <- c(subsample_ari, aligned_adjusted_rand_index_local(labels, sub_labels))
       }
     }
 
@@ -233,8 +256,16 @@ run_quality_resolution_search <- function(
       small_cluster_cutoff = small_cutoff,
       small_cluster_n = small_clusters,
       small_cluster_fraction = small_clusters / length(sizes),
-      seed_stability_ari = if (length(seed_ari) > 0) mean(seed_ari, na.rm = TRUE) else NA_real_,
-      subsample_stability_ari = if (length(subsample_ari) > 0) mean(subsample_ari, na.rm = TRUE) else NA_real_,
+      small_cluster_cell_n = small_cluster_cell_n,
+      small_cluster_cell_fraction = small_cluster_cell_fraction,
+      seed_stability_ari = finite_stat_local(seed_ari, mean),
+      seed_stability_median_ari = finite_stat_local(seed_ari, stats::median),
+      seed_stability_min_ari = finite_stat_local(seed_ari, min),
+      seed_stability_sd_ari = finite_stat_local(seed_ari, function(x) if (length(x) > 1L) stats::sd(x) else NA_real_),
+      subsample_stability_ari = finite_stat_local(subsample_ari, mean),
+      subsample_stability_median_ari = finite_stat_local(subsample_ari, stats::median),
+      subsample_stability_min_ari = finite_stat_local(subsample_ari, min),
+      subsample_stability_sd_ari = finite_stat_local(subsample_ari, function(x) if (length(x) > 1L) stats::sd(x) else NA_real_),
       silhouette_mean = mean_silhouette_local(embedding_metric, metric_labels),
       ch_index = calinski_harabasz_local(embedding_metric, metric_labels),
       max_qc_eta2 = cluster_qc_eta2_local(meta_df, labels),
@@ -287,6 +318,58 @@ run_quality_resolution_search <- function(
   metrics$adjacent_ari_mean <- rowMeans(metrics[, c("adjacent_ari_prev", "adjacent_ari_next"), drop = FALSE], na.rm = TRUE)
   metrics$adjacent_ari_mean[!is.finite(metrics$adjacent_ari_mean)] <- NA_real_
 
+  stable_edge_threshold <- 0.80
+  metrics <- dplyr::arrange(metrics, resolution)
+  metrics$plateau_id <- NA_integer_
+  current_plateau <- 1L
+  for (i in seq_len(nrow(metrics))) {
+    if (i > 1L) {
+      prev_edge <- adjacent_ari$ari[
+        adjacent_ari$resolution_left == metrics$resolution[[i - 1L]] &
+          adjacent_ari$resolution_right == metrics$resolution[[i]]
+      ]
+      if (length(prev_edge) == 0 || !is.finite(prev_edge[[1]]) || prev_edge[[1]] < stable_edge_threshold) {
+        current_plateau <- current_plateau + 1L
+      }
+    }
+    metrics$plateau_id[[i]] <- current_plateau
+  }
+  plateau_summary <- metrics %>%
+    dplyr::group_by(plateau_id) %>%
+    dplyr::summarise(
+      plateau_start = min(resolution),
+      plateau_end = max(resolution),
+      plateau_n_points = dplyr::n(),
+      plateau_cluster_count_range = max(n_clusters) - min(n_clusters),
+      .groups = "drop"
+    )
+  plateau_summary$plateau_min_adjacent_ari <- vapply(plateau_summary$plateau_id, function(pid) {
+    plateau_res <- metrics$resolution[metrics$plateau_id == pid]
+    internal_edges <- adjacent_ari$ari[
+      adjacent_ari$resolution_left %in% plateau_res &
+        adjacent_ari$resolution_right %in% plateau_res
+    ]
+    finite_stat_local(internal_edges, min)
+  }, numeric(1))
+  metrics <- dplyr::left_join(metrics, plateau_summary, by = "plateau_id")
+  metrics$ineligible_reason <- vapply(seq_len(nrow(metrics)), function(i) {
+    reasons <- character(0)
+    if (is.finite(metrics$min_cluster_size[[i]]) && metrics$min_cluster_size[[i]] < 10L) {
+      reasons <- c(reasons, "min_cluster_size_lt_10")
+    }
+    if (is.finite(metrics$small_cluster_cell_fraction[[i]]) && metrics$small_cluster_cell_fraction[[i]] > 0.10) {
+      reasons <- c(reasons, "small_cluster_cell_fraction_gt_10pct")
+    }
+    if (is.finite(metrics$seed_stability_ari[[i]]) && metrics$seed_stability_ari[[i]] < 0.80) {
+      reasons <- c(reasons, "seed_ari_lt_0p80")
+    }
+    if (is.finite(metrics$subsample_stability_ari[[i]]) && metrics$subsample_stability_ari[[i]] < 0.60) {
+      reasons <- c(reasons, "subsample_ari_lt_0p60")
+    }
+    paste(reasons, collapse = ";")
+  }, character(1))
+  metrics$eligible <- !nzchar(metrics$ineligible_reason)
+
   metrics$seed_stability_score <- ifelse(is.finite(metrics$seed_stability_ari), pmax(0, pmin(1, metrics$seed_stability_ari)), 0.5)
   metrics$subsample_stability_score <- ifelse(is.finite(metrics$subsample_stability_ari), pmax(0, pmin(1, metrics$subsample_stability_ari)), 0.5)
   metrics$adjacent_stability_score <- ifelse(is.finite(metrics$adjacent_ari_mean), pmax(0, pmin(1, metrics$adjacent_ari_mean)), 0.5)
@@ -297,7 +380,8 @@ run_quality_resolution_search <- function(
   ), na.rm = TRUE)
   metrics$fragmentation_score <- rowMeans(data.frame(
     min_size = safe_minmax_score_local(metrics$min_cluster_size, higher_is_better = TRUE),
-    small_fraction = safe_minmax_score_local(metrics$small_cluster_fraction, higher_is_better = FALSE)
+    small_fraction = safe_minmax_score_local(metrics$small_cluster_fraction, higher_is_better = FALSE),
+    small_cell_fraction = safe_minmax_score_local(metrics$small_cluster_cell_fraction, higher_is_better = FALSE)
   ), na.rm = TRUE)
   metrics$nuisance_score <- safe_minmax_score_local(metrics$max_qc_eta2, higher_is_better = FALSE)
   metrics$target_score <- score_near_target_local(metrics$n_clusters, metrics$target_clusters)
@@ -309,7 +393,11 @@ run_quality_resolution_search <- function(
     0.20 * metrics$fragmentation_score +
     0.05 * metrics$nuisance_score +
     0.05 * metrics$target_score
-  metrics <- dplyr::arrange(metrics, dplyr::desc(clustering_score), dplyr::desc(stability_score), resolution)
+  if (any(metrics$eligible)) {
+    metrics <- dplyr::arrange(metrics, dplyr::desc(eligible), dplyr::desc(clustering_score), dplyr::desc(stability_score), resolution)
+  } else {
+    metrics <- dplyr::arrange(metrics, dplyr::desc(clustering_score), dplyr::desc(stability_score), resolution)
+  }
   metrics$rank <- seq_len(nrow(metrics))
   metrics$selected_by_clustering_metrics <- metrics$rank == 1L
   metrics$marker_audit_candidate <- metrics$rank <= max(1L, candidate_top_n)
@@ -429,7 +517,13 @@ finalize_layer_object <- function(seu, reduction_name, umap_name, cluster_col, s
     stop(sprintf("对象缺少 cluster 列 `%s`，无法 finalize。", source_cluster_col), call. = FALSE)
   }
   Idents(seu) <- source_cluster_col
-  current_ids <- levels(factor(as.character(seu@meta.data[[source_cluster_col]])))
+  current_ids <- unique(as.character(seu@meta.data[[source_cluster_col]]))
+  current_ids <- current_ids[!is.na(current_ids) & nzchar(current_ids)]
+  if (all(grepl("^[0-9]+$", current_ids))) {
+    current_ids <- current_ids[order(as.integer(current_ids))]
+  } else {
+    current_ids <- sort(current_ids)
+  }
   new_ids <- setNames(as.character(seq_along(current_ids)), current_ids)
   seu <- RenameIdents(seu, new_ids)
   renumbered <- as.character(Idents(seu))

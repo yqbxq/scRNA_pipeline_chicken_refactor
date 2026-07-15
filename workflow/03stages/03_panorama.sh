@@ -86,26 +86,34 @@ run_stage_if_stale \
   "${WORKFLOW_ROOT}/05single_script/03c3_cluster_selection_report.R" \
   "${MODULE_03C3_MANIFEST}" \
   "${MODULE_03C_MANIFEST}" \
-  "${MODULE_03C2_MANIFEST}"
+  "${MODULE_03C2_MANIFEST}" \
+  "${CLUSTER_SELECTION_FILE}"
+
+run_stage_if_stale \
+  "${WORKFLOW_ROOT}/05single_script/03d_marker_risk.R" \
+  "${MODULE_03D_MANIFEST}" \
+  "${MODULE_03C3_MANIFEST}"
 
 require_manifest_output "${MODULE_03C3_MANIFEST}" "report" >/dev/null
+require_manifest_output "${MODULE_03D_MANIFEST}" "report" >/dev/null
 if ! eda_gate_passed clustering; then
   set_eda_gate_status \
     "clustering" \
     "pending" \
     "" \
-    "03c3 clustering selection and marker audit completed; review clustering report, then approve clustering"
+    "03c3 clustering selection and 03d marker risk audit completed; review clustering and marker risk reports, then approve clustering"
 fi
 
 update_workflow_status \
-  "03c3_cluster_selection_completed" \
-  "review clustering reports, approve clustering in ${EDA_GATE_FILE}, then rerun 03_panorama" \
+  "03d_marker_risk_completed" \
+  "review clustering and marker risk reports, approve clustering in ${EDA_GATE_FILE}, then rerun 03_panorama" \
   "status.03a1_normalize_hvg_completed=true" \
   "status.03a2_reduce_integrate_completed=true" \
   "status.03b_integration_eda_completed=true" \
   "status.03c_cluster_completed=true" \
   "status.03c2_cluster_marker_audit_completed=true" \
   "status.03c3_cluster_selection_completed=true" \
+  "status.03d_marker_risk_completed=true" \
   "status.integration_eda_complete=true" \
   "status.integration_gate_passed=$(eda_gate_passed integration && echo true || echo false)" \
   "status.clustering_gate_passed=$(eda_gate_passed clustering && echo true || echo false)"
@@ -113,16 +121,12 @@ update_workflow_status \
 hold_for_gate clustering
 
 run_stage_if_stale \
-  "${WORKFLOW_ROOT}/05single_script/03d_marker_risk.R" \
-  "${MODULE_03D_MANIFEST}" \
-  "${MODULE_03C3_MANIFEST}"
-
-run_stage_if_stale \
   "${WORKFLOW_ROOT}/05single_script/03e_panel_evidence.R" \
   "${MODULE_03E_MANIFEST}" \
   "${MODULE_03C3_MANIFEST}" \
   "${MODULE_03D_MANIFEST}" \
-  "${MARKER_PANEL_DIR}"
+  "${MARKER_PANEL_DIR}" \
+  "${MANUAL_ANNOTATION_FILE}"
 
 run_stage_if_stale \
   "${WORKFLOW_ROOT}/05single_script/03f_apply_manual_annotation.R" \
@@ -165,4 +169,5 @@ update_workflow_status \
   "status.03d_annotate_completed=true" \
   "status.03e_annotation_eda_completed=true" \
   "status.03_panorama_completed=true" \
-  "status.annotation_gate_passed=false"
+  "status.clustering_gate_passed=$(eda_gate_passed clustering && echo true || echo false)" \
+  "status.annotation_gate_passed=$(eda_gate_passed annotation && echo true || echo false)"
