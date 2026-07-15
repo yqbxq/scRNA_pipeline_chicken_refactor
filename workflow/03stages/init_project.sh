@@ -333,7 +333,7 @@ __DEFAULT__	200	1000	0.7	20
 EOF
   cat > "${OBJECT_LAYER_CONFIG_FILE}" <<'EOF'
 layer_id	layer_role	enabled	parent_layer	sample_include	sample_exclude	selection_column	selection_values	rebuild_normalization	hvg_nfeatures	pca_dims	target_clusters	res_range	res_fine_step	normalization_methods	integration_mode	vars_to_regress	description
-panorama	panorama	yes					yes	2000	1:30	10	0.10,0.20,0.30,0.40,0.50,0.60,0.80,1.00,1.20	0.005	lognorm	harmony		Root panorama object built from all post-QC cells.
+panorama	panorama	yes						yes	2000	1:30	10	0.10,0.20,0.30,0.40,0.50,0.60,0.80,1.00,1.20	0.005	lognorm	harmony		Root panorama object built from all post-QC cells.
 subcluster_1	subcluster	no	panorama					yes	2000	1:20	8	0.10,0.15,0.20,0.25,0.30,0.35,0.40	0.005				Template subcluster row; set sample_include or selection_column/selection_values before enabling.
 EOF
 }

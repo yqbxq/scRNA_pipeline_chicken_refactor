@@ -61,5 +61,16 @@ grep -q 'RBC / hemoglobin marker gene list' "${TMP_ROOT}/project/config/rbc_gene
 grep -q $'^trajectory_methods\tpending' "${TMP_ROOT}/project/config/eda_gates.tsv"
 grep -q $'^scdesign3_targets\tpending' "${TMP_ROOT}/project/config/eda_gates.tsv"
 grep -q $'^panorama\tpanorama\tyes' "${TMP_ROOT}/project/config/object_layers.tsv"
+awk -F '\t' '
+  NR == 1 { header_nf = NF }
+  NF != header_nf {
+    printf("object_layers.tsv field count mismatch on line %d: got %d expected %d\n", NR, NF, header_nf) > "/dev/stderr"
+    exit 1
+  }
+  $1 == "panorama" && ($15 != "lognorm" || $16 != "harmony") {
+    printf("panorama layer column shift: normalization_methods=%s integration_mode=%s\n", $15, $16) > "/dev/stderr"
+    exit 1
+  }
+' "${TMP_ROOT}/project/config/object_layers.tsv"
 
 echo "smoke_init_project_ok"
